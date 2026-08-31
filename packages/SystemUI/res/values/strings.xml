@@ -374,6 +374,44 @@
     <string name="screenrecord_ongoing_screen_and_audio">Recording screen and audio</string>
     <!-- Label for the checkbox to enable showing location of touches during screen recording [CHAR LIMIT=NONE]-->
     <string name="screenrecord_taps_label">Show touches on screen</string>
+    <string name="screenrecord_skip_timer_label">Skip timer</string>
+    <string name="screenrecord_hevc_label">Use HEVC (H.265) encoder</string>
+
+    <!-- Screen Record Customization Options -->
+    <string name="screenrecord_video_quality_label">Video quality</string>
+    <string name="screenrecord_video_quality_high">High</string>
+    <string name="screenrecord_video_quality_medium">Medium</string>
+    <string name="screenrecord_video_quality_low">Low</string>
+
+    <string name="screenrecord_resolution_label">Resolution</string>
+    <string name="screenrecord_resolution_auto">Native / Original</string>
+    <string name="screenrecord_resolution_1440p">1440p (2K / QHD)</string>
+    <string name="screenrecord_resolution_1220p">1220p (1.5K)</string>
+    <string name="screenrecord_resolution_1080p">1080p (FHD)</string>
+    <string name="screenrecord_resolution_720p">720p (HD)</string>
+    <string name="screenrecord_resolution_480p">480p (SD)</string>
+
+    <string name="screenrecord_framerate_label">Frame rate</string>
+    <string name="screenrecord_framerate_auto">Auto / Max</string>
+    <string name="screenrecord_framerate_60">60 FPS</string>
+    <string name="screenrecord_framerate_30">30 FPS</string>
+    <string name="screenrecord_framerate_90">90 FPS</string>
+    <string name="screenrecord_framerate_120">120 FPS</string>
+
+    <string name="screenrecord_timelimit_label">Time limit</string>
+    <string name="screenrecord_timelimit_unlimited">Unlimited</string>
+    <string name="screenrecord_timelimit_5min">5 minutes</string>
+    <string name="screenrecord_timelimit_10min">10 minutes</string>
+    <string name="screenrecord_timelimit_30min">30 minutes</string>
+    <string name="screenrecord_timelimit_60min">60 minutes</string>
+
+    <string name="screenrecord_filesizelimit_label">File size limit</string>
+    <string name="screenrecord_filesizelimit_unlimited">Unlimited</string>
+    <string name="screenrecord_filesizelimit_10mb">10 MB</string>
+    <string name="screenrecord_filesizelimit_100mb">100 MB</string>
+    <string name="screenrecord_filesizelimit_500mb">500 MB</string>
+    <string name="screenrecord_filesizelimit_1gb">1 GB</string>
+    <string name="screenrecord_filesizelimit_15gb">15 GB</string>
     <!-- Label for notification that the user can tap to stop and save the screen recording [CHAR LIMIT=NONE] -->
     <!-- Label for notification action to stop and save the screen recording [CHAR LIMIT=35] -->
     <string name="screenrecord_stop_label">Stop</string>

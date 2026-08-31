@@ -38,12 +38,15 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Display;
 import android.widget.Toast;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.logging.UiEventLogger;
+import com.android.systemui.Flags;
+import com.android.systemui.Prefs;
 import com.android.systemui.dagger.qualifiers.LongRunning;
 import com.android.systemui.dagger.qualifiers.Main;
 import com.android.systemui.mediaprojection.MediaProjectionCaptureTarget;
@@ -51,7 +54,7 @@ import com.android.systemui.recordissue.ScreenRecordingStartTimeStore;
 import com.android.systemui.res.R;
 import com.android.systemui.screenrecord.ScreenMediaRecorder.SavedRecording;
 import com.android.systemui.screenrecord.ScreenMediaRecorder.ScreenMediaRecorderListener;
-import com.android.systemui.screenrecord.data.repository.ScreenRecordingPreferenceRepository;
+import com.android.systemui.screenrecord.domain.ScreenRecordingPreferenceUtil;
 import com.android.systemui.settings.UserContextProvider;
 import com.android.systemui.statusbar.phone.KeyguardDismissUtil;
 
@@ -80,13 +83,17 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     protected static final String EXTRA_PATH = "extra_path";
     private static final String EXTRA_AUDIO_SOURCE = "extra_useAudio";
     private static final String EXTRA_SHOW_TAPS = "extra_showTaps";
-    private static final String EXTRA_SHOW_SECONDS = "extra_showSeconds";
     private static final String EXTRA_CAPTURE_TARGET = "extra_captureTarget";
     private static final String EXTRA_DISPLAY_ID = "extra_displayId";
     private static final String EXTRA_STOP_REASON = "extra_stopReason";
     private static final String EXTRA_LOW_QUALITY = "extra_lowQuality";
     private static final String EXTRA_LONGER_DURATION = "extra_longerDuration";
     private final static String EXTRA_HEVC = "extra_HEVC";
+    private static final String EXTRA_VIDEO_QUALITY = "extra_videoQuality";
+    private static final String EXTRA_RESOLUTION = "extra_resolution";
+    private static final String EXTRA_FRAME_RATE = "extra_frameRate";
+    private static final String EXTRA_TIME_LIMIT = "extra_timeLimit";
+    private static final String EXTRA_FILE_SIZE_LIMIT = "extra_fileSizeLimit";
 
     protected static final String ACTION_START = "com.android.systemui.screenrecord.START";
     protected static final String ACTION_SHOW_START_NOTIF =
@@ -102,6 +109,8 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     protected final KeyguardDismissUtil mKeyguardDismissUtil;
     private final Handler mMainHandler;
     private ScreenRecordingAudioSource mAudioSource = ScreenRecordingAudioSource.NONE;
+    private boolean mShowTaps;
+    private boolean mOriginalShowTaps;
     private ScreenMediaRecorder mRecorder;
     private final ScreenRecordingStartTimeStore mScreenRecordingStartTimeStore;
     private final Executor mLongExecutor;
@@ -111,8 +120,8 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     protected int mNotificationId = NOTIF_BASE_ID;
     private RecordingServiceStrings mStrings;
 
-    private final ScreenRecordingPreferenceRepository mRecordingPreferenceRepository =
-            new ScreenRecordingPreferenceRepository(this);
+    private final ScreenRecordingPreferenceUtil mPreferenceUtil =
+            new ScreenRecordingPreferenceUtil(this);
 
     private boolean mLowQuality;
     private boolean mLongerDuration;
@@ -150,30 +159,10 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
             int audioSource, boolean showTaps,
             @Nullable MediaProjectionCaptureTarget captureTarget,
             boolean lowQuality, boolean longerDuration, boolean hevc) {
-        return new Intent(context, RecordingService.class)
-                .setAction(ACTION_START)
-                .putExtra(EXTRA_RESULT_CODE, resultCode)
-                .putExtra(EXTRA_AUDIO_SOURCE, audioSource)
-                .putExtra(EXTRA_SHOW_TAPS, showTaps)
-                .putExtra(EXTRA_CAPTURE_TARGET, captureTarget)
-                .putExtra(EXTRA_LOW_QUALITY, lowQuality)
-                .putExtra(EXTRA_LONGER_DURATION, longerDuration)
-                .putExtra(EXTRA_HEVC, hevc);
+        return getStartIntent(context, resultCode, audioSource, showTaps, Display.DEFAULT_DISPLAY,
+                captureTarget, lowQuality, longerDuration, hevc, 0, 0, 0, 0, 0);
     }
 
-    /**
-     * Get an intent to start the recording service.
-     *
-     * @param context Context from the requesting activity
-     * @param resultCode The result code from {@link android.app.Activity#onActivityResult(int, int,
-     *     android.content.Intent)}
-     * @param audioSource The ordinal value of the audio source {@link
-     *     com.android.systemui.screenrecord.ScreenRecordingAudioSource}
-     * @param showTaps True to make touches visible while recording
-     * @param captureTarget pass this parameter to capture a specific part instead of the full
-     *     screen
-     * @param displayId The id of the display to record.
-     */
     public static Intent getStartIntent(
             Context context,
             int resultCode,
@@ -184,9 +173,40 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
             boolean lowQuality,
             boolean longerDuration,
             boolean hevc) {
-        return getStartIntent(context, resultCode, audioSource, showTaps, captureTarget, lowQuality,
-            longerDuration, hevc)
-                .putExtra(EXTRA_DISPLAY_ID, displayId);
+        return getStartIntent(context, resultCode, audioSource, showTaps, displayId, captureTarget,
+                lowQuality, longerDuration, hevc, 0, 0, 0, 0, 0);
+    }
+
+    public static Intent getStartIntent(
+            Context context,
+            int resultCode,
+            int audioSource,
+            boolean showTaps,
+            int displayId,
+            @Nullable MediaProjectionCaptureTarget captureTarget,
+            boolean lowQuality,
+            boolean longerDuration,
+            boolean hevc,
+            int videoQuality,
+            int resolution,
+            int frameRate,
+            int timeLimit,
+            int fileSizeLimit) {
+        return new Intent(context, RecordingService.class)
+                .setAction(ACTION_START)
+                .putExtra(EXTRA_RESULT_CODE, resultCode)
+                .putExtra(EXTRA_AUDIO_SOURCE, audioSource)
+                .putExtra(EXTRA_SHOW_TAPS, showTaps)
+                .putExtra(EXTRA_DISPLAY_ID, displayId)
+                .putExtra(EXTRA_CAPTURE_TARGET, captureTarget)
+                .putExtra(EXTRA_LOW_QUALITY, lowQuality)
+                .putExtra(EXTRA_LONGER_DURATION, longerDuration)
+                .putExtra(EXTRA_HEVC, hevc)
+                .putExtra(EXTRA_VIDEO_QUALITY, videoQuality)
+                .putExtra(EXTRA_RESOLUTION, resolution)
+                .putExtra(EXTRA_FRAME_RATE, frameRate)
+                .putExtra(EXTRA_TIME_LIMIT, timeLimit)
+                .putExtra(EXTRA_FILE_SIZE_LIMIT, fileSizeLimit);
     }
 
     @Override
@@ -214,6 +234,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                 mAudioSource = ScreenRecordingAudioSource
                         .values()[intent.getIntExtra(EXTRA_AUDIO_SOURCE, 0)];
                 Log.d(getTag(), "recording with audio source " + mAudioSource);
+                mShowTaps = intent.getBooleanExtra(EXTRA_SHOW_TAPS, false);
                 mLowQuality = intent.getBooleanExtra(EXTRA_LOW_QUALITY, false);
                 mLongerDuration = intent.getBooleanExtra(EXTRA_LONGER_DURATION, false);
                 mHEVC = intent.getBooleanExtra(EXTRA_HEVC, true);
@@ -222,12 +243,16 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                         intent.getParcelableExtra(EXTRA_CAPTURE_TARGET,
                                 MediaProjectionCaptureTarget.class);
 
+                mOriginalShowTaps = Settings.System.getInt(
+                        getApplicationContext().getContentResolver(),
+                        Settings.System.SHOW_TOUCHES, 0) != 0;
                 int displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, Display.DEFAULT_DISPLAY);
 
-                mRecordingPreferenceRepository.setShouldShowTaps(
-                        intent.getBooleanExtra(EXTRA_SHOW_TAPS, false));
-                mRecordingPreferenceRepository.setShouldShowSeconds(
-                        intent.getBooleanExtra(EXTRA_SHOW_SECONDS, false));
+                if (Flags.restoreShowTapsSetting()) {
+                    mPreferenceUtil.updateShowTaps(mShowTaps);
+                } else {
+                    setTapsVisible(mShowTaps);
+                }
 
                 mRecorder = new ScreenMediaRecorder(
                         mUserContextTracker.getUserContext(),
@@ -241,6 +266,13 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                 setLowQuality(mLowQuality);
                 setLongerDuration(mLongerDuration);
                 setHEVC(mHEVC);
+                if (mRecorder != null) {
+                    mRecorder.setVideoQuality(intent.getIntExtra(EXTRA_VIDEO_QUALITY, 0));
+                    mRecorder.setResolution(intent.getIntExtra(EXTRA_RESOLUTION, 0));
+                    mRecorder.setFrameRate(intent.getIntExtra(EXTRA_FRAME_RATE, 0));
+                    mRecorder.setTimeLimit(intent.getIntExtra(EXTRA_TIME_LIMIT, 0));
+                    mRecorder.setFileSizeLimit(intent.getIntExtra(EXTRA_FILE_SIZE_LIMIT, 0));
+                }
 
                 if (startRecording()) {
                     updateState(true);
@@ -249,7 +281,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                 } else {
                     updateState(false);
                     createErrorStartingNotification(currentUser);
-                    stopForeground(STOP_FOREGROUND_DETACH);
+                    stopForeground(STOP_FOREGROUND_REMOVE);
                     stopSelf();
                     return Service.START_NOT_STICKY;
                 }
@@ -521,7 +553,11 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
         }
         UserHandle currentUser = new UserHandle(userId);
         Log.d(getTag(), "notifying for user " + userId);
-        mRecordingPreferenceRepository.maybeRestoreSetting();
+        if (Flags.restoreShowTapsSetting()) {
+            mPreferenceUtil.restoreShowTapsSetting();
+        } else {
+            setTapsVisible(mOriginalShowTaps);
+        }
         try {
             if (getRecorder() != null) {
                 getRecorder().end(stopReason);
@@ -547,7 +583,8 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
             throw new RuntimeException(throwable);
         }
         updateState(false);
-        stopForeground(STOP_FOREGROUND_DETACH);
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        mNotificationManager.cancelAsUser(null, mNotificationId, currentUser);
         stopSelf();
     }
 
@@ -579,6 +616,11 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
             UserHandle currentUser) {
         mNotificationManager.notifyAsUser(null, mNotificationId,
                 createSaveNotification(savedRecording), currentUser);
+    }
+
+    private void setTapsVisible(boolean turnOn) {
+        int value = turnOn ? 1 : 0;
+        Settings.System.putInt(getContentResolver(), Settings.System.SHOW_TOUCHES, value);
     }
 
     private void setLowQuality(boolean turnOn) {

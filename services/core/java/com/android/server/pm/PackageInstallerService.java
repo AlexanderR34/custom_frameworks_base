@@ -858,8 +858,11 @@ public class PackageInstallerService extends IPackageInstaller.Stub implements
             }
         }
 
-        if (Build.IS_DEBUGGABLE || PackageManagerServiceUtils.isSystemOrRoot(callingUid)) {
+        boolean allowDowngrade = android.provider.Settings.Global.getInt(
+                mContext.getContentResolver(), "allow_app_downgrade", 0) != 0;
+        if (allowDowngrade || Build.IS_DEBUGGABLE || PackageManagerServiceUtils.isSystemOrRoot(callingUid)) {
             params.installFlags |= PackageManager.INSTALL_ALLOW_DOWNGRADE;
+            params.installFlags |= PackageManager.INSTALL_REQUEST_DOWNGRADE;
         } else {
             params.installFlags &= ~PackageManager.INSTALL_ALLOW_DOWNGRADE;
         }

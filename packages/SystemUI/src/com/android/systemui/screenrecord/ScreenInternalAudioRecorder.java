@@ -34,11 +34,25 @@ import java.nio.ByteBuffer;
 
 /**
  * Recording internal audio
+ * Nintendo switch 1 y 2
  */
 public class ScreenInternalAudioRecorder {
     private static String TAG = "ScreenAudioRecorder";
     private static final int TIMEOUT = 500;
     private static final float MIC_VOLUME_SCALE = 1.4f;
+    private static final float DUCKED_INTERNAL_VOLUME = 0.35f; // Ducked internal audio volume when user speaks
+    private static final float NORMAL_INTERNAL_VOLUME = 1.0f;  // Full internal audio volume when user is silent
+    private static final double VOICE_RMS_THRESHOLD = 380.0;   // Microphone RMS threshold for voice detection
+    private static final long DUCK_HOLD_TIME_MS = 650;         // Hold time to prevent volume pumping between words
+    private static final float ATTACK_STEP = 0.0025f;          // Smooth, pop-free fade down (~7ms)
+    private static final float RELEASE_STEP = 0.00009f;        // Smooth natural fade up (~160ms)
+
+    private float mCurrentInternalGain = NORMAL_INTERNAL_VOLUME;
+    private long mLastVoiceDetectedTime = 0;
+    private float mHpPrevSample = 0f;
+    private float mHpPrevOutput = 0f;
+    private float mLpPrevOutput = 0f;
+    private float mAdaptiveNoiseFloor = 100f;
     private AudioRecord mAudioRecord;
     private AudioRecord mAudioRecordMic;
     private Config mConfig = new Config();
@@ -65,11 +79,11 @@ public class ScreenInternalAudioRecorder {
      * Audio recoding configuration
      */
     public static class Config {
-        public int channelOutMask = AudioFormat.CHANNEL_OUT_MONO;
-        public int channelInMask = AudioFormat.CHANNEL_IN_MONO;
+        public int channelOutMask = AudioFormat.CHANNEL_OUT_STEREO;
+        public int channelInMask = AudioFormat.CHANNEL_IN_STEREO;
         public int encoding = AudioFormat.ENCODING_PCM_16BIT;
-        public int sampleRate = 44100;
-        public int bitRate = 196000;
+        public int sampleRate = 48000;
+        public int bitRate = 256000; // 256 kbps High-Fidelity AAC Stereo
         public int bufferSizeBytes = 1 << 17;
         public boolean privileged = true;
         public boolean legacy_app_looback = false;
@@ -112,13 +126,13 @@ public class ScreenInternalAudioRecorder {
                 .build();
 
         if (mMic) {
-            mAudioRecordMic = new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    mConfig.sampleRate, AudioFormat.CHANNEL_IN_MONO, mConfig.encoding, size);
+            mAudioRecordMic = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                    mConfig.sampleRate, AudioFormat.CHANNEL_IN_STEREO, mConfig.encoding, size);
         }
 
         mCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
         MediaFormat medFormat = MediaFormat.createAudioFormat(
-                MediaFormat.MIMETYPE_AUDIO_AAC, mConfig.sampleRate, 1);
+                MediaFormat.MIMETYPE_AUDIO_AAC, mConfig.sampleRate, 2);
         medFormat.setInteger(MediaFormat.KEY_AAC_PROFILE,
                 MediaCodecInfo.CodecProfileLevel.AACObjectLC);
         medFormat.setInteger(MediaFormat.KEY_BIT_RATE, mConfig.bitRate);
@@ -174,11 +188,64 @@ public class ScreenInternalAudioRecorder {
                     int minShorts = Math.min(readShortsInternal, readShortsMic);
                     readBytes = minShorts * 2;
 
-                    // modify the volume
-                    // scale only mixed shorts
-                    scaleValues(bufferMic, minShorts, MIC_VOLUME_SCALE);
-                    // Mix the two buffers
-                    addAndConvertBuffers(bufferInternal, bufferMic, buffer, minShorts);
+                    // Voice Activity Detection with 280Hz - 3400Hz speech bandpass filter
+                    long rawSumSquares = 0;
+                    long filteredSumSquares = 0;
+                    int zeroCrossings = 0;
+                    boolean lastSignPositive = false;
+
+                    for (int i = 0; i < minShorts; i++) {
+                        short sample = bufferMic[i];
+                        rawSumSquares += (long) sample * sample;
+
+                        // High-pass filter (~280 Hz) to reject handling rumble and wind
+                        float hp = (sample - mHpPrevSample) + 0.963f * mHpPrevOutput;
+                        mHpPrevSample = sample;
+                        mHpPrevOutput = hp;
+
+                        // Low-pass filter (~3400 Hz) to reject high frequency friction
+                        float lp = mLpPrevOutput + 0.36f * (hp - mLpPrevOutput);
+                        mLpPrevOutput = lp;
+
+                        filteredSumSquares += (long) (lp * lp);
+
+                        boolean signPositive = lp > 0;
+                        if (i > 0 && signPositive != lastSignPositive) {
+                            zeroCrossings++;
+                        }
+                        lastSignPositive = signPositive;
+                    }
+
+                    double rawRms = Math.sqrt((double) rawSumSquares / Math.max(1, minShorts));
+                    double filteredRms = Math.sqrt((double) filteredSumSquares / Math.max(1, minShorts));
+                    double voiceRatio = (rawRms > 10.0) ? (filteredRms / rawRms) : 0.0;
+
+                    // Dynamically adapt noise floor
+                    if (filteredRms < mAdaptiveNoiseFloor * 1.5) {
+                        mAdaptiveNoiseFloor = (float) (mAdaptiveNoiseFloor * 0.98 + filteredRms * 0.02);
+                    } else {
+                        mAdaptiveNoiseFloor = (float) (mAdaptiveNoiseFloor * 0.999 + filteredRms * 0.001);
+                    }
+                    mAdaptiveNoiseFloor = Math.max(80.0f, Math.min(mAdaptiveNoiseFloor, 800.0f));
+
+                    double dynamicThreshold = Math.max(340.0, mAdaptiveNoiseFloor * 2.8);
+                    int zcrPer1024 = (minShorts > 0) ? (zeroCrossings * 1024 / minShorts) : 0;
+
+                    boolean isSpeech = (filteredRms > dynamicThreshold)
+                            && (voiceRatio >= 0.40)
+                            && (zcrPer1024 >= 8 && zcrPer1024 <= 180);
+
+                    long now = System.currentTimeMillis();
+                    float targetInternalGain = NORMAL_INTERNAL_VOLUME;
+                    if (isSpeech) {
+                        mLastVoiceDetectedTime = now;
+                        targetInternalGain = DUCKED_INTERNAL_VOLUME;
+                    } else if (now - mLastVoiceDetectedTime < DUCK_HOLD_TIME_MS) {
+                        targetInternalGain = DUCKED_INTERNAL_VOLUME; // Hold ducked volume during speech pauses
+                    }
+
+                    // Apply dynamic voice ducking and mix the two audio streams
+                    applyVoiceDuckingAndMix(bufferInternal, bufferMic, buffer, minShorts, targetInternalGain);
 
                     // shift unmixed shorts to the beginning of the buffer
                     shiftToStart(bufferInternal, minShorts, offsetShortsInternal);
@@ -213,18 +280,20 @@ public class ScreenInternalAudioRecorder {
         }
     }
 
-    private void scaleValues(short[] buff, int len, float scale) {
-        for (int i = 0; i < len; i++) {
-            int newValue = (int) (buff[i] * scale);
-            buff[i] = (short) MathUtils.constrain(newValue, Short.MIN_VALUE, Short.MAX_VALUE);
-        }
-    }
-
-    private void addAndConvertBuffers(short[] src1, short[] src2, byte[] dst, int sizeShorts) {
+    private void applyVoiceDuckingAndMix(short[] internalBuf, short[] micBuf, byte[] dst, int sizeShorts, float targetInternalGain) {
         for (int i = 0; i < sizeShorts; i++) {
-            int sum;
-            sum = (short) MathUtils.constrain(
-                    (int) src1[i] + (int) src2[i], Short.MIN_VALUE, Short.MAX_VALUE);
+            // Smoothly interpolate internal gain to eliminate pops or clicks
+            if (mCurrentInternalGain > targetInternalGain) {
+                mCurrentInternalGain = Math.max(targetInternalGain, mCurrentInternalGain - ATTACK_STEP);
+            } else if (mCurrentInternalGain < targetInternalGain) {
+                mCurrentInternalGain = Math.min(targetInternalGain, mCurrentInternalGain + RELEASE_STEP);
+            }
+
+            int duckedInternal = (int) (internalBuf[i] * mCurrentInternalGain);
+            int amplifiedMic = (int) (micBuf[i] * MIC_VOLUME_SCALE);
+
+            int sum = (short) MathUtils.constrain(
+                    duckedInternal + amplifiedMic, Short.MIN_VALUE, Short.MAX_VALUE);
             int byteIndex = i * 2;
             dst[byteIndex] = (byte) (sum & 0xff);
             dst[byteIndex + 1] = (byte) ((sum >> 8) & 0xff);
@@ -250,7 +319,8 @@ public class ScreenInternalAudioRecorder {
             offset += bytesToRead;
             mCodec.queueInputBuffer(bufferIndex, 0, bytesToRead, mPresentationTime, 0);
             mTotalBytes += totalBytesRead;
-            mPresentationTime = 1000000L * (mTotalBytes / 2) / mConfig.sampleRate;
+            // Stereo (2 channels) * 16-bit PCM (2 bytes) = 4 bytes per audio frame
+            mPresentationTime = 1000000L * (mTotalBytes / 4) / mConfig.sampleRate;
 
             writeOutput();
         }

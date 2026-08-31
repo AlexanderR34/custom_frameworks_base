@@ -150,7 +150,7 @@ public class RecordingController
      */
     public Dialog createScreenRecordDialog(@Nullable Runnable onStartRecordingClicked) {
         if (isScreenCaptureDisabled()) {
-            return mScreenCaptureDisabledDialogDelegate.createDialog();
+            return mScreenCaptureDisabledDialogDelegate.createSysUIDialog();
         }
 
         mMediaProjectionMetricsLogger.notifyProjectionInitiated(
@@ -195,6 +195,26 @@ public class RecordingController
     public void startCountdown(long ms, long interval, Runnable start, Runnable stop) {
         mIsStarting = true;
         mStop = stop;
+
+        if (ms <= 0) {
+            mIsStarting = false;
+            mIsRecording = true;
+            for (ScreenRecordUxController.StateChangeCallback cb : mListeners) {
+                cb.onCountdownEnd();
+            }
+            try {
+                start.run();
+                mUserTracker.addCallback(mUserChangedCallback, mMainExecutor);
+
+                IntentFilter stateFilter = new IntentFilter(INTENT_UPDATE_STATE);
+                mBroadcastDispatcher.registerReceiver(mStateChangeReceiver, stateFilter, null,
+                        UserHandle.ALL);
+                mRecordingControllerLogger.logSentStartIntent();
+            } catch (Exception e) {
+                mRecordingControllerLogger.logRecordingStopError(e);
+            }
+            return;
+        }
 
         mCountDownTimer = new CountDownTimer(ms, interval) {
             @Override

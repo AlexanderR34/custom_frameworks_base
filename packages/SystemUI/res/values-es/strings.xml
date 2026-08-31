@@ -20,6 +20,30 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_label" msgid="4811759950673118541">"UI del sistema"</string>
+    <string name="screenrecord_skip_timer_label">Omitir temporizador</string>
+    <string name="screenrecord_hevc_label">Usar codificador HEVC (H.265)</string>
+    <string name="screenrecord_video_quality_label">"Calidad de video"</string>
+    <string name="screenrecord_video_quality_high">"Alto"</string>
+    <string name="screenrecord_video_quality_medium">"Medio"</string>
+    <string name="screenrecord_video_quality_low">"Bajo"</string>
+    <string name="screenrecord_resolution_label">"Resolución"</string>
+    <string name="screenrecord_resolution_auto">"Auto"</string>
+    <string name="screenrecord_framerate_label">"Tasa de fotogramas"</string>
+    <string name="screenrecord_framerate_auto">"Auto"</string>
+    <string name="screenrecord_timelimit_label">"Límite de tiempo"</string>
+    <string name="screenrecord_timelimit_unlimited">"Sin límite"</string>
+    <string name="screenrecord_timelimit_5min">"5 minutos"</string>
+    <string name="screenrecord_timelimit_10min">"10 minutos"</string>
+    <string name="screenrecord_timelimit_30min">"30 minutos"</string>
+    <string name="screenrecord_timelimit_60min">"60 minutos"</string>
+    <string name="screenrecord_filesizelimit_label">"Límite de tamaño de archivo"</string>
+    <string name="screenrecord_filesizelimit_unlimited">"Sin límite"</string>
+    <string name="screenrecord_filesizelimit_10mb">"10 MB"</string>
+    <string name="screenrecord_filesizelimit_100mb">"100 MB"</string>
+    <string name="screenrecord_filesizelimit_500mb">"500 MB"</string>
+    <string name="screenrecord_filesizelimit_1gb">"1 GB"</string>
+    <string name="screenrecord_filesizelimit_15gb">"15 GB"</string>
+    <string name="volume_custom_timer_hint">Deslice para establecer un temporizador</string>
     <string name="battery_low_title" msgid="5319680173344341779">"¿Activar Ahorro de batería?"</string>
     <string name="battery_low_description" msgid="7848989602036547056">"Te queda un <xliff:g id="PERCENTAGE">%s</xliff:g> de batería. Ahorro de batería activa el tema oscuro, restringe la actividad en segundo plano y retrasa las notificaciones."</string>
     <string name="battery_low_intro" msgid="8033783734931200690">"Ahorro de batería activa el tema oscuro, restringe la actividad en segundo plano y retrasa las notificaciones."</string>

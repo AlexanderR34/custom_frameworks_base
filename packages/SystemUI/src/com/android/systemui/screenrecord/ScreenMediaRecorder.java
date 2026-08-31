@@ -24,7 +24,6 @@ import static com.android.systemui.screenrecord.ScreenRecordingAudioSource.MIC_A
 
 import android.annotation.Nullable;
 import android.app.ActivityManager;
-import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -32,6 +31,7 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
+import android.hardware.display.VirtualDisplayConfig;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -49,14 +49,11 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.provider.MediaStore;
-import android.text.format.DateUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Size;
 import android.view.Display;
 import android.view.Surface;
-
-import androidx.annotation.NonNull;
 
 import com.android.internal.R;
 import com.android.systemui.mediaprojection.MediaProjectionCaptureTarget;
@@ -70,23 +67,21 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Recording screen and mic/internal audio
  */
-public class ScreenMediaRecorder {
-    private static final int TOTAL_NUM_TRACKS = 1;
+public class ScreenMediaRecorder extends MediaProjection.Callback {
+    private static final int TOTAL_NUM_TRACKS = 2; // True Stereo (Left + Right)
     private static final int VIDEO_FRAME_RATE = 30;
     private static final int VIDEO_FRAME_RATE_TO_RESOLUTION_RATIO = 6;
     private static final int LOW_VIDEO_FRAME_RATE_TO_RESOLUTION_RATIO = 2;
     private static final int LOW_VIDEO_FRAME_RATE = 25;
-    private static final int AUDIO_BIT_RATE = 196000;
-    private static final int AUDIO_SAMPLE_RATE = 44100;
-    private static final int MAX_DURATION_MS = (int) DateUtils.HOUR_IN_MILLIS;
+    private static final int AUDIO_BIT_RATE = 256000; // 256 kbps High-Fidelity AAC Stereo
+    private static final int AUDIO_SAMPLE_RATE = 48000; // 48 kHz Standard
+    private static final int MAX_DURATION_MS = 60 * 60 * 1000;
     private static final long MAX_FILESIZE_BYTES = 5000000000L;
     private static final long MAX_FILESIZE_BYTES_LONGER = 16106100000L; // 15 GiB
-
     private static final String TAG = "ScreenMediaRecorder";
 
     private File mTempVideoFile;
@@ -102,13 +97,17 @@ public class ScreenMediaRecorder {
     private final MediaProjectionCaptureTarget mCaptureRegion;
     private final Handler mHandler;
     private final int mDisplayId;
-    private final AtomicBoolean mIsStarted = new AtomicBoolean();
     private int mMaxRefreshRate;
     private String mAvcProfileLevel;
 
     private boolean mLowQuality;
     private boolean mLongerDuration;
     private boolean mHEVC;
+    private int mVideoQuality = 0;
+    private int mResolution = 0;
+    private int mFrameRate = 0;
+    private int mTimeLimit = 0;
+    private int mFileSizeLimit = 0;
 
     private Context mContext;
     ScreenMediaRecorderListener mListener;
@@ -164,6 +163,26 @@ public class ScreenMediaRecorder {
         mHEVC = hevc;
     }
 
+    public void setVideoQuality(int quality) {
+        mVideoQuality = quality;
+    }
+
+    public void setResolution(int resolution) {
+        mResolution = resolution;
+    }
+
+    public void setFrameRate(int frameRate) {
+        mFrameRate = frameRate;
+    }
+
+    public void setTimeLimit(int timeLimit) {
+        mTimeLimit = timeLimit;
+    }
+
+    public void setFileSizeLimit(int fileSizeLimit) {
+        mFileSizeLimit = fileSizeLimit;
+    }
+
     private void prepare() throws IOException, RemoteException, RuntimeException {
         //Setup media projection
         IBinder b = ServiceManager.getService(MEDIA_PROJECTION_SERVICE);
@@ -181,17 +200,15 @@ public class ScreenMediaRecorder {
             projection.setLaunchCookie(mCaptureRegion.getLaunchCookie());
             projection.setTaskId(mCaptureRegion.getTaskId());
         }
-        final MediaProjectionCallback mediaProjectionCallback = new MediaProjectionCallback(
-                mListener, mContext.getUserId());
         mMediaProjection = new MediaProjection(mContext, projection);
-        mMediaProjection.registerCallback(mediaProjectionCallback, mHandler);
+        mMediaProjection.registerCallback(this, mHandler);
 
         File cacheDir = mContext.getCacheDir();
         cacheDir.mkdirs();
         mTempVideoFile = File.createTempFile("temp", ".mp4", cacheDir);
 
         // Set up media recorder
-        mMediaRecorder = new MediaRecorder(mContext);
+        mMediaRecorder = new MediaRecorder();
 
         // Set up audio source
         if (mAudioSource == MIC) {
@@ -207,38 +224,142 @@ public class ScreenMediaRecorder {
         DisplayManager dm = mContext.getSystemService(DisplayManager.class);
         Display display = dm.getDisplay(mDisplayId);
         display.getRealMetrics(metrics);
-        int refreshRate = mLowQuality ? LOW_VIDEO_FRAME_RATE : (int) display.getRefreshRate();
-        if (mMaxRefreshRate != 0 && refreshRate > mMaxRefreshRate) {
-            refreshRate = mMaxRefreshRate;
+
+        int nativeWidth = metrics.widthPixels;
+        int nativeHeight = metrics.heightPixels;
+        boolean isPortrait = nativeHeight >= nativeWidth;
+        int maxDim = Math.max(nativeWidth, nativeHeight);
+        int minDim = Math.min(nativeWidth, nativeHeight);
+        float aspectRatio = (float) minDim / (float) maxDim;
+
+        int reqWidth = nativeWidth;
+        int reqHeight = nativeHeight;
+
+        if (mResolution == 1) { // 1440p (2K / QHD)
+            int shortSide = 1440;
+            int longSide = Math.round(shortSide / aspectRatio);
+            reqWidth = isPortrait ? shortSide : longSide;
+            reqHeight = isPortrait ? longSide : shortSide;
+        } else if (mResolution == 2) { // 1220p (1.5K)
+            int shortSide = 1220;
+            int longSide = Math.round(shortSide / aspectRatio);
+            reqWidth = isPortrait ? shortSide : longSide;
+            reqHeight = isPortrait ? longSide : shortSide;
+        } else if (mResolution == 3) { // 1080p (FHD)
+            int shortSide = 1080;
+            int longSide = Math.round(shortSide / aspectRatio);
+            reqWidth = isPortrait ? shortSide : longSide;
+            reqHeight = isPortrait ? longSide : shortSide;
+        } else if (mResolution == 4) { // 720p (HD)
+            int shortSide = 720;
+            int longSide = Math.round(shortSide / aspectRatio);
+            reqWidth = isPortrait ? shortSide : longSide;
+            reqHeight = isPortrait ? longSide : shortSide;
+        } else if (mResolution == 5) { // 480p (SD)
+            int shortSide = 480;
+            int longSide = Math.round(shortSide / aspectRatio);
+            reqWidth = isPortrait ? shortSide : longSide;
+            reqHeight = isPortrait ? longSide : shortSide;
         }
-        VideoParameters videoParameters = getSupportedSize(metrics.widthPixels,
-                metrics.heightPixels, refreshRate);
+
+        // Enforce 16-pixel block alignment required by hardware video encoders
+        reqWidth = (reqWidth / 16) * 16;
+        reqHeight = (reqHeight / 16) * 16;
+
+        int refreshRate;
+        if (mFrameRate == 1) { // 60 FPS
+            refreshRate = 60;
+        } else if (mFrameRate == 2) { // 30 FPS
+            refreshRate = 30;
+        } else if (mFrameRate == 3) { // 90 FPS
+            refreshRate = 90;
+        } else if (mFrameRate == 4) { // 120 FPS
+            refreshRate = 120;
+        } else { // 0: Auto / Native display refresh rate
+            refreshRate = mLowQuality ? LOW_VIDEO_FRAME_RATE : (int) display.getRefreshRate();
+            if (mMaxRefreshRate != 0 && refreshRate > mMaxRefreshRate) refreshRate = mMaxRefreshRate;
+        }
+
+        int[] dimens = getSupportedSize(reqWidth, reqHeight, refreshRate);
+        int width = dimens[0];
+        int height = dimens[1];
+        if (mFrameRate == 0) {
+            refreshRate = dimens[2];
+        }
+
+        int vidBitRate;
+        if (mHEVC) {
+            if (mVideoQuality == 1) { // Medium
+                vidBitRate = 5000000; // 5 Mbps (~110 MB for 3 mins)
+            } else if (mVideoQuality == 2) { // Low
+                vidBitRate = 2500000; // 2.5 Mbps (~55 MB for 3 mins)
+            } else { // High / Default (0)
+                vidBitRate = mLowQuality ? 3500000 : 10000000; // 10 Mbps (~220 MB for 3 mins)
+            }
+        } else {
+            if (mVideoQuality == 1) { // Medium
+                vidBitRate = 8000000; // 8 Mbps (~170 MB for 3 mins)
+            } else if (mVideoQuality == 2) { // Low
+                vidBitRate = 4000000; // 4 Mbps (~85 MB for 3 mins)
+            } else { // High / Default (0)
+                vidBitRate = mLowQuality ? 5000000 : 14000000; // 14 Mbps (~300 MB for 3 mins)
+            }
+        }
+
+        int maxDurationMs = 0;
+        if (mTimeLimit == 1) {
+            maxDurationMs = 5 * 60 * 1000;
+        } else if (mTimeLimit == 2) {
+            maxDurationMs = 10 * 60 * 1000;
+        } else if (mTimeLimit == 3) {
+            maxDurationMs = 30 * 60 * 1000;
+        } else if (mTimeLimit == 4) {
+            maxDurationMs = 60 * 60 * 1000;
+        } else {
+            maxDurationMs = mLongerDuration ? 0 : MAX_DURATION_MS;
+        }
+
+        long maxFilesize = MAX_FILESIZE_BYTES;
+        if (mFileSizeLimit == 1) {
+            maxFilesize = 10L * 1024 * 1024;
+        } else if (mFileSizeLimit == 2) {
+            maxFilesize = 100L * 1024 * 1024;
+        } else if (mFileSizeLimit == 3) {
+            maxFilesize = 500L * 1024 * 1024;
+        } else if (mFileSizeLimit == 4) {
+            maxFilesize = 1000L * 1024 * 1024;
+        } else if (mFileSizeLimit == 5) {
+            maxFilesize = 15L * 1024 * 1024 * 1024;
+        } else {
+            maxFilesize = mLongerDuration ? MAX_FILESIZE_BYTES_LONGER : MAX_FILESIZE_BYTES;
+        }
+
         if (!mHEVC) {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-            mMediaRecorder.setVideoEncodingProfileLevel(
-                    MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
-                    mLowQuality
-                            ? MediaCodecInfo.CodecProfileLevel.AVCLevel32
-                            : getAvcProfileLevelCodeByName(mAvcProfileLevel));
+            try {
+                mMediaRecorder.setVideoEncodingProfileLevel(
+                        MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
+                        mLowQuality ? MediaCodecInfo.CodecProfileLevel.AVCLevel32
+                        : MediaCodecInfo.CodecProfileLevel.AVCLevel51);
+            } catch (Exception ignored) {}
         } else {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.HEVC);
-            mMediaRecorder.setVideoEncodingProfileLevel(
-                    MediaCodecInfo.CodecProfileLevel.HEVCProfileMain,
-                    mLowQuality
-                            ? MediaCodecInfo.CodecProfileLevel.HEVCHighTierLevel31
-                            : MediaCodecInfo.CodecProfileLevel.HEVCHighTierLevel41);
+            try {
+                mMediaRecorder.setVideoEncodingProfileLevel(
+                        MediaCodecInfo.CodecProfileLevel.HEVCProfileMain,
+                        mLowQuality ? MediaCodecInfo.CodecProfileLevel.HEVCHighTierLevel31
+                        : MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51);
+            } catch (Exception ignored) {}
         }
-        mMediaRecorder.setVideoSize(videoParameters.mWidth, videoParameters.mHeight);
-        mMediaRecorder.setVideoFrameRate(videoParameters.mRefreshRate);
-        mMediaRecorder.setVideoEncodingBitRate(mLowQuality ? (videoParameters.bitrate() / 3)
-                : videoParameters.bitrate());
-        mMediaRecorder.setMaxDuration(mLongerDuration ? 0 : MAX_DURATION_MS);
-        mMediaRecorder.setMaxFileSize(
-                mLongerDuration ? MAX_FILESIZE_BYTES_LONGER : MAX_FILESIZE_BYTES);
+        mMediaRecorder.setVideoSize(width, height);
+        mMediaRecorder.setVideoFrameRate(refreshRate);
+        mMediaRecorder.setVideoEncodingBitRate(vidBitRate);
+        mMediaRecorder.setMaxDuration(maxDurationMs);
+        mMediaRecorder.setMaxFileSize(maxFilesize);
 
         // Set up audio
         if (mAudioSource == MIC) {
-            mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.HE_AAC);
+            mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             mMediaRecorder.setAudioChannels(TOTAL_NUM_TRACKS);
             mMediaRecorder.setAudioEncodingBitRate(AUDIO_BIT_RATE);
             mMediaRecorder.setAudioSamplingRate(AUDIO_SAMPLE_RATE);
@@ -248,17 +369,25 @@ public class ScreenMediaRecorder {
         mMediaRecorder.prepare();
         // Create surface
         mInputSurface = mMediaRecorder.getSurface();
-        mVirtualDisplay = mMediaProjection.createVirtualDisplay(
+
+        VirtualDisplayConfig.Builder vdBuilder = new VirtualDisplayConfig.Builder(
                 "Recording Display",
-                videoParameters.mWidth,
-                videoParameters.mHeight,
-                metrics.densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                mInputSurface,
+                width,
+                height,
+                metrics.densityDpi)
+                .setFlags(DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR | DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC)
+                .setSurface(mInputSurface);
+
+        if (refreshRate > 0) {
+            vdBuilder.setRequestedRefreshRate(refreshRate);
+        }
+
+        mVirtualDisplay = mMediaProjection.createVirtualDisplay(
+                vdBuilder,
                 new VirtualDisplay.Callback() {
                     @Override
                     public void onStopped() {
-                        mediaProjectionCallback.onStop();
+                        onStop();
                     }
                 },
                 mHandler);
@@ -295,84 +424,45 @@ public class ScreenMediaRecorder {
      * If possible this will return the same values as given, but values may be smaller on some
      * devices.
      *
-     * @param screenWidth  Actual pixel width of screen
+     * @param screenWidth Actual pixel width of screen
      * @param screenHeight Actual pixel height of screen
-     * @param refreshRate  Desired refresh rate
-     * @return returns {@link VideoParameters} for the screen recording.
+     * @param refreshRate Desired refresh rate
+     * @return array with supported width, height, and refresh rate
      */
-    private VideoParameters getSupportedSize(final int screenWidth, final int screenHeight,
-            int refreshRate)
-            throws IOException {
-        String videoType = mHEVC ? MediaFormat.MIMETYPE_VIDEO_HEVC : MediaFormat.MIMETYPE_VIDEO_AVC;
+    private int[] getSupportedSize(final int screenWidth, final int screenHeight, int refreshRate) {
+        int alignedWidth = (screenWidth / 16) * 16;
+        int alignedHeight = (screenHeight / 16) * 16;
 
-        // Get max size from the decoder, to ensure recordings will be playable on device
-        MediaCodec decoder = MediaCodec.createDecoderByType(videoType);
-        MediaCodecInfo.VideoCapabilities vc = decoder.getCodecInfo().getCapabilitiesForType(
-                        videoType)
-                .getVideoCapabilities();
-        decoder.release();
-
-        // Check if we can support screen size as-is
-        int width = vc.getSupportedWidths().getUpper();
-        int height = vc.getSupportedHeights().getUpper();
-
-        int screenWidthAligned = screenWidth;
-        if (screenWidthAligned % vc.getWidthAlignment() != 0) {
-            screenWidthAligned -= (screenWidthAligned % vc.getWidthAlignment());
-        }
-        int screenHeightAligned = screenHeight;
-        if (screenHeightAligned % vc.getHeightAlignment() != 0) {
-            screenHeightAligned -= (screenHeightAligned % vc.getHeightAlignment());
+        // If the user manually selected resolution or frame rate, trust their selection
+        // Hardware encoders with Level 5.1 support up to 4K @ 120 FPS natively
+        if (mResolution != 0 || mFrameRate != 0) {
+            Log.d(TAG, "Using requested manual parameters: " + alignedWidth + "x" + alignedHeight + " @" + refreshRate + "fps");
+            return new int[]{alignedWidth, alignedHeight, refreshRate};
         }
 
-        if (width >= screenWidthAligned && height >= screenHeightAligned
-                && vc.isSizeSupported(screenWidthAligned, screenHeightAligned)) {
-            // Desired size is supported, now get the rate
-            int maxRate = getSupportedFrameRateFor(vc, screenWidthAligned, screenHeightAligned);
+        try {
+            String videoType = mHEVC ? MediaFormat.MIMETYPE_VIDEO_HEVC : MediaFormat.MIMETYPE_VIDEO_AVC;
+            MediaCodec decoder = MediaCodec.createDecoderByType(videoType);
+            MediaCodecInfo.VideoCapabilities vc = decoder.getCodecInfo()
+                    .getCapabilitiesForType(videoType).getVideoCapabilities();
+            decoder.release();
 
-            if (maxRate < refreshRate) {
-                refreshRate = maxRate;
+            int minDim = Math.min(alignedWidth, alignedHeight);
+            int maxDim = Math.max(alignedWidth, alignedHeight);
+
+            if (vc.isSizeSupported(minDim, maxDim) || vc.isSizeSupported(maxDim, minDim)) {
+                return new int[]{alignedWidth, alignedHeight, refreshRate};
             }
-            VideoParameters parameters = new VideoParameters(
-                    /* mWidth= */ screenWidthAligned,
-                    /* mHeight= */ screenHeightAligned,
-                    /* mRefreshRate= */ refreshRate
-            );
-            Log.d(TAG, "Screen size supported with parameters: " + parameters);
-            return parameters;
+        } catch (Exception e) {
+            Log.w(TAG, "Error checking codec capabilities", e);
         }
 
-        // Otherwise, resize for max supported size
-        double scale = Math.min(((double) width / screenWidth),
-                ((double) height / screenHeight));
-
-        int scaledWidth = (int) (screenWidth * scale);
-        int scaledHeight = (int) (screenHeight * scale);
-        if (scaledWidth % vc.getWidthAlignment() != 0) {
-            scaledWidth -= (scaledWidth % vc.getWidthAlignment());
-        }
-        if (scaledHeight % vc.getHeightAlignment() != 0) {
-            scaledHeight -= (scaledHeight % vc.getHeightAlignment());
-        }
-
-        // Find max supported rate for size
-        int maxRate = getSupportedFrameRateFor(vc, scaledWidth, scaledHeight);
-        if (maxRate < refreshRate) {
-            refreshRate = maxRate;
-        }
-
-        VideoParameters parameters = new VideoParameters(
-                /* mWidth= */ scaledWidth,
-                /* mHeight= */ scaledHeight,
-                /* mRefreshRate= */ refreshRate
-        );
-        Log.d(TAG, "Resized to parameters: " + parameters);
-        return parameters;
+        return new int[]{alignedWidth, alignedHeight, refreshRate};
     }
 
     /**
-     * Start screen recording
-     */
+    * Start screen recording
+    */
     public void start() throws IOException, RemoteException, RuntimeException {
         Log.d(TAG, "start recording");
         prepare();
@@ -380,46 +470,45 @@ public class ScreenMediaRecorder {
         mStartTimeMillis = System.currentTimeMillis();
         mListener.onStarted();
         recordInternalAudio();
-        mIsStarted.set(true);
     }
 
     /**
      * End screen recording, throws an exception if stopping recording failed
      */
     public void end(@StopReason int stopReason) throws IOException {
-        if (mIsStarted.compareAndSet(true, false)) {
-            Closer closer = new Closer();
+        Closer closer = new Closer();
 
-            // MediaRecorder might throw RuntimeException if stopped immediately after starting
-            // We should remove the recording in this case as it will be invalid
-            closer.register(mMediaRecorder::stop);
-            closer.register(mMediaRecorder::release);
-            closer.register(mInputSurface::release);
-            closer.register(mVirtualDisplay::release);
-            closer.register(() -> {
-                if (stopReason == StopReason.STOP_UNKNOWN) {
-                    // Attempt to call MediaProjection#stop() even if it might have already been
-                    // called.
-                    // If projection has already been stopped, then nothing will happen. Else, stop
-                    // will be logged as a manually requested stop from host app.
-                    mMediaProjection.stop();
-                } else {
-                    // In any other case, the stop reason is related to the recorder, so pass it
-                    // on here
-                    mMediaProjection.stop(stopReason);
-                }
-            });
-            closer.register(this::stopInternalAudioRecording);
+        // MediaRecorder might throw RuntimeException if stopped immediately after starting
+        // We should remove the recording in this case as it will be invalid
+        closer.register(mMediaRecorder::stop);
+        closer.register(mMediaRecorder::release);
+        closer.register(mInputSurface::release);
+        closer.register(mVirtualDisplay::release);
+        closer.register(() -> {
+            if (stopReason == StopReason.STOP_UNKNOWN) {
+                // Attempt to call MediaProjection#stop() even if it might have already been called.
+                // If projection has already been stopped, then nothing will happen. Else, stop
+                // will be logged as a manually requested stop from host app.
+                mMediaProjection.stop();
+            } else {
+                // In any other case, the stop reason is related to the recorder, so pass it on here
+                mMediaProjection.stop(stopReason);
+            }
+        });
+        closer.register(this::stopInternalAudioRecording);
 
-            closer.close();
+        closer.close();
 
-            mMediaRecorder = null;
-            mMediaProjection = null;
+        mMediaRecorder = null;
+        mMediaProjection = null;
 
-            Log.d(TAG, "end recording");
-        } else {
-            Log.d(TAG, "recording hasn't been started. Nothing to end");
-        }
+        Log.d(TAG, "end recording");
+    }
+
+    @Override
+    public void onStop() {
+        Log.d(TAG, "The system notified about stopping the projection");
+        mListener.onStopped(mContext.getUserId(), StopReason.STOP_UNKNOWN);
     }
 
     private void stopInternalAudioRecording() {
@@ -429,17 +518,16 @@ public class ScreenMediaRecorder {
         }
     }
 
-    private void recordInternalAudio() throws IllegalStateException {
+    private  void recordInternalAudio() throws IllegalStateException {
         if (mAudioSource == INTERNAL || mAudioSource == MIC_AND_INTERNAL) {
             mAudio.start();
         }
     }
 
+    /**
+     * Store recorded video
+     */
     public SavedRecording save() throws IOException, IllegalStateException {
-        return save(createRecordingUri());
-    }
-
-    public Uri createRecordingUri() {
         String saveDate = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
         String fileName = mStartTimeMillis > 0L
                 ? String.format("screen-%s-%d.mp4", saveDate, mStartTimeMillis)
@@ -454,17 +542,9 @@ public class ScreenMediaRecorder {
         ContentResolver resolver = mContext.getContentResolver();
         Uri collectionUri = MediaStore.Video.Media.getContentUri(
                 MediaStore.VOLUME_EXTERNAL_PRIMARY);
-        return ContentProvider.maybeAddUserId(resolver.insert(collectionUri, values),
-                mContext.getUserId());
-    }
+        Uri itemUri = resolver.insert(collectionUri, values);
 
-    /**
-     * Store recorded video
-     */
-    public SavedRecording save(Uri itemUri)
-            throws IOException, IllegalStateException {
         Log.d(TAG, itemUri.toString());
-        ContentResolver resolver = mContext.getContentResolver();
         if (mAudioSource == MIC_AND_INTERNAL || mAudioSource == INTERNAL) {
             try {
                 Log.d(TAG, "muxing recording");
@@ -499,10 +579,13 @@ public class ScreenMediaRecorder {
      * Returns the required {@code Size} of the thumbnail.
      */
     private Size getRequiredThumbnailSize() {
-        int thumbnailIconHeight = mContext.getResources().getDimensionPixelSize(
-                R.dimen.notification_big_picture_max_height);
-        int thumbnailIconWidth = mContext.getResources().getDimensionPixelSize(
-                R.dimen.notification_big_picture_max_width);
+        boolean isLowRam = ActivityManager.isLowRamDeviceStatic();
+        int thumbnailIconHeight = mContext.getResources().getDimensionPixelSize(isLowRam
+                ? R.dimen.notification_big_picture_max_height_low_ram
+                : R.dimen.notification_big_picture_max_height);
+        int thumbnailIconWidth = mContext.getResources().getDimensionPixelSize(isLowRam
+                ? R.dimen.notification_big_picture_max_width_low_ram
+                : R.dimen.notification_big_picture_max_width);
         return new Size(thumbnailIconWidth, thumbnailIconHeight);
     }
 
@@ -519,87 +602,30 @@ public class ScreenMediaRecorder {
     }
 
     /**
-     * Currently, screen recording is being treated as a real time usecase which is at the same
-     * priority as any other video encoding/decoding usecases. This can result in video playback and
-     * recording failures while screen recording is in progress.
-     *
-     * Test the selfie enabled when increasing the cap because it's known to overflow the
-     * buffer when it is too high.
-     *
-     * @return frame rate that is supported by the codec and adjusted for the screen recording.
-     */
-    private int getSupportedFrameRateFor(MediaCodecInfo.VideoCapabilities vc, int width,
-            int height) {
-        int maxRate = vc.getSupportedFrameRatesFor(width,
-                height).getUpper().intValue() / 2;
-        // hard cap refresh rate at VIDEO_FRAME_RATE anyway
-        return Math.min(maxRate, VIDEO_FRAME_RATE);
-    }
+    * Object representing the recording
+    */
+    public class SavedRecording {
 
-    private static final class MediaProjectionCallback extends MediaProjection.Callback {
+        private Uri mUri;
+        private Icon mThumbnailIcon;
 
-        private final ScreenMediaRecorderListener mListener;
-        private final int mUserId;
-
-        MediaProjectionCallback(ScreenMediaRecorderListener listener, int userId) {
-            mListener = listener;
-            mUserId = userId;
-        }
-
-        @Override
-        public void onStop() {
-            Log.d(TAG, "Projection stopped");
-            mListener.onStopped(mUserId, StopReason.STOP_TARGET_REMOVED);
-        }
-
-        @Override
-        public void onCapturedContentVisibilityChanged(boolean isVisible) {
-            if (!isVisible) {
-                Log.d(TAG, "Content became invisible");
-                mListener.onStopped(mUserId, StopReason.STOP_TARGET_REMOVED);
+        public SavedRecording(Uri uri, File file, Size thumbnailSize) {
+            mUri = uri;
+            try {
+                Bitmap thumbnailBitmap = ThumbnailUtils.createVideoThumbnail(
+                        file, thumbnailSize, null);
+                mThumbnailIcon = Icon.createWithBitmap(thumbnailBitmap);
+            } catch (IOException e) {
+                Log.e(TAG, "Error creating thumbnail", e);
             }
         }
-    }
 
-    /**
-     * Object representing the recording
-     */
-    public static class SavedRecording {
-
-        @NonNull
-        private final Uri mUri;
-        @Nullable
-        private final Icon mThumbnailIcon;
-
-        public SavedRecording(@NonNull Uri uri, File file, Size thumbnailSize) {
-            this(uri, createThumbnail(file, thumbnailSize));
-        }
-
-        public SavedRecording(@NonNull Uri uri, @Nullable Icon thumbnailIcon) {
-            mUri = uri;
-            mThumbnailIcon = thumbnailIcon;
-        }
-
-        @NonNull
         public Uri getUri() {
             return mUri;
         }
 
         public @Nullable Icon getThumbnail() {
             return mThumbnailIcon;
-        }
-
-        @Nullable
-        private static Icon createThumbnail(File file, Size thumbnailSize) {
-            Icon thumbnailIcon = null;
-            try {
-                Bitmap thumbnailBitmap = ThumbnailUtils.createVideoThumbnail(
-                        file, thumbnailSize, null);
-                thumbnailIcon = Icon.createWithBitmap(thumbnailBitmap);
-            } catch (IOException e) {
-                Log.e(TAG, "Error creating thumbnail", e);
-            }
-            return thumbnailIcon;
         }
     }
 
@@ -668,14 +694,6 @@ public class ScreenMediaRecorder {
 
                 throw (Error) throwable;
             }
-        }
-    }
-
-    private record VideoParameters(int mWidth, int mHeight, int mRefreshRate) {
-
-        int bitrate() {
-            return mWidth * mHeight * mRefreshRate / VIDEO_FRAME_RATE
-                    * VIDEO_FRAME_RATE_TO_RESOLUTION_RATIO;
         }
     }
 }

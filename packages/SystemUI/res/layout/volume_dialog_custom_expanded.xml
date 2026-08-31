@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/volume_dialog"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:id="@+id/volume_dialog_container"
+        android:layout_width="320dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/hyperos_volume_expanded_bg"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Top Row: 4 Vertical Volume Sliders -->
+        <LinearLayout
+            android:id="@+id/volume_dialog_expanded_sliders"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <!-- Media Volume Slider -->
+            <FrameLayout
+                android:id="@+id/custom_stream_media_container"
+                android:layout_width="0dp"
+                android:layout_height="180dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp">
+                <SeekBar
+                    android:id="@+id/custom_media_seekbar"
+                    android:layout_width="180dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:background="@null"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:progressDrawable="@drawable/hyperos_vertical_progress_drawable"
+                    android:rotation="270"
+                    android:splitTrack="false"
+                    android:thumb="@null" />
+                <ImageView
+                    android:id="@+id/custom_media_icon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center_horizontal|bottom"
+                    android:layout_marginBottom="16dp"
+                    android:src="@drawable/ic_volume_speaker_blue" />
+            </FrameLayout>
+
+            <!-- Ring Volume Slider -->
+            <FrameLayout
+                android:id="@+id/custom_stream_ring_container"
+                android:layout_width="0dp"
+                android:layout_height="180dp"
+                android:layout_weight="1"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp">
+                <SeekBar
+                    android:id="@+id/custom_ring_seekbar"
+                    android:layout_width="180dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:background="@null"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:progressDrawable="@drawable/hyperos_vertical_progress_drawable"
+                    android:rotation="270"
+                    android:splitTrack="false"
+                    android:thumb="@null" />
+                <ImageView
+                    android:id="@+id/custom_ring_icon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center_horizontal|bottom"
+                    android:layout_marginBottom="16dp"
+                    android:src="@drawable/ic_volume_bell_blue" />
+            </FrameLayout>
+
+            <!-- Alarm Volume Slider -->
+            <FrameLayout
+                android:id="@+id/custom_stream_alarm_container"
+                android:layout_width="0dp"
+                android:layout_height="180dp"
+                android:layout_weight="1"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp">
+                <SeekBar
+                    android:id="@+id/custom_alarm_seekbar"
+                    android:layout_width="180dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:background="@null"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:progressDrawable="@drawable/hyperos_vertical_progress_drawable"
+                    android:rotation="270"
+                    android:splitTrack="false"
+                    android:thumb="@null" />
+                <ImageView
+                    android:id="@+id/custom_alarm_icon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center_horizontal|bottom"
+                    android:layout_marginBottom="16dp"
+                    android:src="@drawable/ic_volume_alarm_blue" />
+            </FrameLayout>
+
+            <!-- Notification Volume Slider -->
+            <FrameLayout
+                android:id="@+id/custom_stream_notif_container"
+                android:layout_width="0dp"
+                android:layout_height="180dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp">
+                <SeekBar
+                    android:id="@+id/custom_notif_seekbar"
+                    android:layout_width="180dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:background="@null"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:progressDrawable="@drawable/hyperos_vertical_progress_drawable"
+                    android:rotation="270"
+                    android:splitTrack="false"
+                    android:thumb="@null" />
+                <ImageView
+                    android:id="@+id/custom_notif_icon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center_horizontal|bottom"
+                    android:layout_marginBottom="16dp"
+                    android:src="@drawable/ic_volume_notif_blue" />
+            </FrameLayout>
+
+        </LinearLayout>
+
+        <!-- Dynamic Rows Container for system / bluetooth rows if needed -->
+        <LinearLayout
+            android:id="@+id/volume_dialog_rows"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:orientation="horizontal" />
+
+        <!-- Bottom Section: 2 Horizontal Timers -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <!-- Silence Timer Row -->
+            <LinearLayout
+                android:id="@+id/silence_timer_row"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/silence_timer_btn"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
+                    android:background="@drawable/hyperos_volume_capsule_bg">
+                    <ImageView
+                        android:id="@+id/silence_timer_icon"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_volume_bell_mute_red" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/silence_timer_container"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1">
+
+                    <ProgressBar
+                        android:id="@+id/silence_timer_progress"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:max="4"
+                        android:progress="0"
+                        android:progressDrawable="@drawable/hyperos_timer_progress_drawable" />
+
+                    <SeekBar
+                        android:id="@+id/silence_timer_seekbar"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:max="4"
+                        android:progress="0"
+                        android:progressTint="@android:color/transparent"
+                        android:thumb="@null" />
+
+                    <TextView
+                        android:id="@+id/silence_timer_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="Deslice para establecer un temporizador"
+                        android:textColor="#FFFFFFFF"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- DND Timer Row -->
+            <LinearLayout
+                android:id="@+id/dnd_timer_row"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/dnd_timer_btn"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
+                    android:background="@drawable/hyperos_volume_capsule_bg">
+                    <ImageView
+                        android:id="@+id/dnd_timer_icon"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_volume_moon_purple" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/dnd_timer_container"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1">
+
+                    <ProgressBar
+                        android:id="@+id/dnd_timer_progress"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:max="4"
+                        android:progress="0"
+                        android:progressDrawable="@drawable/hyperos_timer_progress_drawable" />
+
+                    <SeekBar
+                        android:id="@+id/dnd_timer_seekbar"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:max="4"
+                        android:progress="0"
+                        android:progressTint="@android:color/transparent"
+                        android:thumb="@null" />
+
+                    <TextView
+                        android:id="@+id/dnd_timer_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="Deslice para establecer un temporizador"
+                        android:textColor="#FFFFFFFF"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

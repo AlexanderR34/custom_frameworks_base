@@ -20,6 +20,7 @@ import static android.hardware.display.DisplayManager.SWITCHING_TYPE_NONE;
 import static android.hardware.display.DisplayManager.SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY;
 
 import android.hardware.display.DisplayManager;
+import android.provider.Settings;
 import android.view.Display;
 import android.view.Display.Mode;
 import android.view.DisplayInfo;
@@ -261,11 +262,21 @@ class RefreshRatePolicy {
                     SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
         }
 
+        final String packageName = w.getOwningPackage();
+        if (packageName != null) {
+            int appRefreshRate = Settings.System.getInt(mWmService.mContext.getContentResolver(),
+                    "app_refresh_rate_" + packageName, 0);
+            if (appRefreshRate > 0) {
+                return w.mFrameRateVote.update((float) appRefreshRate,
+                        Surface.FRAME_RATE_COMPATIBILITY_EXACT,
+                        SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
+            }
+        }
+
         // If the app didn't set a preferred mode id or refresh rate, but it is part of the deny
         // list, we return the low refresh rate as the preferred one.
         if (refreshRateSwitchingType != SWITCHING_TYPE_RENDER_FRAME_RATE_ONLY) {
-            final String packageName = w.getOwningPackage();
-            if (mHighRefreshRateDenylist.isDenylisted(packageName)) {
+            if (packageName != null && mHighRefreshRateDenylist.isDenylisted(packageName)) {
                 return w.mFrameRateVote.update(mLowRefreshRateMode.getRefreshRate(),
                         Surface.FRAME_RATE_COMPATIBILITY_EXACT,
                         SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
@@ -287,6 +298,13 @@ class RefreshRatePolicy {
         }
 
         String packageName = w.getOwningPackage();
+        if (packageName != null) {
+            int appRefreshRate = Settings.System.getInt(mWmService.mContext.getContentResolver(),
+                    "app_refresh_rate_" + packageName, 0);
+            if (appRefreshRate > 0) {
+                return appRefreshRate;
+            }
+        }
         // If app is using Camera, we set both the min and max refresh rate to the camera's
         // preferred refresh rate to make sure we don't end up with a refresh rate lower
         // than the camera capture rate, which will lead to dropping camera frames.
@@ -310,6 +328,13 @@ class RefreshRatePolicy {
         }
 
         final String packageName = w.getOwningPackage();
+        if (packageName != null) {
+            int appRefreshRate = Settings.System.getInt(mWmService.mContext.getContentResolver(),
+                    "app_refresh_rate_" + packageName, 0);
+            if (appRefreshRate > 0) {
+                return appRefreshRate;
+            }
+        }
         // If app is using Camera, force it to default (lower) refresh rate.
         RefreshRateRange range = mNonHighRefreshRatePackages.get(packageName);
         if (range != null) {

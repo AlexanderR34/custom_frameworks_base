@@ -6989,6 +6989,10 @@ final class ActivityRecord extends WindowToken {
     }
 
     void reportScreenCaptured() {
+        if (android.provider.Settings.Secure.getInt(
+                mAtmService.mContext.getContentResolver(), "block_screenshot_detection", 0) != 0) {
+            return;
+        }
         if (mCaptureCallbacks != null) {
             final int n = mCaptureCallbacks.beginBroadcast();
             for (int i = 0; i < n; i++) {
@@ -7016,6 +7020,10 @@ final class ActivityRecord extends WindowToken {
     }
 
     boolean isRegisteredForScreenCaptureCallback() {
+        if (android.provider.Settings.Secure.getInt(
+                mAtmService.mContext.getContentResolver(), "block_screenshot_detection", 0) != 0) {
+            return false;
+        }
         return mCaptureCallbacks != null && mCaptureCallbacks.getRegisteredCallbackCount() > 0;
     }
 

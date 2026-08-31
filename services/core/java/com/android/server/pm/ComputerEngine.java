@@ -176,9 +176,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Objects;
+import java.security.cert.CertificateException;
 import java.util.Set;
 import java.util.UUID;
+import android.os.Bundle;
+import android.security.pif.PlayIntegritySpoofService;
 
 /**
  * This class contains the implementation of the Computer functions.  It
@@ -1482,6 +1486,45 @@ public class ComputerEngine implements Computer {
         return result;
     }
 
+    public static boolean isMicrogSigned(AndroidPackage p) {
+        // Allowlist the following apps:
+        // * com.android.vending - microG Companion
+        // * com.google.android.gms - microG Services
+        // * revanced - revanced microG Services
+        Set<String> allowlistedPackages = Set.of(
+            "com.android.vending",  // microG Companion
+            "com.google.android.gms" // microG Services
+        );
+
+        if (!allowlistedPackages.contains(p.getPackageName()) &&
+            !p.getPackageName().toLowerCase().contains("revanced")) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static Optional<Signature> generateFakeSignature(AndroidPackage p) {
+        if (!isMicrogSigned(p)) {
+            return Optional.empty();
+        }
+
+        Bundle metadata = p.getMetaData();
+        if (metadata == null) {
+            return Optional.empty();
+        }
+
+        String fakeSignatureStr = metadata.getString("fake-signature");
+        if (TextUtils.isEmpty(fakeSignatureStr)) {
+            return Optional.empty();
+        }
+
+        // Only MICROG_FAKE_SIGNATURE can be faked
+        Signature fakeSignature = new Signature(fakeSignatureStr);
+
+        return Optional.of(fakeSignature);
+    }
+
     public final PackageInfo generatePackageInfo(PackageStateInternal ps,
             @PackageManager.PackageInfoFlagsBits long flags, int userId) {
         if (!mUserManager.exists(userId)) return null;
@@ -1545,6 +1588,56 @@ public class ComputerEngine implements Computer {
                             developerVerificationStatusInternal.isAppMetadataVerified());
                 }
             }
+
+            generateFakeSignature(p).ifPresent(fakeSignature -> {
+                packageInfo.signatures = new Signature[]{fakeSignature};
+                try {
+                    packageInfo.signingInfo = new SigningInfo(
+                            new SigningDetails(
+                                    packageInfo.signatures,
+                                    SigningDetails.SignatureSchemeVersion.SIGNING_BLOCK_V3,
+                                    SigningDetails.toSigningKeys(packageInfo.signatures),
+                                    null
+                            )
+                    );
+                } catch (CertificateException e) {
+                    Slog.e(TAG, "Caught an exception when creating signing keys: ", e);
+                }
+            });
+
+            if ("android".equals(p.getPackageName())) {
+                try {
+                    PlayIntegritySpoofService pifService = PlayIntegritySpoofService.getInstance();
+                    if (pifService.isSpoofSignatureEnabled()) {
+                        String[] callingPackages = getPackagesForUid(callingUid);
+                        boolean isGms = false;
+                        if (callingPackages != null) {
+                            for (String pkg : callingPackages) {
+                                if ("com.google.android.gms".equals(pkg)) {
+                                    isGms = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (isGms) {
+                            Signature pifSignature = new Signature(pifService.getRomSignatureBytes());
+                            packageInfo.signatures = new Signature[]{pifSignature};
+                            packageInfo.signingInfo = new SigningInfo(
+                                    new SigningDetails(
+                                            packageInfo.signatures,
+                                            SigningDetails.SignatureSchemeVersion.SIGNING_BLOCK_V3,
+                                            SigningDetails.toSigningKeys(packageInfo.signatures),
+                                            null
+                                    )
+                            );
+                            Slog.d(TAG, "PIF: Spoofed ROM signature for 'android' package to GMS");
+                        }
+                    }
+                } catch (Exception e) {
+                    Slog.e(TAG, "PIF: Failed to spoof ROM signature", e);
+                }
+            }
+
             return packageInfo;
         } else if ((flags & (MATCH_UNINSTALLED_PACKAGES | MATCH_ARCHIVED_PACKAGES)) != 0
                 && PackageUserStateUtils.isAvailable(state, flags)) {

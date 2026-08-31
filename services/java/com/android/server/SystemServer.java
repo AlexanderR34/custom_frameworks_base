@@ -1011,6 +1011,8 @@ public final class SystemServer implements Dumpable {
 
             LocalServices.addService(SystemServiceManager.class, mSystemServiceManager);
 
+            AxExtServiceFactory.init(mSystemContext);
+
             // Lazily load the pre-installed system font map in SystemServer only if we're not doing
             // the optimized font loading in the FontManagerService.
             if (!com.android.text.flags.Flags.useOptimizedBoottimeFontLoading()
@@ -1374,34 +1376,82 @@ public final class SystemServer implements Dumpable {
                 mSystemContext, SystemConfig.getInstance(), platformCompat);
         mSystemServiceManager.startService(domainVerificationService);
         t.traceEnd();
+        mActivityManagerService.setSystemServiceManager(mSystemServiceManager);
+        mActivityManagerService.setInstaller(installer);
+        mWindowManagerGlobalLock = atm.getGlobalLock();
+        AxExtServiceFactory.injectActivityManagerService(mActivityManagerService);
+        t.traceEnd();
 
+        // Data loader manager service needs to be started before package manager
+        t.traceBegin("StartDataLoaderManagerService");
+        mDataLoaderManagerService = mSystemServiceManager.startService(
+                DataLoaderManagerService.class);
+        t.traceEnd();
+
+        // Incremental service needs to be started before package manager
+        t.traceBegin("StartIncrementalService");
+        mIncrementalServiceHandle = startIncrementalService();
+        t.traceEnd();
+
+        // Start the package manager.
         t.traceBegin("StartPackageManagerService");
         try {
-            Watchdog.getInstance().pauseWatchingCurrentThread("packagemanagermain");
+            Watchdog.getInstance().pauseWatchingCurrentThread();
             mPackageManagerService = PackageManagerService.main(
-                    mSystemContext, installer, domainVerificationService,
-                    mFactoryTestMode != FactoryTest.FACTORY_TEST_OFF);
+                    mSystemContext,
+                    installer,
+                    mFactoryTestMode != FactoryTest.FACTORY_TEST_OFF,
+                    mOnlyCore);
         } finally {
-            Watchdog.getInstance().resumeWatchingCurrentThread("packagemanagermain");
+            Watchdog.getInstance().resumeWatchingCurrentThread();
         }
 
+        // Now that the package manager has started, do some more setup.
         mFirstBoot = mPackageManagerService.isFirstBoot();
         mPackageManager = mSystemContext.getPackageManager();
         t.traceEnd();
 
-        t.traceBegin("DexUseManagerLocal");
-        // DexUseManagerLocal needs to be loaded after PackageManagerLocal has been registered, but
-        // before PackageManagerService starts processing binder calls to notifyDexLoad.
+        if (Flags.postBootDexopt()) {
+            t.traceBegin("StartArtManagerLocal");
+            LocalManagerRegistry.addManager(ArtManagerLocal.class, new ArtManagerLocal());
+            t.traceEnd();
+        }
+
+        t.traceBegin("StartDexMetadataPreOptManagerLocal");
         LocalManagerRegistry.addManager(
-                DexUseManagerLocal.class, DexUseManagerLocal.createInstance(mSystemContext));
+                DexMetadataPreOptManagerLocal.class, new DexMetadataPreOptManagerLocal());
         t.traceEnd();
 
-        if (!mRuntimeRestart && !isFirstBootOrUpgrade()) {
+        t.traceBegin("StartAppDataMigrationManagerLocal");
+        LocalManagerRegistry.addManager(
+                AppDataMigrationManagerLocal.class, new AppDataMigrationManagerLocal());
+        t.traceEnd();
+
+        if (!mOnlyCore) {
+            boolean disableOtaDexopt = SystemProperties.getBoolean("config.disable_otadexopt",
+                    false);
+            if (!disableOtaDexopt) {
+                t.traceBegin("StartOtaDexOptService");
+                try {
+                    Watchdog.getInstance().pauseWatchingCurrentThread();
+                    OtaDexoptService.main(mSystemContext, mPackageManagerService);
+                } catch (Throwable e) {
+                    reportWtf("starting OtaDexOptService", e);
+                } finally {
+                    Watchdog.getInstance().resumeWatchingCurrentThread();
+                }
+                t.traceEnd();
+            }
+        }
+
+        if (Flags.systemServerPreBootEvent()) {
             FrameworkStatsLog.write(FrameworkStatsLog.BOOT_TIME_EVENT_ELAPSED_TIME_REPORTED,
                     FrameworkStatsLog
                             .BOOT_TIME_EVENT_ELAPSED_TIME__EVENT__PACKAGE_MANAGER_INIT_READY,
                     SystemClock.elapsedRealtime());
         }
+
+        AxExtServiceFactory.injectPackageManagerservice(mPackageManagerService);
 
         if (Build.IS_ARC) {
             t.traceBegin("StartArcSystemHealthService");
@@ -1440,6 +1490,21 @@ public final class SystemServer implements Dumpable {
         // Manages Overlay packages
         t.traceBegin("StartOverlayManagerService");
         mSystemServiceManager.startService(new OverlayManagerService(mSystemContext));
+        t.traceEnd();
+
+        t.traceBegin("InitVBMetaDigest");
+        try {
+            android.security.trickystore.AttestationUtils.initBootHash();
+        } catch (Throwable e) {
+            Slog.e(TAG, "Failed to init VBMeta digest", e);
+        }
+
+        t.traceBegin("StartTrickyStoreService");
+        try {
+            android.security.trickystore.TrickyStoreService.getInstance().initialize();
+        } catch (Throwable e) {
+            Slog.e(TAG, "Failed to initialize TrickyStoreService", e);
+        }
         t.traceEnd();
 
         // Manages Resources packages
@@ -1761,6 +1826,7 @@ public final class SystemServer implements Dumpable {
             mSystemServiceManager.startBootPhase(t, SystemService.PHASE_WAIT_FOR_SENSOR_SERVICE);
             wm = WindowManagerService.main(context, inputManager, !mFirstBoot,
                     new PhoneWindowManager(), mActivityManagerService.mActivityTaskManager);
+            AxExtServiceFactory.injectWindowManagerService(wm);
             ServiceManager.addService(Context.WINDOW_SERVICE, wm, /* allowIsolated= */ false,
                     DUMP_FLAG_PRIORITY_CRITICAL | DUMP_FLAG_PRIORITY_HIGH
                             | DUMP_FLAG_PROTO);

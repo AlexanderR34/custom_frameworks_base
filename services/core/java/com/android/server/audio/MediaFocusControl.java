@@ -1595,8 +1595,13 @@ public class MediaFocusControl implements PlayerFocusEnforcer {
             final FocusRequester nfr = new FocusRequester(aa, focusChangeHint, flags, fd, cb,
                     clientId, afdh, callingPackageName, uid, this, sdk, mEventLogger);
 
-            if (mMultiAudioFocusEnabled
-                    && (focusChangeHint == AudioManager.AUDIOFOCUS_GAIN)) {
+            boolean isMultiFocus = (Settings.System.getInt(mContext.getContentResolver(),
+                    "multi_audio_focus_enabled", 0) != 0) || mMultiAudioFocusEnabled;
+            if (isMultiFocus
+                    && (focusChangeHint == AudioManager.AUDIOFOCUS_GAIN
+                        || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                        || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                        || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)) {
                 if (isForCall) {
                     if (!mMultiAudioFocusList.isEmpty()) {
                         for (FocusRequester multifr : mMultiAudioFocusList) {
@@ -1825,6 +1830,7 @@ public class MediaFocusControl implements PlayerFocusEnforcer {
     }
 
     public void updateMultiAudioFocus(boolean enabled) {
+        if (mMultiAudioFocusEnabled == enabled) return;
         Log.d(TAG, "updateMultiAudioFocus( " + enabled + " )");
         synchronized (mAudioFocusLock) {
             mMultiAudioFocusEnabled = enabled;

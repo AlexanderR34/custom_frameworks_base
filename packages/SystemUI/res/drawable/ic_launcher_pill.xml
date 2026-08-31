@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Background Pill -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M30,35 L70,35 A15,15 0 0 1 70,65 L30,65 A15,15 0 0 1 30,35 Z" />
+    <!-- Miku Cyan Accent -->
+    <path
+        android:fillColor="#39C5BB"
+        android:pathData="M35,48 L45,48 A2,2 0 0 1 45,52 L35,52 A2,2 0 0 1 35,48 Z" />
+</vector>

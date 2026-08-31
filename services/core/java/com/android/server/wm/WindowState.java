@@ -1965,6 +1965,11 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
             return false;
         }
 
+        if (android.provider.Settings.Secure.getInt(
+                mWmService.mContext.getContentResolver(), "disable_flag_secure", 0) != 0) {
+            return false;
+        }
+
         if ((mAttrs.flags & WindowManager.LayoutParams.FLAG_SECURE) != 0) {
             return true;
         }

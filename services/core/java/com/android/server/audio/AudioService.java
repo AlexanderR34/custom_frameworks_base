@@ -376,6 +376,7 @@ public class AudioService extends IAudioService.Stub
     private final AudioServerPermissionProvider mPermissionProvider;
 
     private final MusicFxHelper mMusicFxHelper;
+    private VolumeBoostHelper mVolumeBoostHelper;
 
     /** Debug audio mode */
     protected static final boolean DEBUG_MODE = Log.isLoggable(TAG + ".Mode", Log.DEBUG);
@@ -1844,6 +1845,8 @@ public class AudioService extends IAudioService.Stub
         mDisplayManager = context.getSystemService(DisplayManager.class);
 
         mMusicFxHelper = new MusicFxHelper(mContext, mAudioHandler);
+        mVolumeBoostHelper = new VolumeBoostHelper(mContext);
+        com.android.server.wallpaper.LockscreenWallpaperRotationService.getInstance(mContext);
 
         mHardeningEnforcer = new HardeningEnforcer(mContext, isPlatformAutomotive(),
                 mHardeningOverride,
@@ -12202,6 +12205,10 @@ public class AudioService extends IAudioService.Stub
                     Settings.System.MASTER_MONO), false, this, UserHandle.USER_ALL);
             mContentResolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.MASTER_BALANCE), false, this, UserHandle.USER_ALL);
+            mContentResolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.VOLUME_BOOST_LEVEL), false, this, UserHandle.USER_ALL);
+            mContentResolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.MULTI_AUDIO_FOCUS_ENABLED), false, this, UserHandle.USER_ALL);
 
             mEncodedSurroundMode = mSettings.getGlobalInt(
                     mContentResolver, Settings.Global.ENCODED_SURROUND_OUTPUT,
@@ -12220,6 +12227,14 @@ public class AudioService extends IAudioService.Stub
         @Override
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
+            if (mVolumeBoostHelper != null) {
+                mVolumeBoostHelper.updateVolumeBoost();
+            }
+            if (mMediaFocusControl != null) {
+                boolean multiFocus = Settings.System.getIntForUser(mContentResolver,
+                        Settings.System.MULTI_AUDIO_FOCUS_ENABLED, 0, UserHandle.USER_CURRENT) != 0;
+                mMediaFocusControl.updateMultiAudioFocus(multiFocus);
+            }
             // FIXME This synchronized is not necessary if mSettingsLock only protects mRingerMode.
             //       However there appear to be some missing locks around sRingerAndZenModeMutedStreams
             //       and mRingerModeAffectedStreams, so will leave this synchronized for now.

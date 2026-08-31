@@ -21,10 +21,23 @@
         android:src="@drawable/ic_volume_odi_captions_disabled"
         android:layout_width="@dimen/volume_dialog_button_size"
         android:layout_height="@dimen/volume_dialog_button_size"
-        android:tint="@color/materialColorPrimary"
+        android:tint="@androidprv:color/materialColorPrimary"
         android:background="@drawable/volume_dialog_captions_button_transition_bg"
         android:scaleType="centerInside"
         android:soundEffectsEnabled="false"
+        android:visibility="gone"/>
+
+    <ImageButton
+        android:id="@+id/app_volume_icon"
+        android:src="@drawable/ic_app_volume"
+        android:layout_width="@dimen/volume_dialog_button_size"
+        android:layout_height="@dimen/volume_dialog_button_size"
+        android:layout_gravity="center"
+        android:background="@drawable/volume_dialog_captions_button_transition_bg"
+        android:contentDescription="@string/accessibility_volume_settings"
+        android:scaleType="centerInside"
+        android:soundEffectsEnabled="false"
+        android:tint="@androidprv:color/materialColorPrimary"
         android:visibility="gone"/>
 
     <ImageButton
@@ -37,5 +50,5 @@
         android:scaleType="centerInside"
         android:soundEffectsEnabled="false"
         android:padding="4dp"
-        android:tint="@color/materialColorPrimary"/>
+        android:tint="@androidprv:color/materialColorPrimary"/>
 </merge>

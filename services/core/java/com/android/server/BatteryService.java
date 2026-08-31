@@ -534,6 +534,79 @@ public final class BatteryService extends SystemService {
                         Settings.Global.LOW_POWER_MODE_TRIGGER_LEVEL),
                         false, obs, UserHandle.USER_ALL);
                 updateBatteryWarningLevelLocked();
+
+                ContentObserver usbPdObs = new ContentObserver(mHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        updateUsbPdOptimizationState();
+                    }
+                };
+                resolver.registerContentObserver(Settings.System.getUriFor(
+                        Settings.System.USB_PD_OPTIMIZATION_ENABLED),
+                        false, usbPdObs, UserHandle.USER_ALL);
+                updateUsbPdOptimizationState();
+
+                ContentObserver cpuCoreObs = new ContentObserver(mHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        updateCpuCoreStates();
+                    }
+                };
+                for (int i = 1; i <= 7; i++) {
+                    resolver.registerContentObserver(Settings.System.getUriFor(
+                            "cpu_core_online_" + i),
+                            false, cpuCoreObs, UserHandle.USER_ALL);
+                }
+                updateCpuCoreStates();
+            }
+        }
+    }
+
+    private static final String[] USB_PD_OPTIMIZATION_NODES = new String[] {
+            "/sys/class/power_supply/battery/step_charging_enabled",
+            "/sys/class/power_supply/battery/charge_control_limit",
+            "/sys/class/power_supply/battery/charge_control_limit_max",
+            "/sys/class/power_supply/usb/pd_allowed"
+    };
+
+    private void updateUsbPdOptimizationState() {
+        boolean enabled = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.USB_PD_OPTIMIZATION_ENABLED, 1, UserHandle.USER_CURRENT) == 1;
+
+        for (String nodePath : USB_PD_OPTIMIZATION_NODES) {
+            File node = new File(nodePath);
+            if (node.exists()) {
+                try {
+                    String value;
+                    if (nodePath.contains("step_charging_enabled") || nodePath.contains("pd_allowed")) {
+                        value = enabled ? "1" : "0";
+                    } else if (nodePath.contains("charge_control_limit")) {
+                        value = enabled ? "80" : "100";
+                    } else {
+                        value = enabled ? "1" : "0";
+                    }
+                    FileUtils.stringToFile(nodePath, value);
+                    Slog.i(TAG, "USB-PD Optimization updated: " + nodePath + " -> " + value);
+                } catch (IOException e) {
+                    Slog.w(TAG, "Failed to write USB-PD Optimization state to " + nodePath + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private void updateCpuCoreStates() {
+        for (int i = 1; i <= 7; i++) {
+            int online = Settings.System.getIntForUser(mContext.getContentResolver(),
+                    "cpu_core_online_" + i, 1, UserHandle.USER_CURRENT);
+            String path = "/sys/devices/system/cpu/cpu" + i + "/online";
+            File node = new File(path);
+            if (node.exists()) {
+                try {
+                    FileUtils.stringToFile(path, String.valueOf(online));
+                    Slog.i(TAG, "CPU core " + i + " online state updated -> " + online);
+                } catch (IOException e) {
+                    Slog.w(TAG, "Failed to write CPU core " + i + " online state to " + path + ": " + e.getMessage());
+                }
             }
         }
     }

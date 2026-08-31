@@ -93,6 +93,16 @@ public class NetworkPolicyManager {
      * @hide
      */
     public static final int POLICY_ALLOW_METERED_BACKGROUND = 0x4;
+    /**
+     * Reject network usage on cellular networks for this UID.
+     * @hide
+     */
+    public static final int POLICY_REJECT_CELLULAR = 0x8;
+    /**
+     * Reject network usage on Wi-Fi networks for this UID.
+     * @hide
+     */
+    public static final int POLICY_REJECT_WIFI = 0x10;
     /** Reject network usage on cellular network
      * @hide
      */

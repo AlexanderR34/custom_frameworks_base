@@ -54,6 +54,7 @@ import com.android.systemui.statusbar.ImmersiveModeConfirmation
 import com.android.systemui.statusbar.gesture.GesturePointerEventListener
 import com.android.systemui.statusbar.notification.InstantAppNotifier
 import com.android.systemui.statusbar.notification.headsup.StatusBarHeadsUpChangeListener
+import com.android.systemui.statusbar.policy.GameSpaceManager
 import com.android.systemui.stylus.StylusUsiPowerStartable
 import com.android.systemui.temporarydisplay.chipbar.ChipbarCoordinator
 import com.android.systemui.usb.StorageNotification
@@ -336,4 +337,10 @@ abstract class SystemUICoreStartableModule {
     @IntoMap
     @ClassKey(KeyguardSmartspaceStartable::class)
     abstract fun bindKeyguardSmartspaceStartable(impl: KeyguardSmartspaceStartable): CoreStartable
+
+    /** Inject into GameSpaceManager. */
+    @Binds
+    @IntoMap
+    @ClassKey(GameSpaceManager::class)
+    abstract fun bindGameSpaceManager(impl: GameSpaceManager): CoreStartable
 }
