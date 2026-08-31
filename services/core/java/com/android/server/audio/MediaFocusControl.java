@@ -42,6 +42,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.RemoteException;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
@@ -1595,8 +1596,7 @@ public class MediaFocusControl implements PlayerFocusEnforcer {
             final FocusRequester nfr = new FocusRequester(aa, focusChangeHint, flags, fd, cb,
                     clientId, afdh, callingPackageName, uid, this, sdk, mEventLogger);
 
-            boolean isMultiFocus = (Settings.System.getInt(mContext.getContentResolver(),
-                    "multi_audio_focus_enabled", 0) != 0) || mMultiAudioFocusEnabled;
+            boolean isMultiFocus = mMultiAudioFocusEnabled;
             if (isMultiFocus
                     && (focusChangeHint == AudioManager.AUDIOFOCUS_GAIN
                         || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT

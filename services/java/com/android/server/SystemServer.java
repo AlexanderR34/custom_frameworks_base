@@ -1396,14 +1396,14 @@ public final class SystemServer implements Dumpable {
         // Start the package manager.
         t.traceBegin("StartPackageManagerService");
         try {
-            Watchdog.getInstance().pauseWatchingCurrentThread();
+            Watchdog.getInstance().pauseWatchingCurrentThread("package manager init");
             mPackageManagerService = PackageManagerService.main(
                     mSystemContext,
                     installer,
-                    mFactoryTestMode != FactoryTest.FACTORY_TEST_OFF,
-                    mOnlyCore);
+                    domainVerificationService,
+                    mFactoryTestMode != FactoryTest.FACTORY_TEST_OFF);
         } finally {
-            Watchdog.getInstance().resumeWatchingCurrentThread();
+            Watchdog.getInstance().resumeWatchingCurrentThread("package manager init");
         }
 
         // Now that the package manager has started, do some more setup.
@@ -1411,45 +1411,10 @@ public final class SystemServer implements Dumpable {
         mPackageManager = mSystemContext.getPackageManager();
         t.traceEnd();
 
-        if (Flags.postBootDexopt()) {
-            t.traceBegin("StartArtManagerLocal");
-            LocalManagerRegistry.addManager(ArtManagerLocal.class, new ArtManagerLocal());
-            t.traceEnd();
-        }
-
-        t.traceBegin("StartDexMetadataPreOptManagerLocal");
-        LocalManagerRegistry.addManager(
-                DexMetadataPreOptManagerLocal.class, new DexMetadataPreOptManagerLocal());
-        t.traceEnd();
-
-        t.traceBegin("StartAppDataMigrationManagerLocal");
-        LocalManagerRegistry.addManager(
-                AppDataMigrationManagerLocal.class, new AppDataMigrationManagerLocal());
-        t.traceEnd();
-
-        if (!mOnlyCore) {
-            boolean disableOtaDexopt = SystemProperties.getBoolean("config.disable_otadexopt",
-                    false);
-            if (!disableOtaDexopt) {
-                t.traceBegin("StartOtaDexOptService");
-                try {
-                    Watchdog.getInstance().pauseWatchingCurrentThread();
-                    OtaDexoptService.main(mSystemContext, mPackageManagerService);
-                } catch (Throwable e) {
-                    reportWtf("starting OtaDexOptService", e);
-                } finally {
-                    Watchdog.getInstance().resumeWatchingCurrentThread();
-                }
-                t.traceEnd();
-            }
-        }
-
-        if (Flags.systemServerPreBootEvent()) {
-            FrameworkStatsLog.write(FrameworkStatsLog.BOOT_TIME_EVENT_ELAPSED_TIME_REPORTED,
-                    FrameworkStatsLog
-                            .BOOT_TIME_EVENT_ELAPSED_TIME__EVENT__PACKAGE_MANAGER_INIT_READY,
-                    SystemClock.elapsedRealtime());
-        }
+        FrameworkStatsLog.write(FrameworkStatsLog.BOOT_TIME_EVENT_ELAPSED_TIME_REPORTED,
+                FrameworkStatsLog
+                        .BOOT_TIME_EVENT_ELAPSED_TIME__EVENT__PACKAGE_MANAGER_INIT_READY,
+                SystemClock.elapsedRealtime());
 
         AxExtServiceFactory.injectPackageManagerservice(mPackageManagerService);
 
@@ -1490,21 +1455,6 @@ public final class SystemServer implements Dumpable {
         // Manages Overlay packages
         t.traceBegin("StartOverlayManagerService");
         mSystemServiceManager.startService(new OverlayManagerService(mSystemContext));
-        t.traceEnd();
-
-        t.traceBegin("InitVBMetaDigest");
-        try {
-            android.security.trickystore.AttestationUtils.initBootHash();
-        } catch (Throwable e) {
-            Slog.e(TAG, "Failed to init VBMeta digest", e);
-        }
-
-        t.traceBegin("StartTrickyStoreService");
-        try {
-            android.security.trickystore.TrickyStoreService.getInstance().initialize();
-        } catch (Throwable e) {
-            Slog.e(TAG, "Failed to initialize TrickyStoreService", e);
-        }
         t.traceEnd();
 
         // Manages Resources packages

@@ -150,9 +150,9 @@ open class ScreenRecordingService : ComponentService() {
         }
     }
 
-    private suspend fun RecordingContext.saveRecording(uri: Uri) {
+    private suspend fun RecordingContext.saveRecording() {
+        var uri: Uri? = null
         try {
-            callback?.onSavingRecording(uri, notificationId)
             Log.d(tag, "Saving screen recording")
             notificationInteractor.notifyProcessing(
                 notificationId = notificationId,
@@ -161,8 +161,9 @@ open class ScreenRecordingService : ComponentService() {
 
             val savedRecording: SavedRecording =
                 withContext(backgroundContext) {
-                    recorder.save(uri).apply {
-                        callback?.onRecordingSaved(uri, thumbnail, notificationId)
+                    recorder.save().apply {
+                        uri = this.uri
+                        callback?.onRecordingSaved(this.uri, thumbnail, notificationId)
                     }
                 }
             onRecordingSaved(this, savedRecording)
@@ -181,16 +182,14 @@ open class ScreenRecordingService : ComponentService() {
     }
 
     private fun RecordingContext.stopRecording(@StopReason reason: Int) {
-        var recordingUri: Uri? = null
         try {
-            recordingUri = recorder.createRecordingUri()
             Log.d(tag, "Stopping screen recording reason=$reason")
             recordingContext = null
             screenRecordingPreferenceRepository.maybeRestoreSetting()
             recorder.end(reason)
-            coroutineScope.launch { saveRecording(recordingUri) }
+            coroutineScope.launch { saveRecording() }
         } catch (e: Exception) {
-            launchCallbackAction { onRecordingSaveError(recordingUri, notificationId) }
+            launchCallbackAction { onRecordingSaveError(null, notificationId) }
             notificationInteractor.notifyErrorSaving(notificationId)
             Log.e(tag, "Error stopping screen recording", e)
             showToast(R.string.screenrecord_save_error)

@@ -29,16 +29,13 @@ import android.stats.devicepolicy.DevicePolicyEnums;
 
 /**
  * Params required to provision a managed full user on a multi-user device. See
- * {@link DevicePolicyManager#provisionMultiUserManagedUser}.
- *
- * <p>This will be removed soon. Please use
- * {@link #MultiuserManagedUserProvisioningParams} instead.
+ * {@link DevicePolicyManager#provisionMultiuserManagedUser}.
  *
  * @hide
  */
 @SystemApi
 @FlaggedApi(Flags.FLAG_MULTI_USER_MANAGEMENT_USER_PROVISIONING)
-public final class MultiUserManagedUserProvisioningParams {
+public final class MultiuserManagedUserProvisioningParams {
     private static final String LEAVE_ALL_SYSTEM_APPS_ENABLED_PARAM =
             "LEAVE_ALL_SYSTEM_APPS_ENABLED";
 
@@ -46,12 +43,12 @@ public final class MultiUserManagedUserProvisioningParams {
     private final MultiuserManagedUserProvisioningParamsTransport mTransport;
 
     /**
-     * Constructs a new {@link MultiUserManagedUserProvisioningParams} object.
+     * Constructs a new {@link MultiuserManagedUserProvisioningParams} object.
      *
      * @param transport The transport representation of the params.
      * @hide
      */
-    public MultiUserManagedUserProvisioningParams(
+    public MultiuserManagedUserProvisioningParams(
             @NonNull MultiuserManagedUserProvisioningParamsTransport transport) {
         this.mTransport = transport;
     }
@@ -95,10 +92,7 @@ public final class MultiUserManagedUserProvisioningParams {
     }
 
     /**
-     * Builder class for {@link MultiUserManagedUserProvisioningParams} objects.
-     *
-     * <p>This will be removed soon. Please use
-     * {@link MultiuserManagedUserProvisioningParams.Builder} instead.
+     * Builder class for {@link MultiuserManagedUserProvisioningParams} objects.
      *
      * @hide
      */
@@ -111,9 +105,9 @@ public final class MultiUserManagedUserProvisioningParams {
 
         /**
          * Initialize a new {@link Builder} to construct a
-         * {@link MultiUserManagedUserProvisioningParams}.
+         * {@link MultiuserManagedUserProvisioningParams}.
          * <p>
-         * See {@link DevicePolicyManager#provisionMultiUserManagedUser}
+         * See {@link DevicePolicyManager#provisionMultiuserManagedUser}
          *
          * @param profileAdminComponentName The admin {@link ComponentName} to be set as the profile
          *                                  owner.
@@ -127,7 +121,7 @@ public final class MultiUserManagedUserProvisioningParams {
 
         /**
          * Sets whether non-required system apps should be installed on the created user when
-         * {@link DevicePolicyManager#provisionMultiUserManagedUser} is called. Defaults to
+         * {@link DevicePolicyManager#provisionMultiuserManagedUser} is called. Defaults to
          * {@code false} if not set.
          */
         @NonNull
@@ -139,11 +133,11 @@ public final class MultiUserManagedUserProvisioningParams {
         /**
          * Combines all of the attributes that have been set on this {@code Builder}.
          *
-         * @return a new {@link MultiUserManagedUserProvisioningParams} object.
+         * @return a new {@link MultiuserManagedUserProvisioningParams} object.
          */
         @NonNull
-        public MultiUserManagedUserProvisioningParams build() {
-            return new MultiUserManagedUserProvisioningParams(mTransport);
+        public MultiuserManagedUserProvisioningParams build() {
+            return new MultiuserManagedUserProvisioningParams(mTransport);
         }
     }
 }

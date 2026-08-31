@@ -111,8 +111,6 @@ class ScreenRecordPermissionContentManager(
 
     private lateinit var tapsSwitch: Switch
     private lateinit var audioSwitch: Switch
-    private lateinit var lowQualitySwitch: Switch
-    private lateinit var longerDurationSwitch: Switch
     private lateinit var skipTimeSwitch: Switch
     private lateinit var hevcSwitch: Switch
     private lateinit var tapsView: View
@@ -164,10 +162,7 @@ class ScreenRecordPermissionContentManager(
     private fun initRecordOptionsView() {
         audioSwitch = containerView.requireViewById(R.id.screenrecord_audio_switch)
         tapsSwitch = containerView.requireViewById(R.id.screenrecord_taps_switch)
-        lowQualitySwitch = containerView.requireViewById(R.id.screenrecord_lowquality_switch)
-        longerDurationSwitch =
-            containerView.requireViewById(R.id.screenrecord_longer_timeout_switch)
-        skipTimeSwitch = containerView.requireViewById(R.id.screenrecord_skip_time_switch)
+        skipTimeSwitch = containerView.requireViewById(R.id.screenrecord_skip_timer_switch)
         hevcSwitch = containerView.requireViewById(R.id.screenrecord_hevc_switch)
 
         tapsView = containerView.requireViewById(R.id.show_taps)
@@ -177,8 +172,6 @@ class ScreenRecordPermissionContentManager(
         // within its target region, to meet accessibility requirements
         audioSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
         tapsSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
-        lowQualitySwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
-        longerDurationSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
         skipTimeSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
         hevcSwitch.setOnTouchListener { _, event -> event.action == ACTION_MOVE }
 
@@ -198,7 +191,7 @@ class ScreenRecordPermissionContentManager(
         // Disable HEVC when hardware accelerated codec is not available
         if (!hasHevcHwEncoder()) {
             Prefs.putInt(containerView.context, PREF_HEVC, 0)
-            containerView.requireViewById<View>(R.id.show_hevc).visibility = View.GONE
+            containerView.requireViewById<View>(R.id.hevc_encoder).visibility = View.GONE
         }
 
         // disable redundant Touch & Hold accessibility action for Switch Access
@@ -242,8 +235,6 @@ class ScreenRecordPermissionContentManager(
         val audioMode =
             if (audioSwitch.isChecked) options.selectedItem as ScreenRecordingAudioSource
             else ScreenRecordingAudioSource.NONE
-        val lowQuality = lowQualitySwitch.isChecked
-        val longerDuration = longerDurationSwitch.isChecked
         val skipTime = skipTimeSwitch.isChecked
         val hevc = hevcSwitch.isChecked
 
@@ -259,8 +250,8 @@ class ScreenRecordPermissionContentManager(
                         audioSource = audioMode,
                         displayId = displayId,
                         shouldShowTaps = showTaps,
-                        lowQuality = lowQuality,
-                        longerDuration = longerDuration,
+                        lowQuality = false,
+                        longerDuration = false,
                         hevc = hevc,
                     )
                 )
@@ -272,8 +263,6 @@ class ScreenRecordPermissionContentManager(
     private fun savePrefs() {
         val userContext = containerView.context
         Prefs.putInt(userContext, PREF_TAPS, if (tapsSwitch.isChecked) 1 else 0)
-        Prefs.putInt(userContext, PREF_LOW, if (lowQualitySwitch.isChecked) 1 else 0)
-        Prefs.putInt(userContext, PREF_LONGER, if (longerDurationSwitch.isChecked) 1 else 0)
         Prefs.putInt(userContext, PREF_AUDIO, if (audioSwitch.isChecked) 1 else 0)
         Prefs.putInt(userContext, PREF_AUDIO_SOURCE, options.selectedItemPosition)
         Prefs.putInt(userContext, PREF_SKIP, if (skipTimeSwitch.isChecked) 1 else 0)
@@ -283,8 +272,6 @@ class ScreenRecordPermissionContentManager(
     private fun loadPrefs() {
         val userContext = containerView.context
         tapsSwitch.isChecked = Prefs.getInt(userContext, PREF_TAPS, 0) == 1
-        lowQualitySwitch.isChecked = Prefs.getInt(userContext, PREF_LOW, 0) == 1
-        longerDurationSwitch.isChecked = Prefs.getInt(userContext, PREF_LONGER, 0) == 1
         audioSwitch.isChecked = Prefs.getInt(userContext, PREF_AUDIO, 0) == 1
         options.setSelection(Prefs.getInt(userContext, PREF_AUDIO_SOURCE, 0))
         skipTimeSwitch.isChecked = Prefs.getInt(userContext, PREF_SKIP, 0) == 1

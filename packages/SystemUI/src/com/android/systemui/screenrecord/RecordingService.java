@@ -54,7 +54,6 @@ import com.android.systemui.recordissue.ScreenRecordingStartTimeStore;
 import com.android.systemui.res.R;
 import com.android.systemui.screenrecord.ScreenMediaRecorder.SavedRecording;
 import com.android.systemui.screenrecord.ScreenMediaRecorder.ScreenMediaRecorderListener;
-import com.android.systemui.screenrecord.domain.ScreenRecordingPreferenceUtil;
 import com.android.systemui.settings.UserContextProvider;
 import com.android.systemui.statusbar.phone.KeyguardDismissUtil;
 
@@ -119,9 +118,6 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
     protected final UserContextProvider mUserContextTracker;
     protected int mNotificationId = NOTIF_BASE_ID;
     private RecordingServiceStrings mStrings;
-
-    private final ScreenRecordingPreferenceUtil mPreferenceUtil =
-            new ScreenRecordingPreferenceUtil(this);
 
     private boolean mLowQuality;
     private boolean mLongerDuration;
@@ -248,11 +244,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                         Settings.System.SHOW_TOUCHES, 0) != 0;
                 int displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, Display.DEFAULT_DISPLAY);
 
-                if (Flags.restoreShowTapsSetting()) {
-                    mPreferenceUtil.updateShowTaps(mShowTaps);
-                } else {
-                    setTapsVisible(mShowTaps);
-                }
+                setTapsVisible(mShowTaps);
 
                 mRecorder = new ScreenMediaRecorder(
                         mUserContextTracker.getUserContext(),
@@ -553,11 +545,7 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
         }
         UserHandle currentUser = new UserHandle(userId);
         Log.d(getTag(), "notifying for user " + userId);
-        if (Flags.restoreShowTapsSetting()) {
-            mPreferenceUtil.restoreShowTapsSetting();
-        } else {
-            setTapsVisible(mOriginalShowTaps);
-        }
+        setTapsVisible(mOriginalShowTaps);
         try {
             if (getRecorder() != null) {
                 getRecorder().end(stopReason);

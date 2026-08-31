@@ -11357,4 +11357,17 @@ public class AudioManager {
             return mHandler;
         }
     }
+
+    /**
+     * @hide
+     */
+    public List<AppVolume> listAppVolumes() {
+        return new ArrayList<AppVolume>();
+    }
+
+    /**
+     * @hide
+     */
+    public void setAppVolume(String packageName, float volume) {
+    }
 }

@@ -1572,10 +1572,15 @@
     <dimen name="media_output_dialog_header_album_icon_size">72dp</dimen>
     <dimen name="media_output_dialog_header_icon_padding">16dp</dimen>
     <dimen name="media_output_dialog_icon_corner_radius">16dp</dimen>
+    <dimen name="media_output_dialog_icon_left_radius">16dp</dimen>
+    <dimen name="media_output_dialog_icon_right_radius">0dp</dimen>
     <dimen name="media_output_dialog_margin_horizontal">16dp</dimen>
     <dimen name="media_output_dialog_app_icon_size">16dp</dimen>
     <dimen name="media_output_dialog_app_icon_bottom_margin">11dp</dimen>
     <dimen name="media_output_dialog_corner_radius">20dp</dimen>
+    <dimen name="media_output_dialog_active_background_radius">20dp</dimen>
+    <dimen name="media_output_dialog_background_radius">20dp</dimen>
+    <dimen name="media_output_dialog_item_height">64dp</dimen>
     <dimen name="media_output_dialog_button_gap">8dp</dimen>
     <dimen name="media_output_item_content_vertical_margin">4dp</dimen>
     <dimen name="media_output_item_content_vertical_margin_active">0dp</dimen>
@@ -2303,8 +2308,15 @@
     <dimen name="usb_device_dialog_always_use_checkbox_padding_vertical">12dp</dimen>
     <dimen name="usb_device_dialog_icon_size">32dp</dimen>
     <dimen name="usb_device_dialog_button_height">40dp</dimen>
-
     <dimen name="usb_device_dialog_button_background_radius_full">360dp</dimen>
-    <!-- Usb Device Dialog values end -->
 
+    <!-- Sliders and QS dimens -->
+    <dimen name="rounded_slider_track_inset">0dp</dimen>
+    <dimen name="rounded_slider_track_width">4dp</dimen>
+    <dimen name="rounded_slider_track_corner_radius">2dp</dimen>
+    <dimen name="rounded_slider_height">48dp</dimen>
+    <dimen name="rounded_slider_corner_radius">28dp</dimen>
+    <dimen name="rounded_slider_icon_inset">12dp</dimen>
+    <dimen name="qs_footer_action_corner_radius">20dp</dimen>
+    <dimen name="smart_reply_button_corner_radius">16dp</dimen>
 </resources>

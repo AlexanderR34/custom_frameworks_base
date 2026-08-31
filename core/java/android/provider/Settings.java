@@ -6810,6 +6810,48 @@ public final class Settings {
         public static final String MULTI_AUDIO_FOCUS_ENABLED = "multi_audio_focus_enabled";
 
         /**
+         * System-wide volume boost level percentage (0 - 100)
+         * @hide
+         */
+        @Readable
+        public static final String VOLUME_BOOST_LEVEL = "volume_boost_level";
+
+        /**
+         * Whether USB-PD charging optimization is enabled
+         * @hide
+         */
+        @Readable
+        public static final String USB_PD_OPTIMIZATION_ENABLED = "usb_pd_optimization_enabled";
+
+        /**
+         * List of apps added to GameSpace
+         * @hide
+         */
+        @Readable
+        public static final String GAMESPACE_GAME_LIST = "gamespace_game_list";
+
+        /**
+         * Whether GameSpace suppresses full screen intents
+         * @hide
+         */
+        @Readable
+        public static final String GAMESPACE_SUPPRESS_FULLSCREEN_INTENT = "gamespace_suppress_fullscreen_intent";
+
+        /**
+         * Custom blur intensity level
+         * @hide
+         */
+        @Readable
+        public static final String CUSTOM_BLUR_INTENSITY = "custom_blur_intensity";
+
+        /**
+         * Whether to show Wi-Fi standard icon (e.g. Wi-Fi 4/5/6/7)
+         * @hide
+         */
+        @Readable
+        public static final String SHOW_WIFI_STANDARD_ICON = "show_wifi_standard_icon";
+
+        /**
          * Whether user can swap the order of the Alert Slider.
          * * Whether user can invert the order of the Alert Slider.
          * 0: Default
@@ -7110,6 +7152,27 @@ public final class Settings {
         public static final String SCREENSHOT_SHUTTER_SOUND = "screenshot_shutter_sound";
 
         /**
+         * Whether to enable multi wallpaper rotation on lockscreen
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_MULTI_WALLPAPER_ENABLED = "lockscreen_multi_wallpaper_enabled";
+
+        /**
+         * File paths for multi wallpaper rotation on lockscreen
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_MULTI_WALLPAPER_FILES = "lockscreen_multi_wallpaper_files";
+
+        /**
+         * Current index for multi wallpaper rotation on lockscreen
+         * @hide
+         */
+        @Readable
+        public static final String LOCKSCREEN_MULTI_WALLPAPER_INDEX = "lockscreen_multi_wallpaper_index";
+
+        /**
          * Keys we no longer back up under the current schema, but want to continue to
          * process when restoring historical backup datasets.
          *
@@ -7300,6 +7363,16 @@ public final class Settings {
             PRIVATE_SETTINGS.add(VIBRATE_ON_CALLWAITING);
             PRIVATE_SETTINGS.add(VIBRATE_ON_DISCONNECT);
             PRIVATE_SETTINGS.add(FORCE_FULLSCREEN_CUTOUT_APPS);
+            PRIVATE_SETTINGS.add(LOCKSCREEN_MULTI_WALLPAPER_ENABLED);
+            PRIVATE_SETTINGS.add(LOCKSCREEN_MULTI_WALLPAPER_FILES);
+            PRIVATE_SETTINGS.add(LOCKSCREEN_MULTI_WALLPAPER_INDEX);
+            PRIVATE_SETTINGS.add(MULTI_AUDIO_FOCUS_ENABLED);
+            PRIVATE_SETTINGS.add(VOLUME_BOOST_LEVEL);
+            PRIVATE_SETTINGS.add(USB_PD_OPTIMIZATION_ENABLED);
+            PRIVATE_SETTINGS.add(GAMESPACE_GAME_LIST);
+            PRIVATE_SETTINGS.add(GAMESPACE_SUPPRESS_FULLSCREEN_INTENT);
+            PRIVATE_SETTINGS.add(CUSTOM_BLUR_INTENSITY);
+            PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);
         }
 
         /**
@@ -8311,6 +8384,42 @@ public final class Settings {
          */
         @Readable
         public static final String ADAPTIVE_SLEEP = "adaptive_sleep";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String SPOOF_PIF_CONFIG = "spoof_pif_config";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String SPOOF_PIF_PHOTOS = "spoof_pif_photos";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String SPOOF_GAMEPROPS_CONFIG = "spoof_gameprops_config";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String SPOOF_TRICKYSTORE_TARGET = "spoof_trickystore_target";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String SPOOF_TRICKYSTORE_KEYBOX = "spoof_trickystore_keybox";
+
+        /**
+         * @hide
+         */
+        @Readable
+        public static final String SPOOF_TRICKYSTORE_PATCH = "spoof_trickystore_patch";
 
         /**
          * Setting key to indicate whether camera-based autorotate is enabled.
@@ -23403,6 +23512,14 @@ public final class Settings {
         @SdkConstant(SdkConstant.SdkConstantType.ACTIVITY_INTENT_ACTION)
         public static final String ACTION_VOLUME =
                 "android.settings.panel.action.VOLUME";
+
+        /**
+         * Activity Action: Show a settings dialog containing per-app volume sliders.
+         * @hide
+         */
+        @SdkConstant(SdkConstant.SdkConstantType.ACTIVITY_INTENT_ACTION)
+        public static final String ACTION_APP_VOLUME =
+                "android.settings.panel.action.APP_VOLUME";
     }
 
     /**

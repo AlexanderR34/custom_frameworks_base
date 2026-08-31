@@ -218,6 +218,10 @@
     <color name="media_dialog_on_surface_variant">@android:color/system_on_surface_variant_light</color>
     <color name="media_dialog_outline">@android:color/system_outline_light</color>
     <color name="media_dialog_outline_variant">@android:color/system_outline_variant_light</color>
+    <color name="media_dialog_seekbar_progress">@color/media_dialog_primary</color>
+    <color name="media_dialog_item_background">@color/media_dialog_surface_container</color>
+    <color name="media_dialog_item_main_content">@color/media_dialog_on_surface</color>
+    <color name="media_dialog_background">@color/media_dialog_surface_container</color>
 
     <!-- controls -->
     <color name="control_primary_text">#E6FFFFFF</color>
@@ -295,4 +299,9 @@
         <item>#1AA64A</item>
         <item>#D37B00</item>
     </array>
+
+    <!-- Sliders and QS colors -->
+    <color name="brightness_slider_track">@color/material_dynamic_neutral_variant80</color>
+    <color name="brightness_slider_overlay_color">@android:color/transparent</color>
+    <color name="qs_tile_ripple_color">@*android:color/ripple_material_dark</color>
 </resources>
