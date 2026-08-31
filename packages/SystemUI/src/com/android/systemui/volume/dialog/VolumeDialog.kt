@@ -73,13 +73,7 @@ constructor(
                 )
             val volumePanelOnLeft =
                 (configuredGravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.LEFT
-            val side = if (volumePanelOnLeft) Gravity.LEFT else Gravity.RIGHT
-
-            decorView.layoutDirection =
-                if (volumePanelOnLeft)
-                    View.LAYOUT_DIRECTION_RTL
-                else
-                    View.LAYOUT_DIRECTION_LTR
+            val side = if (volumePanelOnLeft) Gravity.START else Gravity.END
 
             if (isVolumeDialogVertical) {
                 setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
