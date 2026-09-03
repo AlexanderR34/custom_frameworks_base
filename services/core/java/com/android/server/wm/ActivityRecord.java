@@ -7552,6 +7552,15 @@ final class ActivityRecord extends WindowToken {
     @Override
     @ActivityInfo.ScreenOrientation
     protected int getOverrideOrientation() {
+        if (packageName != null && mAtmService != null && mAtmService.mContext != null) {
+            int customOrientation = android.provider.Settings.System.getInt(
+                    mAtmService.mContext.getContentResolver(),
+                    "app_orientation_" + packageName,
+                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            if (customOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+                return customOrientation;
+            }
+        }
         int candidateOrientation = super.getOverrideOrientation();
         if (isRestrictedFixedOrientation(candidateOrientation)) {
             candidateOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
@@ -7569,6 +7578,15 @@ final class ActivityRecord extends WindowToken {
      */
     @ActivityInfo.ScreenOrientation
     int getRequestedOrientation() {
+        if (packageName != null && mAtmService != null && mAtmService.mContext != null) {
+            int customOrientation = android.provider.Settings.System.getInt(
+                    mAtmService.mContext.getContentResolver(),
+                    "app_orientation_" + packageName,
+                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            if (customOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+                return customOrientation;
+            }
+        }
         return super.getOverrideOrientation();
     }
 

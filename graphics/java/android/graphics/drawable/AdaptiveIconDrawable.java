@@ -161,19 +161,53 @@ public class AdaptiveIconDrawable extends Drawable implements Drawable.Callback 
         this((LayerState) null, null);
     }
 
+    private static String sCurrentMaskStr;
+
+    private static synchronized Path getUpdatedMask() {
+        var app = ActivityThread.currentApplication();
+        String maskStr = null;
+        try {
+            if (app != null) {
+                maskStr = android.provider.Settings.System.getString(
+                        app.getContentResolver(), "custom_icon_shape_path");
+                if (maskStr == null || maskStr.trim().isEmpty()) {
+                    maskStr = android.provider.Settings.Secure.getString(
+                            app.getContentResolver(), "custom_icon_shape_path");
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (maskStr == null || maskStr.trim().isEmpty()) {
+            try {
+                maskStr = Resources.getSystem().getString(com.android.internal.R.string.config_icon_mask);
+            } catch (Exception ignored) {
+            }
+        }
+        if (maskStr == null || maskStr.trim().isEmpty()) {
+            try {
+                Resources r = app == null ? Resources.getSystem() : app.getResources();
+                maskStr = r.getString(R.string.config_icon_mask);
+            } catch (Exception ignored) {
+            }
+        }
+        if (sMask == null || !java.util.Objects.equals(maskStr, sCurrentMaskStr)) {
+            sCurrentMaskStr = maskStr;
+            if (maskStr != null && !maskStr.trim().isEmpty()) {
+                sMask = PathParser.createPathFromPathData(maskStr);
+            }
+        }
+        return sMask;
+    }
+
     /**
      * The one constructor to rule them all. This is called by all public
      * constructors to set the state and initialize local properties.
      */
     AdaptiveIconDrawable(@Nullable LayerState state, @Nullable Resources res) {
         mLayerState = createConstantState(state, res);
-        // config_icon_mask from context bound resource may have been chaged using
-        // OverlayManager. Read that one first.
         var app = ActivityThread.currentApplication();
         Resources r = app == null ? Resources.getSystem() : app.getResources();
-        // TODO: either make sMask update only when config_icon_mask changes OR
-        // get rid of it all-together in layoutlib
-        sMask = PathParser.createPathFromPathData(r.getString(R.string.config_icon_mask));
+        sMask = getUpdatedMask();
         sMaskBanner = PathParser.createPathFromPathData(r.getString(R.string.config_banner_mask));
         mMask = new Path(sMask);
         mMaskScaleOnly = new Path(mMask);
@@ -376,7 +410,7 @@ public class AdaptiveIconDrawable extends Drawable implements Drawable.Callback 
         if (b.width() / (float) b.height() > BANNER_THRESHOLD_ASPECT_RATIO) {
             mask = sMaskBanner;
         } else {
-            mask = sMask;
+            mask = getUpdatedMask();
         }
 
         // reset everything that depends on the view bounds

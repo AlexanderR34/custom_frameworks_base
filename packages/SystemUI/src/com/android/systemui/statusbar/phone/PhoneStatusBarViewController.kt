@@ -91,6 +91,7 @@ private constructor(
     private lateinit var clock: Clock
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
+    private var musicIslandController: com.android.systemui.statusbar.phone.island.MusicIslandController? = null
 
     private val shadeInvocationSplitRatio: Float =
         resources.getFloat(R.dimen.config_invocationGestureSplitRatio)
@@ -199,6 +200,13 @@ private constructor(
         }
         progressProvider?.setReadyToHandleTransition(true)
         configurationController.addCallback(configurationListener)
+
+        val musicIslandView: com.android.systemui.statusbar.phone.island.MusicIslandView? =
+            mView.findViewById(R.id.music_island_view)
+        if (musicIslandView != null) {
+            musicIslandController = com.android.systemui.statusbar.phone.island.MusicIslandController(mView.context)
+            musicIslandController?.attachView(musicIslandView)
+        }
     }
 
     private fun addCursorSupportToIconContainers() {
@@ -253,6 +261,8 @@ private constructor(
 
     @VisibleForTesting
     public override fun onViewDetached() {
+        musicIslandController?.detach()
+        musicIslandController = null
         removeDarkReceivers()
         startSideContainer.setOnHoverListener(null)
         endSideContainer.setOnHoverListener(null)

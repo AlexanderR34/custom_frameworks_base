@@ -230,6 +230,19 @@ public class PackageItemInfo {
     /** @hide */
     @android.ravenwood.annotation.RavenwoodThrow(blockedBy = android.content.res.Resources.class)
     public CharSequence loadUnsafeLabel(PackageManager pm) {
+        if (packageName != null) {
+            try {
+                android.app.Application currentApp = android.app.ActivityThread.currentApplication();
+                if (currentApp != null) {
+                    String customLabel = android.provider.Settings.System.getString(
+                            currentApp.getContentResolver(), "custom_app_label_" + packageName);
+                    if (customLabel != null && !customLabel.trim().isEmpty()) {
+                        return customLabel.trim();
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
         if (nonLocalizedLabel != null) {
             return nonLocalizedLabel;
         }
@@ -288,7 +301,7 @@ public class PackageItemInfo {
      */
     @android.ravenwood.annotation.RavenwoodThrow(blockedBy = android.content.res.Resources.class)
     public Drawable loadIcon(PackageManager pm) {
-        return pm.loadItemIcon(this, getApplicationInfo());
+        return wrapAdaptiveIfNeeded(pm.loadItemIcon(this, getApplicationInfo()));
     }
 
     /**
@@ -306,7 +319,22 @@ public class PackageItemInfo {
      */
     @android.ravenwood.annotation.RavenwoodThrow(blockedBy = android.content.res.Resources.class)
     public Drawable loadUnbadgedIcon(PackageManager pm) {
-        return pm.loadUnbadgedItemIcon(this, getApplicationInfo());
+        return wrapAdaptiveIfNeeded(pm.loadUnbadgedItemIcon(this, getApplicationInfo()));
+    }
+
+    private Drawable wrapAdaptiveIfNeeded(Drawable dr) {
+        if (dr == null || dr instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            return dr;
+        }
+        try {
+            android.graphics.drawable.ColorDrawable bg =
+                    new android.graphics.drawable.ColorDrawable(0xFFFFFFFF);
+            android.graphics.drawable.InsetDrawable fg =
+                    new android.graphics.drawable.InsetDrawable(dr, 0.2f);
+            return new android.graphics.drawable.AdaptiveIconDrawable(bg, fg);
+        } catch (Exception ignored) {
+            return dr;
+        }
     }
 
     /**

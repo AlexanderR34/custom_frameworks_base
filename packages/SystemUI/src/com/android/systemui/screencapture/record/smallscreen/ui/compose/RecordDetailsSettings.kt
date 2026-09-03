@@ -178,6 +178,7 @@ fun RecordDetailsSettings(
                         contentDescription = null,
                     ),
                 label = stringResource(R.string.screenrecord_lowquality_label),
+                summary = stringResource(R.string.screenrecord_lowquality_summary),
                 checked = parametersViewModel.lowQuality,
                 onCheckedChange = { parametersViewModel.setLowQuality(it) },
                 modifier = Modifier,
@@ -191,8 +192,23 @@ fun RecordDetailsSettings(
                         contentDescription = null,
                     ),
                 label = stringResource(R.string.screenrecord_longer_timeout_switch_label),
+                summary = stringResource(R.string.screenrecord_longer_timeout_switch_summary),
                 checked = parametersViewModel.longerDuration,
                 onCheckedChange = { parametersViewModel.setLongerDuration(it) },
+                modifier = Modifier,
+            )
+            RichSwitch(
+                visible = true,
+                icon =
+                    loadIcon(
+                        viewModel = drawableLoaderViewModel,
+                        resId = R.drawable.ic_sr_clock,
+                        contentDescription = null,
+                    ),
+                label = stringResource(R.string.screenrecord_skip_time_label),
+                summary = stringResource(R.string.screenrecord_skip_time_summary),
+                checked = parametersViewModel.skipTimer,
+                onCheckedChange = { parametersViewModel.setSkipTimer(it) },
                 modifier = Modifier,
             )
             RichSwitch(
@@ -204,6 +220,7 @@ fun RecordDetailsSettings(
                         contentDescription = null,
                     ),
                 label = stringResource(R.string.screenrecord_hevc_switch_label),
+                summary = stringResource(R.string.screenrecord_hevc_switch_summary),
                 checked = parametersViewModel.hevc,
                 onCheckedChange = { parametersViewModel.setHevc(it) },
                 modifier = Modifier,
@@ -236,6 +253,7 @@ private fun RichSwitch(
     visible: Boolean,
     onCheckedChange: (isChecked: Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    summary: String? = null,
     enabled: Boolean = true,
     disabledMessageRes: Int = Resources.ID_NULL,
 ) {
@@ -261,7 +279,7 @@ private fun RichSwitch(
                 )
                 .clearAndSetSemantics {
                     if (enabled) {
-                        contentDescription = label
+                        contentDescription = if (summary != null) "$label, $summary" else label
                     } else {
                         contentDescription = "$label. ${disabledMessage!!}"
                         disabled()
@@ -269,12 +287,22 @@ private fun RichSwitch(
                 },
     ) {
         LoadingIcon(icon = icon.value, modifier = Modifier.size(40.dp).padding(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 8.dp).weight(1f).basicMarquee(),
-        )
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp).weight(1f),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (!summary.isNullOrEmpty()) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Switch(
             checked = checked,
             enabled = enabled,

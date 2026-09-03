@@ -281,6 +281,9 @@ public final class DexOptHelper {
      */
     public static void initializeArtManagerLocal(
             @NonNull Context systemContext, @NonNull PackageManagerService pm) {
+        if (LocalManagerRegistry.getManager(DexUseManagerLocal.class) == null) {
+            LocalManagerRegistry.addManager(DexUseManagerLocal.class, new DexUseManagerLocal());
+        }
         ArtManagerLocal artManager = new ArtManagerLocal(systemContext);
         artManager.addDexoptDoneCallback(false /* onlyIncludeUpdates */, Runnable::run,
                 pm.getDexOptHelper().new DexoptDoneHandler());

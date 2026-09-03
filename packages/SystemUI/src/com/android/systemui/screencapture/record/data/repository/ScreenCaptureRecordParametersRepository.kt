@@ -77,6 +77,14 @@ constructor(@Application private val context: Context, private val userTracker: 
             Prefs.putInt(userContext, PREF_HEVC, if (value) 1 else 0)
         }
 
+    private val skipTimerState = mutableStateOf(Prefs.getInt(userContext, PREF_SKIP, 0) == 1)
+    var skipTimer: Boolean
+        get() = skipTimerState.value
+        set(value) {
+            skipTimerState.value = value
+            Prefs.putInt(userContext, PREF_SKIP, if (value) 1 else 0)
+        }
+
     private fun loadAudioSource(): ScreenRecordingAudioSource {
         val useAudio = Prefs.getInt(userContext, PREF_AUDIO, 0) == 1
         if (!useAudio) return ScreenRecordingAudioSource.NONE
@@ -100,5 +108,6 @@ constructor(@Application private val context: Context, private val userTracker: 
         private const val PREF_AUDIO = "screenrecord_use_audio"
         private const val PREF_AUDIO_SOURCE = "screenrecord_audio_source"
         private const val PREF_HEVC = "screenrecord_use_hevc"
+        private const val PREF_SKIP = "screenrecord_skip_timer"
     }
 }

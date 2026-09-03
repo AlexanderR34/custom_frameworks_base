@@ -369,8 +369,8 @@ constructor(
         closeUi()
 
         backgroundScope.launch {
-            screenRecordingServiceInteractor.startRecordingDelayed(
-                // TODO(b/437971334): Get options from the UI.
+            val skipTimer = toolbarViewModel.recordParametersViewModel.skipTimer
+            val params =
                 ScreenRecordingParameters(
                     captureTarget = recordingTarget,
                     audioSource = toolbarViewModel.recordParametersViewModel.audioSource,
@@ -380,7 +380,11 @@ constructor(
                     longerDuration = toolbarViewModel.recordParametersViewModel.longerDuration,
                     hevc = toolbarViewModel.recordParametersViewModel.hevc,
                 )
-            )
+            if (skipTimer) {
+                screenRecordingServiceInteractor.startRecording(params)
+            } else {
+                screenRecordingServiceInteractor.startRecordingDelayed(params)
+            }
         }
     }
 

@@ -102,6 +102,15 @@
                         android:gravity="center_vertical|start"
                     />
 
+                    <!-- Status Bar Music Island (Dynamic Media Avatar & Progress Ring) -->
+                    <com.android.systemui.statusbar.phone.island.MusicIslandView
+                        android:id="@+id/music_island_view"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginEnd="6dp"
+                        android:visibility="gone" />
+
                     <!-- To avoid chips causing notifs to re-layout, wrap them in a FrameLayout
                     so they can overlap -->
                     <FrameLayout

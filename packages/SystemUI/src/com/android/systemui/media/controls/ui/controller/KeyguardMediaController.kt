@@ -61,6 +61,9 @@ import com.android.systemui.statusbar.notification.stack.MediaContainerView
 import com.android.systemui.statusbar.phone.KeyguardBypassController
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.statusbar.policy.SplitShadeStateController
+import android.widget.LinearLayout
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsController
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsView
 import com.android.systemui.util.asIndenting
 import com.android.systemui.util.boundsOnScreen
 import com.android.systemui.util.println
@@ -92,12 +95,28 @@ constructor(
     private val mediaViewModelFactory: MediaViewModel.Factory,
     private val mediaCarouselInteractor: MediaCarouselInteractor,
     private val falsingSystem: MediaFalsingSystem,
+    private val lockscreenLyricsController: LockscreenLyricsController? = null,
 ) : Dumpable {
     private var lastUsedStatusBarState = -1
 
     /** Is the media player visible? */
     var visible by mutableStateOf(false)
         private set
+
+    private val lyricsView = LockscreenLyricsView(context).apply {
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
+
+    private val mediaAndLyricsContainer = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
 
     private var distanceForFullShadeTransition = 0
     private var fullShadeTransitionProgress: Float by mutableStateOf(0.0f)
@@ -125,6 +144,7 @@ constructor(
     init {
         dumpManager.registerDumpable(this)
         setUpListenersAndCallbacks()
+        lockscreenLyricsController?.attachView(lyricsView)
     }
 
     private fun setUpListenersAndCallbacks() {
@@ -292,24 +312,37 @@ constructor(
             inactiveContainer = splitShadeContainer
             activeContainer = singlePaneContainer
         }
-        if (inactiveContainer?.childCount == 1) {
-            inactiveContainer.removeAllViews()
+        if (inactiveContainer?.childCount != 0) {
+            inactiveContainer?.removeAllViews()
         }
         if (activeContainer?.childCount == 0) {
-            if (MediaControlsInComposeFlag.isEnabled) {
+            val playerView: View = if (MediaControlsInComposeFlag.isEnabled) {
                 composeView.parent?.let { (it as? ViewGroup)?.removeView(composeView) }
-                activeContainer.addView(composeView)
                 composeView.layoutParams.apply {
                     height = ViewGroup.LayoutParams.WRAP_CONTENT
                     width = ViewGroup.LayoutParams.MATCH_PARENT
                 }
+                composeView
             } else {
-                // Detach the hostView from its parent view if exists
                 mediaHost.hostView.parent?.let {
                     (it as? ViewGroup)?.removeView(mediaHost.hostView)
                 }
-                activeContainer.addView(mediaHost.hostView)
+                mediaHost.hostView.layoutParams.apply {
+                    height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    width = ViewGroup.LayoutParams.MATCH_PARENT
+                }
+                mediaHost.hostView
             }
+
+            playerView.parent?.let { (it as? ViewGroup)?.removeView(playerView) }
+            lyricsView.parent?.let { (it as? ViewGroup)?.removeView(lyricsView) }
+
+            mediaAndLyricsContainer.removeAllViews()
+            mediaAndLyricsContainer.addView(playerView)
+            mediaAndLyricsContainer.addView(lyricsView)
+
+            mediaAndLyricsContainer.parent?.let { (it as? ViewGroup)?.removeView(mediaAndLyricsContainer) }
+            activeContainer.addView(mediaAndLyricsContainer)
         }
     }
 

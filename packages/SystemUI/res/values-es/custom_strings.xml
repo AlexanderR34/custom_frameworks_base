@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Grabación de pantalla -->
+    <string name="screenrecord_lowquality_label">Baja calidad</string>
+    <string name="screenrecord_lowquality_summary">Para un tamaño de archivo más pequeño</string>
+    <string name="screenrecord_longer_timeout_switch_label">Límite de archivo más grande</string>
+    <string name="screenrecord_longer_timeout_switch_summary">Limitar el tamaño de grabación a 15 GB</string>
+    <string name="screenrecord_skip_time_label">Omitir temporizador</string>
+    <string name="screenrecord_skip_time_summary">Eliminar la espera de 3 segundos</string>
+    <string name="screenrecord_hevc_switch_label">Codificación HEVC</string>
+    <string name="screenrecord_hevc_switch_summary">Usar el codificador HEVC más eficiente</string>
+</resources>

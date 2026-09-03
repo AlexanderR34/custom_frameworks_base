@@ -7152,6 +7152,12 @@ public final class Settings {
         public static final String SCREENSHOT_SHUTTER_SOUND = "screenshot_shutter_sound";
 
         /**
+         * Show app volume rows in volume panel
+         * @hide
+         */
+        public static final String SHOW_APP_VOLUME = "show_app_volume";
+
+        /**
          * Whether to enable multi wallpaper rotation on lockscreen
          * @hide
          */

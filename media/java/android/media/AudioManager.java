@@ -1189,6 +1189,32 @@ public class AudioManager {
 
     /** @hide */
     @UnsupportedAppUsage
+    @RequiresPermission(android.Manifest.permission.MODIFY_AUDIO_ROUTING)
+    public int setAppVolume(String packageName, float volume) {
+        return AudioSystem.setAppVolume(packageName, volume);
+    }
+
+    /** @hide */
+    @UnsupportedAppUsage
+    @RequiresPermission(android.Manifest.permission.MODIFY_AUDIO_ROUTING)
+    public int setAppMute(String packageName, boolean mute) {
+        return AudioSystem.setAppMute(packageName, mute);
+    }
+
+    /** @hide */
+    @UnsupportedAppUsage
+    @RequiresPermission(android.Manifest.permission.MODIFY_AUDIO_ROUTING)
+    public ArrayList<AppVolume> listAppVolumes() {
+        ArrayList<AppVolume> volumes = new ArrayList<AppVolume>();
+        int status = AudioSystem.listAppVolumes(volumes);
+        if (status != AudioManager.SUCCESS) {
+            return new ArrayList<AppVolume>();
+        }
+        return volumes;
+    }
+
+    /** @hide */
+    @UnsupportedAppUsage
     @RequiresPermission(Manifest.permission.MODIFY_AUDIO_ROUTING)
     public void setMasterMute(boolean mute, int flags) {
         final IAudioService service = getService();

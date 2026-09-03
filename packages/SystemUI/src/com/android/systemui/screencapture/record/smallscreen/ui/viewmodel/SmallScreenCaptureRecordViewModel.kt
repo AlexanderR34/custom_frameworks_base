@@ -256,20 +256,24 @@ constructor(
         val lowQuality = recordDetailsParametersViewModel.lowQuality
         val longerDuration = recordDetailsParametersViewModel.longerDuration
         val hevc = recordDetailsParametersViewModel.hevc
+        val skipTimer = recordDetailsParametersViewModel.skipTimer
         when (target) {
             is ScreenCaptureTarget.Fullscreen -> {
                 val shouldShowTaps = recordDetailsParametersViewModel.shouldShowTaps
-                screenRecordingServiceInteractor.startRecordingDelayed(
-                    ScreenRecordingParameters(
-                        captureTarget = null,
-                        displayId = target.displayId,
-                        shouldShowTaps = shouldShowTaps,
-                        audioSource = audioSource,
-                        lowQuality = lowQuality,
-                        longerDuration = longerDuration,
-                        hevc = hevc,
-                    )
+                val params = ScreenRecordingParameters(
+                    captureTarget = null,
+                    displayId = target.displayId,
+                    shouldShowTaps = shouldShowTaps,
+                    audioSource = audioSource,
+                    lowQuality = lowQuality,
+                    longerDuration = longerDuration,
+                    hevc = hevc,
                 )
+                if (skipTimer) {
+                    screenRecordingServiceInteractor.startRecording(params)
+                } else {
+                    screenRecordingServiceInteractor.startRecordingDelayed(params)
+                }
             }
             is ScreenCaptureTarget.App -> {
                 val cookie = LaunchCookie("screen_record")
@@ -294,21 +298,24 @@ constructor(
                         target.displayId
                     }
 
-                screenRecordingServiceInteractor.startRecordingDelayed(
-                    ScreenRecordingParameters(
-                        captureTarget =
-                            MediaProjectionCaptureTarget(
-                                launchCookie = cookie,
-                                taskId = target.taskId,
-                            ),
-                        displayId = displayId,
-                        shouldShowTaps = false,
-                        audioSource = audioSource,
-                        lowQuality = lowQuality,
-                        longerDuration = longerDuration,
-                        hevc = hevc,
-                    )
+                val params = ScreenRecordingParameters(
+                    captureTarget =
+                        MediaProjectionCaptureTarget(
+                            launchCookie = cookie,
+                            taskId = target.taskId,
+                        ),
+                    displayId = displayId,
+                    shouldShowTaps = false,
+                    audioSource = audioSource,
+                    lowQuality = lowQuality,
+                    longerDuration = longerDuration,
+                    hevc = hevc,
                 )
+                if (skipTimer) {
+                    screenRecordingServiceInteractor.startRecording(params)
+                } else {
+                    screenRecordingServiceInteractor.startRecordingDelayed(params)
+                }
             }
             else -> error("Unsupported target=$target")
         }
