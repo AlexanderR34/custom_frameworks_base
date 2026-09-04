@@ -29,11 +29,14 @@ import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.plugins.FalsingManager
 import com.android.systemui.plugins.qs.QSTile.BooleanState
+import com.android.systemui.plugins.qs.QSTile.Icon
 import com.android.systemui.plugins.statusbar.StatusBarStateController
 import com.android.systemui.qs.QSHost
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.logging.QSLogger
+import com.android.systemui.qs.pipeline.domain.interactor.PanelInteractor
 import com.android.systemui.qs.tileimpl.QSTileImpl
+import com.android.systemui.qs.tileimpl.QSTileImpl.ResourceIcon
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.phone.afk.AfkController
 import javax.inject.Inject
@@ -49,6 +52,7 @@ class AfkTile @Inject constructor(
     statusBarStateController: StatusBarStateController,
     activityStarter: ActivityStarter,
     qsLogger: QSLogger,
+    private val panelInteractor: PanelInteractor,
     private val afkController: AfkController
 ) : QSTileImpl<BooleanState>(
     host,
@@ -86,7 +90,7 @@ class AfkTile @Inject constructor(
 
     override fun handleClick(@Nullable expandable: Expandable?) {
         // Collapse notification / QS panels immediately
-        mHost.collapsePanels()
+        panelInteractor.collapsePanels()
 
         // Toggle AFK Mode
         afkController.toggleAfkMode()

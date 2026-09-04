@@ -396,7 +396,7 @@ constructor(
 
             scene(SceneKeys.EditMode) {
                 Box(Modifier.fillMaxSize()) {
-                    Element(SceneKeys.EditMode.rootElementKey, Modifier) { EditModeElement() }
+                    Element(SceneKeys.EditMode.rootElementKey, Modifier.fillMaxSize()) { EditModeElement() }
                     /*
                      * This provides the position of the bottom nav bar wrt to the root. As it's
                      * full screen (and the container view has the same bounds) this can be used to
@@ -952,9 +952,8 @@ constructor(
             viewModel = viewModel.containerViewModel.editModeViewModel,
             modifier =
                 modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = { horizontalPadding.roundToPx() })
-                    .padding(top = { viewModel.qqsHeaderHeight }),
+                    .fillMaxSize()
+                    .padding(horizontal = { horizontalPadding.roundToPx() }),
         )
     }
 

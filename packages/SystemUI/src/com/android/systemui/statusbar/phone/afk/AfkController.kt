@@ -25,6 +25,7 @@ import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
 import android.view.GestureDetector
@@ -99,9 +100,10 @@ class AfkController @Inject constructor(
             isAfkActive = true
 
             try {
+                Settings.System.putInt(context.contentResolver, "afk_mode_active", 1)
                 wakeLock?.acquire()
                 showOverlay()
-                Log.i(TAG, "AFK Mode started: Partial wake lock acquired & overlay mounted")
+                Log.i(TAG, "AFK Mode started: 30 FPS mode active, Partial wake lock acquired & overlay mounted")
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting AFK Mode", e)
             }
@@ -116,11 +118,12 @@ class AfkController @Inject constructor(
             isAfkActive = false
 
             try {
+                Settings.System.putInt(context.contentResolver, "afk_mode_active", 0)
                 hideOverlay()
                 if (wakeLock?.isHeld == true) {
                     wakeLock?.release()
                 }
-                Log.i(TAG, "AFK Mode stopped: Partial wake lock released & overlay unmounted")
+                Log.i(TAG, "AFK Mode stopped: Restored original FPS, Partial wake lock released & overlay unmounted")
             } catch (e: Exception) {
                 Log.e(TAG, "Error stopping AFK Mode", e)
             }
@@ -148,6 +151,9 @@ class AfkController @Inject constructor(
             PixelFormat.TRANSLUCENT
         ).apply {
             screenBrightness = 0.0f
+            preferredRefreshRate = 30.0f
+            preferredMinDisplayRefreshRate = 30.0f
+            preferredMaxDisplayRefreshRate = 30.0f
             gravity = Gravity.FILL
             systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION

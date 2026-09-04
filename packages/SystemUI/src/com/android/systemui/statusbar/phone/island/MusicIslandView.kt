@@ -127,6 +127,7 @@ class MusicIslandView @JvmOverloads constructor(
         visibility = VISIBLE
         animate().cancel()
         animate()
+            .setListener(null)
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)

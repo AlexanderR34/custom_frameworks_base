@@ -18,13 +18,15 @@ package com.android.systemui.qs.panels.ui.compose
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.compose.theme.LocalAndroidColorScheme
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
 
 @Composable
@@ -36,14 +38,18 @@ fun EditMode(viewModel: EditModeViewModel, modifier: Modifier = Modifier) {
 
     DisposableEffect(Unit) { onDispose { viewModel.stopEditing() } }
 
-    Column(modifier.background(MaterialTheme.colorScheme.surface)) {
-        gridLayout.EditTileGrid(
-            tiles,
-            Modifier,
-            viewModel::addTile,
-            viewModel::removeTile,
-            viewModel::setTiles,
-            viewModel::stopEditing,
-        )
+    Box(
+        Modifier.fillMaxSize().background(LocalAndroidColorScheme.current.underSurface)
+    ) {
+        Column(modifier.fillMaxSize()) {
+            gridLayout.EditTileGrid(
+                tiles,
+                Modifier,
+                viewModel::addTile,
+                viewModel::removeTile,
+                viewModel::setTiles,
+                viewModel::stopEditing,
+            )
+        }
     }
 }

@@ -224,6 +224,32 @@ class RefreshRatePolicy {
         }
     }
 
+    private int getGameFpsLimit(String packageName) {
+        if (packageName == null) {
+            return 0;
+        }
+        int fps = Settings.System.getInt(mWmService.mContext.getContentResolver(),
+                "game_fps_limit_" + packageName, 0);
+        if (fps > 0) {
+            return fps;
+        }
+        String pacerApps = Settings.System.getString(mWmService.mContext.getContentResolver(),
+                "game_frame_pacer_apps");
+        if (pacerApps != null && !pacerApps.isEmpty()) {
+            String[] entries = pacerApps.split(",");
+            for (String entry : entries) {
+                String[] parts = entry.trim().split("=");
+                if (parts.length == 2 && packageName.equals(parts[0].trim())) {
+                    try {
+                        return Integer.parseInt(parts[1].trim());
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
     boolean updateFrameRateVote(WindowState w) {
         @DisplayManager.SwitchingType int refreshRateSwitchingType =
                 mWmService.mDisplayManagerInternal.getRefreshRateSwitchingType();
@@ -262,8 +288,21 @@ class RefreshRatePolicy {
                     SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
         }
 
+        if (Settings.System.getInt(mWmService.mContext.getContentResolver(), "afk_mode_active", 0) == 1) {
+            return w.mFrameRateVote.update(30.0f,
+                    Surface.FRAME_RATE_COMPATIBILITY_EXACT,
+                    SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
+        }
+
         final String packageName = w.getOwningPackage();
         if (packageName != null) {
+            int gameFps = getGameFpsLimit(packageName);
+            if (gameFps > 0) {
+                return w.mFrameRateVote.update((float) gameFps,
+                        Surface.FRAME_RATE_COMPATIBILITY_EXACT,
+                        SurfaceControl.FRAME_RATE_SELECTION_STRATEGY_OVERRIDE_CHILDREN);
+            }
+
             int appRefreshRate = Settings.System.getInt(mWmService.mContext.getContentResolver(),
                     "app_refresh_rate_" + packageName, 0);
             if (appRefreshRate > 0) {
@@ -287,6 +326,10 @@ class RefreshRatePolicy {
     }
 
     float getPreferredMinRefreshRate(WindowState w) {
+        if (Settings.System.getInt(mWmService.mContext.getContentResolver(), "afk_mode_active", 0) == 1) {
+            return 30.0f;
+        }
+
         // If app is animating, it's not able to control refresh rate because we want the animation
         // to run in default refresh rate.
         if (w.isAnimationRunningSelfOrParent() || w.isInsetsAnimationRunning()) {
@@ -317,6 +360,10 @@ class RefreshRatePolicy {
     }
 
     float getPreferredMaxRefreshRate(WindowState w) {
+        if (Settings.System.getInt(mWmService.mContext.getContentResolver(), "afk_mode_active", 0) == 1) {
+            return 30.0f;
+        }
+
         // If app is animating, it's not able to control refresh rate because we want the animation
         // to run in default refresh rate.
         if (w.isAnimationRunningSelfOrParent() || w.isInsetsAnimationRunning()) {

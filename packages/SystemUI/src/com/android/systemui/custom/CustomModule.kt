@@ -19,6 +19,7 @@ package com.android.systemui.custom
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.shared.model.TileCategory
+import com.android.systemui.qs.tileimpl.QSTileImpl
 import com.android.systemui.qs.tiles.AfkTile
 import com.android.systemui.qs.tiles.AmbientDisplayTile
 import com.android.systemui.qs.tiles.AODTile

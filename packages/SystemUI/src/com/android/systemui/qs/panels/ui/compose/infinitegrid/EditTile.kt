@@ -614,7 +614,6 @@ private fun CurrentTilesGrid(
     var gridContentOffset by remember { mutableStateOf(Offset(0f, 0f)) }
     val coroutineScope = rememberCoroutineScope()
 
-    val primaryColor = MaterialTheme.colorScheme.primary
     TileLazyGrid(
         state = gridState,
         columns = GridCells.Fixed(listState.columns),
@@ -622,24 +621,12 @@ private fun CurrentTilesGrid(
         modifier =
             Modifier.fillMaxWidth()
                 .height { totalHeight.roundToPx() }
-                .border(
-                    width = 2.dp,
-                    color = primaryColor,
-                    shape = RoundedCornerShape(GridBackgroundCornerRadius),
-                )
                 .dragAndDropTileList(gridState, { gridContentOffset }, listState) { spec ->
                     onEditAction(EditAction.SetTiles(currentListState.tileSpecs()))
                     selectionState.select(spec)
                 }
                 .onGloballyPositioned { coordinates ->
                     gridContentOffset = coordinates.positionInRoot()
-                }
-                .drawBehind {
-                    drawRoundRect(
-                        primaryColor,
-                        cornerRadius = CornerRadius(GridBackgroundCornerRadius.toPx()),
-                        alpha = .15f,
-                    )
                 }
                 .sysuiResTag(CURRENT_TILES_GRID_TEST_TAG),
     ) {

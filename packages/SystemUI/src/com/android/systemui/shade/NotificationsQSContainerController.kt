@@ -233,11 +233,11 @@ constructor(
                 resources.getDimensionPixelSize(R.dimen.new_qs_header_non_clickable_element_height)
         return estimatedHeight.coerceAtLeast(minHeight)
     }
-
     override fun setCustomizerShowing(showing: Boolean, animationDuration: Long) {
         if (showing != isQSCustomizing) {
             isQSCustomizing = showing
             shadeHeaderController.startCustomizingAnimation(showing, animationDuration)
+            updateConstraints()
             updateBottomSpacing()
         }
     }
@@ -293,9 +293,7 @@ constructor(
         return Paddings(containerPadding, stackScrollMargin, qsContainerPadding)
     }
 
-    fun updateConstraints() {
-        // To change the constraints at runtime, all children of the ConstraintLayout must have ids
-        ensureAllViewsHaveIds(mView)
+    private fun updateConstraints() {
         val constraintSet = ConstraintSet()
         constraintSet.clone(mView)
         setQsConstraints(constraintSet)
@@ -315,9 +313,9 @@ constructor(
         val endConstraintId = if (splitShadeEnabled) R.id.qs_edge_guideline else PARENT_ID
         constraintSet.apply {
             connect(R.id.qs_frame, END, endConstraintId, END)
-            setMargin(R.id.qs_frame, START, if (splitShadeEnabled) 0 else panelMarginHorizontal)
-            setMargin(R.id.qs_frame, END, if (splitShadeEnabled) 0 else panelMarginHorizontal)
-            setMargin(R.id.qs_frame, TOP, topMargin)
+            setMargin(R.id.qs_frame, START, if (splitShadeEnabled || isQSCustomizing) 0 else panelMarginHorizontal)
+            setMargin(R.id.qs_frame, END, if (splitShadeEnabled || isQSCustomizing) 0 else panelMarginHorizontal)
+            setMargin(R.id.qs_frame, TOP, if (isQSCustomizing) 0 else topMargin)
         }
     }
 

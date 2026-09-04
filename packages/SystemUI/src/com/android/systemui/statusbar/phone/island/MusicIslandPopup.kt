@@ -8,10 +8,12 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
 import android.widget.PopupWindow
@@ -33,6 +35,7 @@ class MusicIslandPopup(
 
     companion object {
         private const val AUTO_DISMISS_DELAY_MS = 6000L
+        private const val TOUCH_OUTSIDE_GUARD_TIME_MS = 400L
     }
 
     private val mPopupView: View
@@ -47,6 +50,7 @@ class MusicIslandPopup(
     }
 
     private var mIsPlaying = true
+    private var mLastShowTime: Long = 0L
 
     init {
         mPopupView = LayoutInflater.from(context).inflate(R.layout.music_island_popup, null)
@@ -58,13 +62,26 @@ class MusicIslandPopup(
             mPopupView,
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
-            true // Focusable so it maintains window focus and handles touches cleanly
+            false // Non-focusable to avoid stealing status bar / system focus
         ).apply {
+            windowLayoutType = WindowManager.LayoutParams.TYPE_STATUS_BAR_SUB_PANEL
             inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             isOutsideTouchable = true
             isTouchable = true
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             elevation = 24f
+
+            setTouchInterceptor { _, event ->
+                if (event.action == MotionEvent.ACTION_OUTSIDE) {
+                    if (SystemClock.elapsedRealtime() - mLastShowTime > TOUCH_OUTSIDE_GUARD_TIME_MS) {
+                        dismissWithAnimation()
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+
             setOnDismissListener {
                 mHandler.removeCallbacks(mAutoDismissRunnable)
             }
@@ -135,6 +152,8 @@ class MusicIslandPopup(
         val x = location[0]
         val y = location[1] + anchorView.height + 8
 
+        mLastShowTime = SystemClock.elapsedRealtime()
+
         mPopupView.alpha = 0f
         mPopupView.translationY = -15f
         mPopupView.scaleX = 0.85f
@@ -150,6 +169,7 @@ class MusicIslandPopup(
 
         mPopupView.animate().cancel()
         mPopupView.animate()
+            .setListener(null) // Clear any previous dismiss animator listener!
             .alpha(1f)
             .translationY(0f)
             .scaleX(1f)
@@ -173,6 +193,7 @@ class MusicIslandPopup(
             .setInterpolator(DecelerateInterpolator())
             .setListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
+                    mPopupView.animate().setListener(null)
                     try {
                         mPopupWindow.dismiss()
                     } catch (ignored: Exception) {}

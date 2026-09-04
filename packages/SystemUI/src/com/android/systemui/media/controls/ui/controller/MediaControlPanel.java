@@ -1214,7 +1214,7 @@ public class MediaControlPanel {
             } else {
                 button.setEnabled(true);
                 button.setOnClickListener(v -> {
-                    if (!mFalsingManager.isFalseTap(FalsingManager.MODERATE_PENALTY)) {
+                    if (!mFalsingManager.isFalseTap(FalsingManager.NO_PENALTY)) {
                         mLogger.logTapAction(button.getId(), mUid, mPackageName, mInstanceId);
                         // Used to determine whether to play turbulence noise.
                         mWasPlaying = isPlaying();

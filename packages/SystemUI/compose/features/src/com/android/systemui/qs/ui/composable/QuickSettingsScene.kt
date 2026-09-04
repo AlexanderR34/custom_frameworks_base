@@ -281,16 +281,13 @@ private fun ContentScope.QuickSettingsScene(
             }
 
             scene(Edit) {
-                Element(Edit.rootElementKey, Modifier) {
+                Element(Edit.rootElementKey, Modifier.fillMaxSize()) {
                     GridAnchor()
                     EditMode(
                         viewModel.qsContainerViewModel.editModeViewModel,
                         Modifier.testTag("edit_mode_scene")
-                            .padding(horizontal = QuickSettingsShade.Dimensions.HorizontalPadding)
-                            .padding(
-                                top =
-                                    headerViewModel.statusBarHeightPx.toDp(LocalContext.current).dp
-                            ),
+                            .fillMaxSize()
+                            .padding(horizontal = QuickSettingsShade.Dimensions.HorizontalPadding),
                     )
                 }
             }

@@ -1846,7 +1846,6 @@ public class AudioService extends IAudioService.Stub
 
         mMusicFxHelper = new MusicFxHelper(mContext, mAudioHandler);
         mVolumeBoostHelper = new VolumeBoostHelper(mContext);
-        com.android.server.wallpaper.LockscreenWallpaperRotationService.getInstance(mContext);
 
         mHardeningEnforcer = new HardeningEnforcer(mContext, isPlatformAutomotive(),
                 mHardeningOverride,
