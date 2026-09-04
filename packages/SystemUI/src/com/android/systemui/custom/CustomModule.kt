@@ -19,7 +19,7 @@ package com.android.systemui.custom
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.shared.model.TileCategory
-import com.android.systemui.qs.tileimpl.QSTileImpl
+import com.android.systemui.qs.tiles.AfkTile
 import com.android.systemui.qs.tiles.AmbientDisplayTile
 import com.android.systemui.qs.tiles.AODTile
 import com.android.systemui.qs.tiles.AutoBrightnessTile
@@ -43,6 +43,12 @@ import dagger.multibindings.StringKey
 
 @Module
 interface CustomModule {
+    /** Inject AfkTile into tileMap in QSModule */
+    @Binds
+    @IntoMap
+    @StringKey(AfkTile.TILE_SPEC)
+    fun bindAfkTile(afkTile: AfkTile): QSTileImpl<*>
+
     /** Inject AmbientDisplayTile into tileMap in QSModule */
     @Binds
     @IntoMap
@@ -110,6 +116,7 @@ interface CustomModule {
     fun bindVpnTile(vpnTile: VpnTile): QSTileImpl<*>
 
     companion object {
+        const val AFK_TILE_SPEC = "afk_mode"
         const val AMBIENT_DISPLAY_TILE_SPEC = "ambient_display"
         const val AOD_TILE_SPEC = "aod"
         const val AUTO_BRIGHTNESS_TILE_SPEC = "auto_brightness"
@@ -121,6 +128,21 @@ interface CustomModule {
         const val SYNC_TILE_SPEC = "sync"
         const val USB_TETHER_TILE_SPEC = "usb_tether"
         const val VPN_TILE_SPEC = "vpn"
+
+        @Provides
+        @IntoMap
+        @StringKey(AFK_TILE_SPEC)
+        fun provideAfkTileConfig(uiEventLogger: QsEventLogger): QSTileConfig =
+            QSTileConfig(
+                tileSpec = TileSpec.create(AFK_TILE_SPEC),
+                uiConfig =
+                    QSTileUIConfig.Resource(
+                        iconRes = R.drawable.ic_qs_afk_on,
+                        labelRes = R.string.quick_settings_afk_label
+                    ),
+                instanceId = uiEventLogger.getNewInstanceId(),
+                category = TileCategory.UTILITIES,
+            )
 
         @Provides
         @IntoMap

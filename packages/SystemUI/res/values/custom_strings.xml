@@ -22,6 +22,15 @@
     <string name="status_bar_icons_title">Status bar icons</string>
 
     <!-- Custom QS tiles -->
+    <!-- AFK Mode QS tile -->
+    <string name="quick_settings_afk_label">AFK Mode</string>
+    <string name="quick_settings_afk_active">Active</string>
+    <string name="quick_settings_afk_inactive">Inactive</string>
+    <string name="accessibility_quick_settings_afk_on">AFK mode on.</string>
+    <string name="accessibility_quick_settings_afk_off">AFK mode off.</string>
+    <string name="afk_mode_overlay_title">AFK Mode Active</string>
+    <string name="afk_mode_overlay_desc">Double tap or hold to unlock</string>
+
     <!-- Ambient display QS tile -->
     <string name="quick_settings_ambient_display_label">Ambient display</string>
     <string name="accessibility_quick_settings_ambient_display_off">Ambient display off.</string>

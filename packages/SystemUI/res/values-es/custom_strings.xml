@@ -14,7 +14,15 @@
      See the License for the specific language governing permissions and
      limitations under the License.
 -->
-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Modo AFK / Pantalla Apagada en Segundo Plano -->
+    <string name="quick_settings_afk_label">Modo AFK</string>
+    <string name="quick_settings_afk_active">Activo</string>
+    <string name="quick_settings_afk_inactive">Inactivo</string>
+    <string name="accessibility_quick_settings_afk_on">Modo AFK activado.</string>
+    <string name="accessibility_quick_settings_afk_off">Modo AFK desactivado.</string>
+    <string name="afk_mode_overlay_title">Modo AFK activo</string>
+    <string name="afk_mode_overlay_desc">Toca dos veces o mantén presionado para salir</string>
+
     <!-- Grabación de pantalla -->
     <string name="screenrecord_lowquality_label">Baja calidad</string>
     <string name="screenrecord_lowquality_summary">Para un tamaño de archivo más pequeño</string>
