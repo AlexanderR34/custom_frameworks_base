@@ -148,6 +148,7 @@ public class PropImitationHooks {
          * Set Stock Fingerprint for ARCore
          * Set custom model for Netflix
          * Set Pixel XL for Google Photos
+         * Set Game Spoofing props for configured apps
          */
         if (sIsGms || sIsFinsky) {
             if (!android.os.Process.isIsolated()) {
@@ -159,11 +160,54 @@ public class PropImitationHooks {
             dlog("Setting stock fingerprint for: " + packageName);
             setPropValue("FINGERPRINT", sStockFp);
         } else if (sIsPhotos) {
-            dlog("Spoofing Pixel 1 for Google Photos");
-            sPixelOneProps.forEach((PropImitationHooks::setPropValue));
+            boolean spoofPhotos = true;
+            if (!android.os.Process.isIsolated()) {
+                try {
+                    spoofPhotos = Settings.Secure.getInt(
+                            context.getContentResolver(), Settings.Secure.SPOOF_PIF_PHOTOS, 1) == 1;
+                } catch (Exception ignored) {}
+            }
+            if (spoofPhotos) {
+                dlog("Spoofing Pixel 1 for Google Photos");
+                sPixelOneProps.forEach((PropImitationHooks::setPropValue));
+            }
         } else if (!sNetflixModel.isEmpty() && packageName.equals(PACKAGE_NETFLIX)) {
             dlog("Setting model to " + sNetflixModel + " for Netflix");
             setPropValue("MODEL", sNetflixModel);
+        } else {
+            setGameProps(context, packageName);
+        }
+    }
+
+    private static void setGameProps(Context context, String packageName) {
+        if (android.os.Process.isIsolated()) {
+            dlog("Skipping setGameProps in isolated process");
+            return;
+        }
+        try {
+            String config = Settings.Secure.getString(
+                    context.getContentResolver(), Settings.Secure.SPOOF_GAMEPROPS_CONFIG);
+            if (TextUtils.isEmpty(config)) {
+                return;
+            }
+            JSONObject json = new JSONObject(config);
+            if (!json.optBoolean("enabled", false)) {
+                return;
+            }
+            JSONObject games = json.optJSONObject("games");
+            if (games == null || !games.has(packageName)) {
+                return;
+            }
+            JSONObject props = games.getJSONObject(packageName);
+            Log.i(TAG, "Spoofing game props for package: " + packageName);
+            Iterator<String> keys = props.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                String value = props.getString(key);
+                setPropValue(key, value);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to spoof game props for " + packageName, e);
         }
     }
 
@@ -171,17 +215,129 @@ public class PropImitationHooks {
         try {
             dlog("Setting prop " + key + " to " + value.toString());
             Class clazz = Build.class;
+            String fieldName = key;
             if (key.startsWith("VERSION.")) {
                 clazz = Build.VERSION.class;
-                key = key.substring(8);
+                fieldName = key.substring(8);
+            } else {
+                try {
+                    Build.class.getDeclaredField(key);
+                } catch (NoSuchFieldException e) {
+                    try {
+                        Build.VERSION.class.getDeclaredField(key);
+                        clazz = Build.VERSION.class;
+                        fieldName = key;
+                    } catch (NoSuchFieldException ignored) {
+                        // Custom or system property key
+                    }
+                }
             }
-            Field field = clazz.getDeclaredField(key);
-            field.setAccessible(true);
-            // Cast the value to int if it's an integer field, otherwise string.
-            field.set(null, field.getType().equals(Integer.TYPE) ? Integer.parseInt(value) : value);
-            field.setAccessible(false);
+            try {
+                Field field = clazz.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                // Cast the value to int if it's an integer field, otherwise string.
+                field.set(null, field.getType().equals(Integer.TYPE) ? Integer.parseInt(value) : value);
+                field.setAccessible(false);
+            } catch (NoSuchFieldException ignored) {
+            }
+
+            setSystemPropertyOverride(key, value);
         } catch (Exception e) {
             Log.e(TAG, "Failed to set prop " + key, e);
+        }
+    }
+
+    private static void setSystemPropertyOverride(String key, String value) {
+        if (TextUtils.isEmpty(key) || TextUtils.isEmpty(value)) {
+            return;
+        }
+        if (key.startsWith("ro.")) {
+            SystemProperties.setOverrideProperty(key, value);
+            return;
+        }
+        switch (key) {
+            case "MODEL":
+                SystemProperties.setOverrideProperty("ro.product.model", value);
+                SystemProperties.setOverrideProperty("ro.product.system.model", value);
+                SystemProperties.setOverrideProperty("ro.product.vendor.model", value);
+                SystemProperties.setOverrideProperty("ro.product.odm.model", value);
+                SystemProperties.setOverrideProperty("ro.product.product.model", value);
+                SystemProperties.setOverrideProperty("ro.product.system_ext.model", value);
+                break;
+            case "MANUFACTURER":
+                SystemProperties.setOverrideProperty("ro.product.manufacturer", value);
+                SystemProperties.setOverrideProperty("ro.product.system.manufacturer", value);
+                SystemProperties.setOverrideProperty("ro.product.vendor.manufacturer", value);
+                SystemProperties.setOverrideProperty("ro.product.odm.manufacturer", value);
+                SystemProperties.setOverrideProperty("ro.product.product.manufacturer", value);
+                SystemProperties.setOverrideProperty("ro.product.system_ext.manufacturer", value);
+                break;
+            case "BRAND":
+                SystemProperties.setOverrideProperty("ro.product.brand", value);
+                SystemProperties.setOverrideProperty("ro.product.system.brand", value);
+                SystemProperties.setOverrideProperty("ro.product.vendor.brand", value);
+                SystemProperties.setOverrideProperty("ro.product.odm.brand", value);
+                SystemProperties.setOverrideProperty("ro.product.product.brand", value);
+                SystemProperties.setOverrideProperty("ro.product.system_ext.brand", value);
+                break;
+            case "DEVICE":
+                SystemProperties.setOverrideProperty("ro.product.device", value);
+                SystemProperties.setOverrideProperty("ro.product.system.device", value);
+                SystemProperties.setOverrideProperty("ro.product.vendor.device", value);
+                SystemProperties.setOverrideProperty("ro.product.odm.device", value);
+                SystemProperties.setOverrideProperty("ro.product.product.device", value);
+                SystemProperties.setOverrideProperty("ro.product.system_ext.device", value);
+                break;
+            case "PRODUCT":
+                SystemProperties.setOverrideProperty("ro.product.name", value);
+                SystemProperties.setOverrideProperty("ro.product.system.name", value);
+                SystemProperties.setOverrideProperty("ro.product.vendor.name", value);
+                SystemProperties.setOverrideProperty("ro.product.odm.name", value);
+                SystemProperties.setOverrideProperty("ro.product.product.name", value);
+                SystemProperties.setOverrideProperty("ro.product.system_ext.name", value);
+                break;
+            case "BOARD":
+                SystemProperties.setOverrideProperty("ro.product.board", value);
+                SystemProperties.setOverrideProperty("ro.board.platform", value);
+                break;
+            case "HARDWARE":
+                SystemProperties.setOverrideProperty("ro.hardware", value);
+                break;
+            case "FINGERPRINT":
+                SystemProperties.setOverrideProperty("ro.build.fingerprint", value);
+                SystemProperties.setOverrideProperty("ro.system.build.fingerprint", value);
+                SystemProperties.setOverrideProperty("ro.vendor.build.fingerprint", value);
+                SystemProperties.setOverrideProperty("ro.odm.build.fingerprint", value);
+                SystemProperties.setOverrideProperty("ro.product.build.fingerprint", value);
+                SystemProperties.setOverrideProperty("ro.system_ext.build.fingerprint", value);
+                break;
+            case "ID":
+                SystemProperties.setOverrideProperty("ro.build.id", value);
+                break;
+            case "TAGS":
+                SystemProperties.setOverrideProperty("ro.build.tags", value);
+                break;
+            case "TYPE":
+                SystemProperties.setOverrideProperty("ro.build.type", value);
+                break;
+            case "RELEASE":
+            case "VERSION.RELEASE":
+                SystemProperties.setOverrideProperty("ro.build.version.release", value);
+                break;
+            case "SECURITY_PATCH":
+            case "VERSION.SECURITY_PATCH":
+                SystemProperties.setOverrideProperty("ro.build.version.security_patch", value);
+                break;
+            case "SDK_INT":
+            case "VERSION.SDK_INT":
+                SystemProperties.setOverrideProperty("ro.build.version.sdk", value);
+                break;
+            case "INCREMENTAL":
+            case "VERSION.INCREMENTAL":
+                SystemProperties.setOverrideProperty("ro.build.version.incremental", value);
+                break;
+            default:
+                break;
         }
     }
 
@@ -197,7 +353,10 @@ public class PropImitationHooks {
             return;
         }
 
-        String savedProps = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.PIF_DATA);
+        String savedProps = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.SPOOF_PIF_CONFIG);
+        if (savedProps == null || TextUtils.isEmpty(savedProps)) {
+            savedProps = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.PIF_DATA);
+        }
         if (savedProps == null || TextUtils.isEmpty(savedProps)) {
             savedProps = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.FETCHED_PIF);
         }

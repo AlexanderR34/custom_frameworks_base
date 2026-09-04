@@ -37,6 +37,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Gives access to the system properties store.  The system properties
@@ -137,6 +138,18 @@ public class SystemProperties {
     private static native void native_add_change_callback();
     private static native void native_report_sysprop_change();
 
+    private static final Map<String, String> sPropertyOverrides = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Set a local in-process property override.
+     * @hide
+     */
+    public static void setOverrideProperty(@NonNull String key, @NonNull String value) {
+        if (key != null && value != null) {
+            sPropertyOverrides.put(key, value);
+        }
+    }
+
     /**
      * Get the String value for the given {@code key}.
      *
@@ -148,6 +161,10 @@ public class SystemProperties {
     @SystemApi
     public static String get(@NonNull String key) {
         if (TRACK_KEY_ACCESS) onKeyAccess(key);
+        String override = sPropertyOverrides.get(key);
+        if (override != null) {
+            return override;
+        }
         return native_get(key);
     }
 
@@ -164,6 +181,10 @@ public class SystemProperties {
     @SystemApi
     public static String get(@NonNull String key, @Nullable String def) {
         if (TRACK_KEY_ACCESS) onKeyAccess(key);
+        String override = sPropertyOverrides.get(key);
+        if (override != null) {
+            return override;
+        }
         return native_get(key, def);
     }
 
@@ -179,6 +200,14 @@ public class SystemProperties {
     @SystemApi
     public static int getInt(@NonNull String key, int def) {
         if (TRACK_KEY_ACCESS) onKeyAccess(key);
+        String override = sPropertyOverrides.get(key);
+        if (override != null) {
+            try {
+                return Integer.parseInt(override);
+            } catch (NumberFormatException e) {
+                return def;
+            }
+        }
         return native_get_int(key, def);
     }
 
@@ -194,6 +223,14 @@ public class SystemProperties {
     @SystemApi
     public static long getLong(@NonNull String key, long def) {
         if (TRACK_KEY_ACCESS) onKeyAccess(key);
+        String override = sPropertyOverrides.get(key);
+        if (override != null) {
+            try {
+                return Long.parseLong(override);
+            } catch (NumberFormatException e) {
+                return def;
+            }
+        }
         return native_get_long(key, def);
     }
 
@@ -214,6 +251,15 @@ public class SystemProperties {
     @SystemApi
     public static boolean getBoolean(@NonNull String key, boolean def) {
         if (TRACK_KEY_ACCESS) onKeyAccess(key);
+        String override = sPropertyOverrides.get(key);
+        if (override != null) {
+            if ("1".equals(override) || "true".equalsIgnoreCase(override) || "yes".equalsIgnoreCase(override) || "on".equalsIgnoreCase(override)) {
+                return true;
+            } else if ("0".equals(override) || "false".equalsIgnoreCase(override) || "no".equalsIgnoreCase(override) || "off".equalsIgnoreCase(override)) {
+                return false;
+            }
+            return def;
+        }
         return native_get_boolean(key, def);
     }
 

@@ -54,8 +54,20 @@ public final class KeyProviderManager {
 
         private boolean loadFromXmlSetting(Context ctx) {
             try {
-                String xml = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.KEYBOX_DATA);
-                if (xml == null || xml.trim().isEmpty()) return false;
+                String raw = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.SPOOF_TRICKYSTORE_KEYBOX);
+                if (raw == null || raw.trim().isEmpty()) {
+                    raw = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.KEYBOX_DATA);
+                }
+                if (raw == null || raw.trim().isEmpty()) return false;
+
+                String xml = raw.trim();
+                if (!xml.startsWith("<")) {
+                    try {
+                        byte[] decoded = android.util.Base64.decode(xml, android.util.Base64.DEFAULT);
+                        xml = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+                    } catch (Exception ignored) {
+                    }
+                }
 
                 XmlPullParser p = Xml.newPullParser();
                 p.setInput(new StringReader(xml));
