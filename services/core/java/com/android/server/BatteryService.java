@@ -564,29 +564,45 @@ public final class BatteryService extends SystemService {
 
     private static final String[] USB_PD_OPTIMIZATION_NODES = new String[] {
             "/sys/class/power_supply/battery/step_charging_enabled",
+            "/sys/class/power_supply/battery/smart_charging",
+            "/sys/class/power_supply/battery/fastcharge_mode",
+            "/sys/class/power_supply/battery/super_charging",
+            "/sys/class/power_supply/battery/turbo_power",
+            "/sys/class/power_supply/battery/charging_enabled",
             "/sys/class/power_supply/battery/charge_control_limit",
             "/sys/class/power_supply/battery/charge_control_limit_max",
-            "/sys/class/power_supply/usb/pd_allowed"
+            "/sys/class/power_supply/usb/pd_allowed",
+            "/sys/class/power_supply/usb/pd_active",
+            "/sys/class/power_supply/usb/typec_mode",
+            "/sys/class/power_supply/main/fastcharge_mode",
+            "/sys/class/power_supply/main/step_charging_enabled",
+            "/sys/class/qcom-battery/quick_charge_enable",
+            "/sys/class/qcom-battery/restricted_charging"
     };
 
     private void updateUsbPdOptimizationState() {
         boolean enabled = Settings.System.getIntForUser(mContext.getContentResolver(),
                 Settings.System.USB_PD_OPTIMIZATION_ENABLED, 1, UserHandle.USER_CURRENT) == 1;
 
+        // Thermal safety: check if battery temperature is excessive (> 45.0°C)
+        boolean isOverheating = mHealthInfo != null
+                && mHealthInfo.batteryTemperatureTenthsCelsius > 450;
+
         for (String nodePath : USB_PD_OPTIMIZATION_NODES) {
             File node = new File(nodePath);
             if (node.exists()) {
                 try {
                     String value;
-                    if (nodePath.contains("step_charging_enabled") || nodePath.contains("pd_allowed")) {
-                        value = enabled ? "1" : "0";
+                    if (nodePath.contains("restricted_charging")) {
+                        value = enabled && !isOverheating ? "0" : "1";
                     } else if (nodePath.contains("charge_control_limit")) {
-                        value = enabled ? "80" : "100";
+                        // 0 in Linux power_supply means unrestricted maximum charge throughput
+                        value = "0";
                     } else {
-                        value = enabled ? "1" : "0";
+                        value = enabled && !isOverheating ? "1" : "0";
                     }
                     FileUtils.stringToFile(nodePath, value);
-                    Slog.i(TAG, "USB-PD Optimization updated: " + nodePath + " -> " + value);
+                    Slog.i(TAG, "USB-PD Optimization applied: " + nodePath + " -> " + value);
                 } catch (IOException e) {
                     Slog.w(TAG, "Failed to write USB-PD Optimization state to " + nodePath + ": " + e.getMessage());
                 }
@@ -912,6 +928,7 @@ public final class BatteryService extends SystemService {
                 || mOemFastCharging != mLastOemFastCharging)) {
 
             if (mPlugType != mLastBroadcastPlugType) {
+                mHandler.post(this::updateUsbPdOptimizationState);
                 if (mLastBroadcastPlugType == BATTERY_PLUGGED_NONE) {
                     // discharging -> charging
                     mChargeStartLevel = mHealthInfo.batteryLevel;
