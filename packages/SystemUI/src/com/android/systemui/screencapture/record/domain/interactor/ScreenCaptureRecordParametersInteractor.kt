@@ -86,6 +86,30 @@ constructor(
         }
         get() = repository.skipTimer
 
+    var videoQuality: Int
+        set(value) {
+            repository.videoQuality = value
+        }
+        get() = repository.videoQuality
+
+    var resolution: Int
+        set(value) {
+            repository.resolution = value
+        }
+        get() = repository.resolution
+
+    var frameRate: Int
+        set(value) {
+            repository.frameRate = value
+        }
+        get() = repository.frameRate
+
+    var timeLimit: Int
+        set(value) {
+            repository.timeLimit = value
+        }
+        get() = repository.timeLimit
+
     val canChangeAudioSource: StateFlow<Boolean> =
         serviceInteractor.status
             .map { it.canChangeAudioSource() }

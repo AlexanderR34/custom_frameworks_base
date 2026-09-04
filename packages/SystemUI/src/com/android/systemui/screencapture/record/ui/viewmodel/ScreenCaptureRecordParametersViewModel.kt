@@ -81,6 +81,14 @@ constructor(
 
     val skipTimer: Boolean by interactor::skipTimer
 
+    val videoQuality: Int by interactor::videoQuality
+
+    val resolution: Int by interactor::resolution
+
+    val frameRate: Int by interactor::frameRate
+
+    val timeLimit: Int by interactor::timeLimit
+
     var shouldRecordDevice: Boolean
         get() =
             with(interactor) {
@@ -166,6 +174,22 @@ constructor(
 
     fun setSkipTimer(skipTimer: Boolean) {
         interactor.skipTimer = skipTimer
+    }
+
+    fun setVideoQuality(videoQuality: Int) {
+        interactor.videoQuality = videoQuality
+    }
+
+    fun setResolution(resolution: Int) {
+        interactor.resolution = resolution
+    }
+
+    fun setFrameRate(frameRate: Int) {
+        interactor.frameRate = frameRate
+    }
+
+    fun setTimeLimit(timeLimit: Int) {
+        interactor.timeLimit = timeLimit
     }
 
     @AssistedFactory

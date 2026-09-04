@@ -33,6 +33,10 @@ constructor(
     val lowQuality: Boolean = false,
     val longerDuration: Boolean = false,
     val hevc: Boolean = false,
+    val videoQuality: Int = 0,
+    val resolution: Int = 0,
+    val frameRate: Int = 0,
+    val timeLimit: Int = 0,
 ) : Parcelable {
 
     constructor(
@@ -53,6 +57,10 @@ constructor(
         parcel.readBoolean(),
         parcel.readBoolean(),
         parcel.readBoolean(),
+        parcel.readInt(),
+        parcel.readInt(),
+        parcel.readInt(),
+        parcel.readInt(),
     )
 
     override fun describeContents(): Int = 0
@@ -68,6 +76,10 @@ constructor(
             writeBoolean(lowQuality)
             writeBoolean(longerDuration)
             writeBoolean(hevc)
+            writeInt(videoQuality)
+            writeInt(resolution)
+            writeInt(frameRate)
+            writeInt(timeLimit)
         }
 
     companion object CREATOR : Parcelable.Creator<ScreenRecordingParameters> {

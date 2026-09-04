@@ -43,6 +43,19 @@ public fun Icon(
     val contentDescription = icon.contentDescription?.load()
     when (icon) {
         is Icon.Loaded -> {
+            val drawable = icon.drawable
+            if (drawable is android.graphics.drawable.AdaptiveIconDrawable) {
+                val monochrome = drawable.monochrome
+                if (monochrome != null) {
+                    Icon(rememberDrawablePainter(monochrome), contentDescription, modifier, tint)
+                    return
+                }
+                Icon(rememberDrawablePainter(drawable), contentDescription, modifier, Color.Unspecified)
+                return
+            } else if (drawable is android.graphics.drawable.BitmapDrawable) {
+                Icon(rememberDrawablePainter(drawable), contentDescription, modifier, Color.Unspecified)
+                return
+            }
             Icon(rememberDrawablePainter(icon.drawable), contentDescription, modifier, tint)
         }
         is Icon.Resource -> {
@@ -66,6 +79,34 @@ public fun Icon(icon: Icon, tint: (() -> Color)?, modifier: Modifier = Modifier)
     val contentDescription = icon.contentDescription?.load()
     when (icon) {
         is Icon.Loaded -> {
+            val drawable = icon.drawable
+            if (drawable is android.graphics.drawable.AdaptiveIconDrawable) {
+                val monochrome = drawable.monochrome
+                if (monochrome != null) {
+                    Icon(
+                        rememberDrawablePainter(monochrome),
+                        tint ?: { localContentColor },
+                        contentDescription,
+                        modifier,
+                    )
+                    return
+                }
+                Icon(
+                    rememberDrawablePainter(drawable),
+                    { Color.Unspecified },
+                    contentDescription,
+                    modifier,
+                )
+                return
+            } else if (drawable is android.graphics.drawable.BitmapDrawable) {
+                Icon(
+                    rememberDrawablePainter(drawable),
+                    { Color.Unspecified },
+                    contentDescription,
+                    modifier,
+                )
+                return
+            }
             Icon(
                 rememberDrawablePainter(icon.drawable),
                 tint ?: { localContentColor },

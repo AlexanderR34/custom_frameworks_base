@@ -275,8 +275,8 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             refreshRate = 90;
         } else if (mFrameRate == 4) { // 120 FPS
             refreshRate = 120;
-        } else { // 0: Auto / Native display refresh rate
-            refreshRate = mLowQuality ? LOW_VIDEO_FRAME_RATE : (int) display.getRefreshRate();
+        } else { // 0: Auto / Default 60 FPS
+            refreshRate = mLowQuality ? LOW_VIDEO_FRAME_RATE : Math.min(60, (int) display.getRefreshRate());
             if (mMaxRefreshRate != 0 && refreshRate > mMaxRefreshRate) refreshRate = mMaxRefreshRate;
         }
 

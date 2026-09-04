@@ -379,6 +379,10 @@ constructor(
                     lowQuality = toolbarViewModel.recordParametersViewModel.lowQuality,
                     longerDuration = toolbarViewModel.recordParametersViewModel.longerDuration,
                     hevc = toolbarViewModel.recordParametersViewModel.hevc,
+                    videoQuality = toolbarViewModel.recordParametersViewModel.videoQuality,
+                    resolution = toolbarViewModel.recordParametersViewModel.resolution,
+                    frameRate = toolbarViewModel.recordParametersViewModel.frameRate,
+                    timeLimit = toolbarViewModel.recordParametersViewModel.timeLimit,
                 )
             if (skipTimer) {
                 screenRecordingServiceInteractor.startRecording(params)

@@ -231,6 +231,24 @@ open class ScreenRecordingService : ComponentService() {
                 } else {
                     UUID.randomUUID().mostSignificantBits.toInt()
                 }
+            val recorder =
+                ScreenMediaRecorder(
+                    this@ScreenRecordingService,
+                    Handler(Looper.getMainLooper()),
+                    Process.myUid(),
+                    parameters.audioSource,
+                    parameters.captureTarget,
+                    parameters.displayId,
+                    screenMediaRecorderListener,
+                    parameters.lowQuality,
+                    parameters.longerDuration,
+                    parameters.hevc,
+                ).apply {
+                    setVideoQuality(parameters.videoQuality)
+                    setResolution(parameters.resolution)
+                    setFrameRate(parameters.frameRate)
+                    setTimeLimit(parameters.timeLimit)
+                }
             val context =
                 RecordingContext(
                     notificationId = actualNotificationId,
@@ -239,19 +257,7 @@ open class ScreenRecordingService : ComponentService() {
                     displayId = parameters.displayId,
                     shouldShowTaps = parameters.shouldShowTaps,
                     shouldShowSeconds = parameters.shouldShowSeconds,
-                    recorder =
-                        ScreenMediaRecorder(
-                            this@ScreenRecordingService,
-                            Handler(Looper.getMainLooper()),
-                            Process.myUid(),
-                            parameters.audioSource,
-                            parameters.captureTarget,
-                            parameters.displayId,
-                            screenMediaRecorderListener,
-                            parameters.lowQuality,
-                            parameters.longerDuration,
-                            parameters.hevc,
-                        ),
+                    recorder = recorder,
                 )
             context.startRecording()
             recordingContext = context

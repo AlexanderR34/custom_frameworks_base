@@ -257,6 +257,10 @@ constructor(
         val longerDuration = recordDetailsParametersViewModel.longerDuration
         val hevc = recordDetailsParametersViewModel.hevc
         val skipTimer = recordDetailsParametersViewModel.skipTimer
+        val videoQuality = recordDetailsParametersViewModel.videoQuality
+        val resolution = recordDetailsParametersViewModel.resolution
+        val frameRate = recordDetailsParametersViewModel.frameRate
+        val timeLimit = recordDetailsParametersViewModel.timeLimit
         when (target) {
             is ScreenCaptureTarget.Fullscreen -> {
                 val shouldShowTaps = recordDetailsParametersViewModel.shouldShowTaps
@@ -268,6 +272,10 @@ constructor(
                     lowQuality = lowQuality,
                     longerDuration = longerDuration,
                     hevc = hevc,
+                    videoQuality = videoQuality,
+                    resolution = resolution,
+                    frameRate = frameRate,
+                    timeLimit = timeLimit,
                 )
                 if (skipTimer) {
                     screenRecordingServiceInteractor.startRecording(params)
@@ -310,6 +318,10 @@ constructor(
                     lowQuality = lowQuality,
                     longerDuration = longerDuration,
                     hevc = hevc,
+                    videoQuality = videoQuality,
+                    resolution = resolution,
+                    frameRate = frameRate,
+                    timeLimit = timeLimit,
                 )
                 if (skipTimer) {
                     screenRecordingServiceInteractor.startRecording(params)

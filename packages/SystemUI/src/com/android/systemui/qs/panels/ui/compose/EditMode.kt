@@ -17,7 +17,9 @@
 package com.android.systemui.qs.panels.ui.compose
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -34,7 +36,7 @@ fun EditMode(viewModel: EditModeViewModel, modifier: Modifier = Modifier) {
 
     DisposableEffect(Unit) { onDispose { viewModel.stopEditing() } }
 
-    Column(modifier) {
+    Column(modifier.background(MaterialTheme.colorScheme.surface)) {
         gridLayout.EditTileGrid(
             tiles,
             Modifier,

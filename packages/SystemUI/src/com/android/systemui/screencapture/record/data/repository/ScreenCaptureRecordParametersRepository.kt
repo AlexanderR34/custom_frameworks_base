@@ -85,6 +85,38 @@ constructor(@Application private val context: Context, private val userTracker: 
             Prefs.putInt(userContext, PREF_SKIP, if (value) 1 else 0)
         }
 
+    private val videoQualityState = mutableStateOf(Prefs.getInt(userContext, PREF_VIDEO_QUALITY, 0))
+    var videoQuality: Int
+        get() = videoQualityState.value
+        set(value) {
+            videoQualityState.value = value
+            Prefs.putInt(userContext, PREF_VIDEO_QUALITY, value)
+        }
+
+    private val resolutionState = mutableStateOf(Prefs.getInt(userContext, PREF_RESOLUTION, 0))
+    var resolution: Int
+        get() = resolutionState.value
+        set(value) {
+            resolutionState.value = value
+            Prefs.putInt(userContext, PREF_RESOLUTION, value)
+        }
+
+    private val frameRateState = mutableStateOf(Prefs.getInt(userContext, PREF_FRAME_RATE, 0))
+    var frameRate: Int
+        get() = frameRateState.value
+        set(value) {
+            frameRateState.value = value
+            Prefs.putInt(userContext, PREF_FRAME_RATE, value)
+        }
+
+    private val timeLimitState = mutableStateOf(Prefs.getInt(userContext, PREF_TIME_LIMIT, 0))
+    var timeLimit: Int
+        get() = timeLimitState.value
+        set(value) {
+            timeLimitState.value = value
+            Prefs.putInt(userContext, PREF_TIME_LIMIT, value)
+        }
+
     private fun loadAudioSource(): ScreenRecordingAudioSource {
         val useAudio = Prefs.getInt(userContext, PREF_AUDIO, 0) == 1
         if (!useAudio) return ScreenRecordingAudioSource.NONE
@@ -109,5 +141,9 @@ constructor(@Application private val context: Context, private val userTracker: 
         private const val PREF_AUDIO_SOURCE = "screenrecord_audio_source"
         private const val PREF_HEVC = "screenrecord_use_hevc"
         private const val PREF_SKIP = "screenrecord_skip_timer"
+        private const val PREF_VIDEO_QUALITY = "screenrecord_video_quality"
+        private const val PREF_RESOLUTION = "screenrecord_resolution"
+        private const val PREF_FRAME_RATE = "screenrecord_frame_rate"
+        private const val PREF_TIME_LIMIT = "screenrecord_time_limit"
     }
 }

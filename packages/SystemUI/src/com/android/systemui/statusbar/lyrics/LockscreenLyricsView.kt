@@ -251,9 +251,7 @@ class LockscreenLyricsView @JvmOverloads constructor(
             currentLine.timestampMs + 4000L
         }
 
-        val duration = maxOf(600L, nextTimestampMs - currentLine.timestampMs)
-        val elapsed = maxOf(0L, positionMs - currentLine.timestampMs)
-        val progress = (elapsed.toFloat() / duration.toFloat()).coerceIn(0.0f, 1.0f)
+        val rawGap = maxOf(400L, nextTimestampMs - currentLine.timestampMs)
 
         val wordRanges = mutableListOf<IntRange>()
         val matcher = Pattern.compile("\\S+").matcher(text)
@@ -267,14 +265,27 @@ class LockscreenLyricsView @JvmOverloads constructor(
         }
 
         val totalWordChars = wordRanges.sumOf { it.last - it.first + 1 }
+        
+        // Dynamic vocal duration: songs spend ~280ms-340ms per word on average.
+        // Long gaps between lines are instrumental pauses and should not stretch singing time.
+        val estimatedSingingDurationMs = (wordRanges.size * 300L + totalWordChars * 30L + 200L).coerceIn(900L, 4000L)
+        val activeDuration = if (rawGap <= 2200L) {
+            maxOf(400L, rawGap - 100L)
+        } else {
+            minOf(rawGap - 300L, estimatedSingingDurationMs)
+        }
+
+        val elapsed = maxOf(0L, positionMs - currentLine.timestampMs)
+        val progress = (elapsed.toFloat() / activeDuration.toFloat()).coerceIn(0.0f, 1.0f)
+
         var cumulative = 0
         var activeCharEnd = 0
 
         for (range in wordRanges) {
             val len = range.last - range.first + 1
             cumulative += len
-            // Vocal threshold for this word (triggers as singer reaches the word)
-            val wordThreshold = (cumulative - len * 0.35f) / totalWordChars.toFloat()
+            // Vocal threshold for this word (leads smoothly into word pronunciation)
+            val wordThreshold = (cumulative - len * 0.60f) / totalWordChars.toFloat()
             if (progress >= wordThreshold) {
                 activeCharEnd = range.last + 1
             } else {
@@ -282,7 +293,7 @@ class LockscreenLyricsView @JvmOverloads constructor(
             }
         }
 
-        if (progress >= 0.95f) {
+        if (progress >= 0.90f) {
             activeCharEnd = text.length
         }
 

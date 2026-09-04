@@ -27,12 +27,16 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,13 +44,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -169,7 +182,7 @@ fun RecordDetailsSettings(
                 onCheckedChange = { parametersViewModel.shouldShowTaps = it },
                 modifier = Modifier,
             )
-            RichSwitch(
+            RichDropdown(
                 visible = true,
                 icon =
                     loadIcon(
@@ -177,11 +190,79 @@ fun RecordDetailsSettings(
                         resId = R.drawable.ic_sr_quality,
                         contentDescription = null,
                     ),
-                label = stringResource(R.string.screenrecord_lowquality_label),
-                summary = stringResource(R.string.screenrecord_lowquality_summary),
-                checked = parametersViewModel.lowQuality,
-                onCheckedChange = { parametersViewModel.setLowQuality(it) },
-                modifier = Modifier,
+                label = stringResource(R.string.screenrecord_resolution_label),
+                options =
+                    listOf(
+                        DropdownOption(0, stringResource(R.string.screenrecord_resolution_auto)),
+                        DropdownOption(2, stringResource(R.string.screenrecord_resolution_1220p)),
+                        DropdownOption(3, stringResource(R.string.screenrecord_resolution_1080p)),
+                        DropdownOption(4, stringResource(R.string.screenrecord_resolution_720p)),
+                        DropdownOption(5, stringResource(R.string.screenrecord_resolution_480p)),
+                    ),
+                selectedValue = parametersViewModel.resolution,
+                onValueSelected = { parametersViewModel.setResolution(it) },
+                viewModel = drawableLoaderViewModel,
+            )
+            RichDropdown(
+                visible = true,
+                icon =
+                    loadIcon(
+                        viewModel = drawableLoaderViewModel,
+                        resId = R.drawable.ic_sr_clock,
+                        contentDescription = null,
+                    ),
+                label = stringResource(R.string.screenrecord_framerate_label),
+                options =
+                    listOf(
+                        DropdownOption(0, stringResource(R.string.screenrecord_framerate_60) + " (Auto)"),
+                        DropdownOption(1, stringResource(R.string.screenrecord_framerate_60)),
+                        DropdownOption(2, stringResource(R.string.screenrecord_framerate_30)),
+                        DropdownOption(3, stringResource(R.string.screenrecord_framerate_90)),
+                        DropdownOption(4, stringResource(R.string.screenrecord_framerate_120)),
+                    ),
+                selectedValue = parametersViewModel.frameRate,
+                onValueSelected = { parametersViewModel.setFrameRate(it) },
+                viewModel = drawableLoaderViewModel,
+            )
+            RichDropdown(
+                visible = true,
+                icon =
+                    loadIcon(
+                        viewModel = drawableLoaderViewModel,
+                        resId = R.drawable.ic_sr_quality,
+                        contentDescription = null,
+                    ),
+                label = stringResource(R.string.screenrecord_video_quality_label),
+                options =
+                    listOf(
+                        DropdownOption(0, stringResource(R.string.screenrecord_video_quality_high)),
+                        DropdownOption(1, stringResource(R.string.screenrecord_video_quality_medium)),
+                        DropdownOption(2, stringResource(R.string.screenrecord_video_quality_low)),
+                    ),
+                selectedValue = parametersViewModel.videoQuality,
+                onValueSelected = { parametersViewModel.setVideoQuality(it) },
+                viewModel = drawableLoaderViewModel,
+            )
+            RichDropdown(
+                visible = true,
+                icon =
+                    loadIcon(
+                        viewModel = drawableLoaderViewModel,
+                        resId = R.drawable.ic_sr_clock,
+                        contentDescription = null,
+                    ),
+                label = stringResource(R.string.screenrecord_timelimit_label),
+                options =
+                    listOf(
+                        DropdownOption(0, stringResource(R.string.screenrecord_timelimit_unlimited)),
+                        DropdownOption(1, stringResource(R.string.screenrecord_timelimit_5min)),
+                        DropdownOption(2, stringResource(R.string.screenrecord_timelimit_10min)),
+                        DropdownOption(3, stringResource(R.string.screenrecord_timelimit_30min)),
+                        DropdownOption(4, stringResource(R.string.screenrecord_timelimit_60min)),
+                    ),
+                selectedValue = parametersViewModel.timeLimit,
+                onValueSelected = { parametersViewModel.setTimeLimit(it) },
+                viewModel = drawableLoaderViewModel,
             )
             RichSwitch(
                 visible = true,
@@ -408,3 +489,96 @@ private fun hasHevcHwEncoder(): Boolean {
     }
     return false
 }
+
+private data class DropdownOption<T>(
+    val value: T,
+    val label: String,
+)
+
+@Composable
+private fun <T> RichDropdown(
+    visible: Boolean,
+    icon: State<IconModel?>,
+    label: String,
+    options: List<DropdownOption<T>>,
+    selectedValue: T,
+    onValueSelected: (T) -> Unit,
+    viewModel: DrawableLoaderViewModel,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = options.find { it.value == selectedValue }?.label ?: ""
+    val downArrowIcon =
+        loadIcon(
+            viewModel = viewModel,
+            resId = R.drawable.ic_arrow_down_24dp,
+            contentDescription = null,
+        )
+
+    SettingsRow(visible = visible, modifier = modifier) {
+        LoadingIcon(
+            icon = icon.value,
+            modifier = Modifier.size(40.dp).padding(8.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp).weight(1f).basicMarquee(),
+        )
+        Box {
+            TextButton(
+                onClick = { expanded = true },
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.height(36.dp).semantics { role = Role.DropdownList },
+            ) {
+                Text(
+                    text = currentLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
+                LoadingIcon(
+                    icon = downArrowIcon.value,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                onDismissRequest = { expanded = false },
+            ) {
+                options.fastForEach { option ->
+                    val isSelected = option.value == selectedValue
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = option.label,
+                                style =
+                                    if (isSelected) MaterialTheme.typography.labelLarge
+                                    else MaterialTheme.typography.bodyMedium,
+                                color =
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onValueSelected(option.value)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
