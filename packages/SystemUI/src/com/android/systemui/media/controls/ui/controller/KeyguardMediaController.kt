@@ -61,9 +61,6 @@ import com.android.systemui.statusbar.notification.stack.MediaContainerView
 import com.android.systemui.statusbar.phone.KeyguardBypassController
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.statusbar.policy.SplitShadeStateController
-import android.widget.LinearLayout
-import com.android.systemui.statusbar.lyrics.LockscreenLyricsController
-import com.android.systemui.statusbar.lyrics.LockscreenLyricsView
 import com.android.systemui.util.asIndenting
 import com.android.systemui.util.boundsOnScreen
 import com.android.systemui.util.println
@@ -95,7 +92,6 @@ constructor(
     private val mediaViewModelFactory: MediaViewModel.Factory,
     private val mediaCarouselInteractor: MediaCarouselInteractor,
     private val falsingSystem: MediaFalsingSystem,
-    private val lockscreenLyricsController: LockscreenLyricsController? = null,
 ) : Dumpable {
     private var lastUsedStatusBarState = -1
 
@@ -103,26 +99,15 @@ constructor(
     var visible by mutableStateOf(false)
         private set
 
-    private val lyricsView = LockscreenLyricsView(context).apply {
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-    }
-
-    private val mediaAndLyricsContainer = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-    }
-
     private var distanceForFullShadeTransition = 0
     private var fullShadeTransitionProgress: Float by mutableStateOf(0.0f)
 
     private val composeView =
         ComposeView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
             repeatWhenAttached {
                 lifecycleScope.launch {
                     repeatOnLifecycle(Lifecycle.State.CREATED) {
@@ -144,7 +129,6 @@ constructor(
     init {
         dumpManager.registerDumpable(this)
         setUpListenersAndCallbacks()
-        lockscreenLyricsController?.attachView(lyricsView)
     }
 
     private fun setUpListenersAndCallbacks() {
@@ -281,12 +265,18 @@ constructor(
                 return
             }
             if (MediaControlsInComposeFlag.isEnabled) {
-                composeView.layoutParams.apply {
+                composeView.layoutParams = (composeView.layoutParams ?: ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )).apply {
                     height = ViewGroup.LayoutParams.WRAP_CONTENT
                     width = ViewGroup.LayoutParams.MATCH_PARENT
                 }
             } else {
-                mediaHost.hostView.layoutParams.apply {
+                mediaHost.hostView.layoutParams = (mediaHost.hostView.layoutParams ?: ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )).apply {
                     height = ViewGroup.LayoutParams.WRAP_CONTENT
                     width = ViewGroup.LayoutParams.MATCH_PARENT
                 }
@@ -318,7 +308,10 @@ constructor(
         if (activeContainer?.childCount == 0) {
             val playerView: View = if (MediaControlsInComposeFlag.isEnabled) {
                 composeView.parent?.let { (it as? ViewGroup)?.removeView(composeView) }
-                composeView.layoutParams.apply {
+                composeView.layoutParams = (composeView.layoutParams ?: ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )).apply {
                     height = ViewGroup.LayoutParams.WRAP_CONTENT
                     width = ViewGroup.LayoutParams.MATCH_PARENT
                 }
@@ -327,7 +320,10 @@ constructor(
                 mediaHost.hostView.parent?.let {
                     (it as? ViewGroup)?.removeView(mediaHost.hostView)
                 }
-                mediaHost.hostView.layoutParams.apply {
+                mediaHost.hostView.layoutParams = (mediaHost.hostView.layoutParams ?: ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )).apply {
                     height = ViewGroup.LayoutParams.WRAP_CONTENT
                     width = ViewGroup.LayoutParams.MATCH_PARENT
                 }
@@ -335,14 +331,7 @@ constructor(
             }
 
             playerView.parent?.let { (it as? ViewGroup)?.removeView(playerView) }
-            lyricsView.parent?.let { (it as? ViewGroup)?.removeView(lyricsView) }
-
-            mediaAndLyricsContainer.removeAllViews()
-            mediaAndLyricsContainer.addView(playerView)
-            mediaAndLyricsContainer.addView(lyricsView)
-
-            mediaAndLyricsContainer.parent?.let { (it as? ViewGroup)?.removeView(mediaAndLyricsContainer) }
-            activeContainer.addView(mediaAndLyricsContainer)
+            activeContainer.addView(playerView)
         }
     }
 

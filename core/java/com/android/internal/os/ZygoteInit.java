@@ -27,7 +27,6 @@ import android.app.ApplicationLoaders;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.pm.SharedLibraryInfo;
 import android.content.res.Resources;
-import android.net.http.HttpEngine;
 import android.os.Build;
 import android.os.Environment;
 import android.os.IInstalld;
@@ -147,29 +146,39 @@ public class ZygoteInit {
         Trace.traceEnd(Trace.TRACE_TAG_DALVIK);
         preloadSharedLibraries();
         preloadTextResources();
-        preloadCompatConfig();
-
-        // TODO: remove the try/catch and the flag read as soon as the flag is ramped and 25Q2
-        // starts building from source.
-        if (preloadHttpengineInZygote()) {
-            try {
-                HttpEngine.preload();
-            } catch (NoSuchMethodError e){
-                // The flag protecting this API is not an exported
-                // flag because ZygoteInit happens before the
-                // system service has initialized the flag which means
-                // that we can't query the real value of the flag
-                // from the tethering module. In order to avoid crashing
-                // in the case where we have (new zygote, old tethering).
-                // we catch the NoSuchMethodError and just log.
-                Log.d(TAG, "HttpEngine.preload() threw " + e);
-            }
+        try {
+            preloadCompatConfig();
+        } catch (Throwable t) {
+            Log.e(TAG, "Failed to preload compat config", t);
         }
+
+        try {
+            if (preloadHttpengineInZygote()) {
+                try {
+                    Class<?> clazz = Class.forName("android.net.http.HttpEngine", false, ZygoteInit.class.getClassLoader());
+                    java.lang.reflect.Method preloadMethod = clazz.getMethod("preload");
+                    preloadMethod.invoke(null);
+                } catch (Throwable e) {
+                    Log.d(TAG, "HttpEngine.preload() threw " + e);
+                }
+            }
+        } catch (Throwable t) {
+            Log.d(TAG, "preloadHttpengineInZygote() threw " + t);
+        }
+
         // Ask the WebViewFactory to do any initialization that must run in the zygote process,
         // for memory sharing purposes.
-        WebViewFactory.prepareWebViewInZygote();
+        try {
+            WebViewFactory.prepareWebViewInZygote();
+        } catch (Throwable t) {
+            Log.e(TAG, "Failed to prepare WebView in zygote", t);
+        }
         endPreload();
-        warmUpJcaProviders();
+        try {
+            warmUpJcaProviders();
+        } catch (Throwable t) {
+            Log.e(TAG, "Failed to warm up JCA providers", t);
+        }
         Log.d(TAG, "end preload");
 
         sPreloadComplete = true;
@@ -232,8 +241,12 @@ public class ZygoteInit {
     }
 
     private static void preloadCompatConfig() {
-        Log.i(TAG, "Preloading compat config...");
-        CompatibilityRules.loadSystemRules();
+        try {
+            Log.i(TAG, "Preloading compat config...");
+            CompatibilityRules.loadSystemRules();
+        } catch (Throwable t) {
+            Log.e(TAG, "Failed to preload compat config: " + t);
+        }
     }
 
     /**

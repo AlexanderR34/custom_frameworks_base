@@ -1,4 +1,4 @@
-﻿package com.android.systemui.statusbar.phone.island
+package com.android.systemui.statusbar.phone.island
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -6,13 +6,16 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
 import android.widget.PopupWindow
-import com.android.systemui.R
+import com.android.systemui.res.R
 
 /**
  * Floating Quick Media Controls Popup for Status Bar Music Island
@@ -28,11 +31,20 @@ class MusicIslandPopup(
         NEXT
     }
 
+    companion object {
+        private const val AUTO_DISMISS_DELAY_MS = 6000L
+    }
+
     private val mPopupView: View
     private val mPopupWindow: PopupWindow
     private val mBtnPrev: ImageView
     private val mBtnPlayPause: ImageView
     private val mBtnNext: ImageView
+    private val mHandler = Handler(Looper.getMainLooper())
+
+    private val mAutoDismissRunnable = Runnable {
+        dismissWithAnimation()
+    }
 
     private var mIsPlaying = true
 
@@ -46,36 +58,46 @@ class MusicIslandPopup(
             mPopupView,
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
-            false // Non-focusable so it doesn't block background touches
+            true // Focusable so it maintains window focus and handles touches cleanly
         ).apply {
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             isOutsideTouchable = true
             isTouchable = true
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            elevation = 20f
+            elevation = 24f
+            setOnDismissListener {
+                mHandler.removeCallbacks(mAutoDismissRunnable)
+            }
         }
 
         setupButtons()
     }
 
     private fun setupButtons() {
-        mBtnPrev.setOnClickListener {
-            onAction(Action.PREVIOUS)
-        }
-        mBtnPlayPause.setOnClickListener {
-            onAction(Action.TOGGLE_PLAY_PAUSE)
-        }
-        mBtnNext.setOnClickListener {
-            onAction(Action.NEXT)
-        }
-
-        // Auto dismiss when touching outside the popup content
-        mPopupWindow.setTouchInterceptor { _, event ->
-            if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
-                dismissWithAnimation()
-                return@setTouchInterceptor false
+        mPopupView.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                resetAutoDismissTimer()
             }
             false
         }
+
+        mBtnPrev.setOnClickListener {
+            resetAutoDismissTimer()
+            onAction(Action.PREVIOUS)
+        }
+        mBtnPlayPause.setOnClickListener {
+            resetAutoDismissTimer()
+            onAction(Action.TOGGLE_PLAY_PAUSE)
+        }
+        mBtnNext.setOnClickListener {
+            resetAutoDismissTimer()
+            onAction(Action.NEXT)
+        }
+    }
+
+    private fun resetAutoDismissTimer() {
+        mHandler.removeCallbacks(mAutoDismissRunnable)
+        mHandler.postDelayed(mAutoDismissRunnable, AUTO_DISMISS_DELAY_MS)
     }
 
     fun setPlayingState(isPlaying: Boolean) {
@@ -98,6 +120,7 @@ class MusicIslandPopup(
 
     fun showBelow(anchorView: View) {
         if (mPopupWindow.isShowing) {
+            resetAutoDismissTimer()
             return
         }
 
@@ -117,7 +140,13 @@ class MusicIslandPopup(
         mPopupView.scaleX = 0.85f
         mPopupView.scaleY = 0.85f
 
-        mPopupWindow.showAtLocation(anchorView, android.view.Gravity.NO_GRAVITY, x, y)
+        try {
+            mPopupWindow.showAtLocation(anchorView, android.view.Gravity.NO_GRAVITY, x, y)
+        } catch (e: Exception) {
+            return
+        }
+
+        resetAutoDismissTimer()
 
         mPopupView.animate().cancel()
         mPopupView.animate()
@@ -131,6 +160,7 @@ class MusicIslandPopup(
     }
 
     fun dismissWithAnimation() {
+        mHandler.removeCallbacks(mAutoDismissRunnable)
         if (!mPopupWindow.isShowing) return
 
         mPopupView.animate().cancel()

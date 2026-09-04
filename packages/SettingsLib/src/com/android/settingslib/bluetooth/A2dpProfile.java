@@ -24,6 +24,7 @@ import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothCodecConfig;
+import android.bluetooth.BluetoothCodecStatus;
 import android.bluetooth.BluetoothCodecType;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothProfile;
@@ -319,6 +320,52 @@ public class A2dpProfile implements LocalBluetoothProfile {
         }
         return mContext.getString(
                 R.string.bluetooth_profile_a2dp_high_quality, codecType.getCodecName());
+    }
+
+    /**
+     * Gets the currently active audio codec name (e.g. AAC, SBC, LDAC, aptX, LHDC)
+     */
+    public String getActiveCodecName(BluetoothDevice device) {
+        BluetoothDevice bluetoothDevice = (device != null) ? device : getActiveDevice();
+        if (bluetoothDevice == null || mService == null) {
+            return null;
+        }
+        BluetoothCodecStatus codecStatus = mService.getCodecStatus(bluetoothDevice);
+        if (codecStatus != null && codecStatus.getCodecConfig() != null) {
+            BluetoothCodecConfig codecConfig = codecStatus.getCodecConfig();
+            BluetoothCodecType codecType = codecConfig.getExtendedCodecType();
+            if (codecType != null && !android.text.TextUtils.isEmpty(codecType.getCodecName())) {
+                return codecType.getCodecName();
+            }
+            int type = codecConfig.getCodecType();
+            switch (type) {
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC:
+                    return "SBC";
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC:
+                    return "AAC";
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX:
+                    return "aptX";
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD:
+                    return "aptX HD";
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC:
+                    return "LDAC";
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LC3:
+                    return "LC3";
+                case BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS:
+                    return "Opus";
+                case 7:
+                    return "aptX Adaptive";
+                case 8:
+                    return "aptX TWS+";
+                case 10:
+                    return "LHDC";
+                case 11:
+                    return "LHDC V5";
+                default:
+                    return null;
+            }
+        }
+        return null;
     }
 
     public String toString() {

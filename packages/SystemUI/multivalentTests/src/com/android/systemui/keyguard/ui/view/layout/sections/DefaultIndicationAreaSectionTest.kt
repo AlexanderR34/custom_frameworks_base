@@ -27,6 +27,7 @@ import com.android.systemui.SysuiTestCase
 import com.android.systemui.keyguard.ui.viewmodel.KeyguardIndicationAreaViewModel
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.KeyguardIndicationController
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsController
 import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Test
@@ -40,6 +41,7 @@ class DefaultIndicationAreaSectionTest : SysuiTestCase() {
 
     @Mock private lateinit var keyguardIndicationAreaViewModel: KeyguardIndicationAreaViewModel
     @Mock private lateinit var indicationController: KeyguardIndicationController
+    @Mock private lateinit var lockscreenLyricsController: LockscreenLyricsController
 
     private lateinit var underTest: DefaultIndicationAreaSection
 
@@ -51,6 +53,7 @@ class DefaultIndicationAreaSectionTest : SysuiTestCase() {
                 context,
                 keyguardIndicationAreaViewModel,
                 indicationController,
+                lockscreenLyricsController,
             )
     }
 

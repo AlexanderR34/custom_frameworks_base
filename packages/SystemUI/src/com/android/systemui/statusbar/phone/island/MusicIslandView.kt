@@ -1,4 +1,4 @@
-﻿package com.android.systemui.statusbar.phone.island
+package com.android.systemui.statusbar.phone.island
 
 import android.animation.ValueAnimator
 import android.content.Context
@@ -16,7 +16,7 @@ import android.view.ViewOutlineProvider
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
-import com.android.systemui.R
+import com.android.systemui.res.R
 
 /**
  * Status Bar Music Island View - Circular Artwork with Dynamic Progress Ring

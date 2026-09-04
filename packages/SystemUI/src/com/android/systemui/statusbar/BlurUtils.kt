@@ -84,12 +84,32 @@ constructor(
     @VisibleForTesting
     open fun createTransaction(): SurfaceControl.Transaction = SurfaceControl.Transaction()
 
+    private fun getBlurIntensityMultiplier(): Float {
+        return try {
+            val app = android.app.ActivityThread.currentApplication()
+            if (app != null) {
+                val intensity = android.provider.Settings.System.getInt(
+                    app.contentResolver,
+                    "custom_blur_intensity",
+                    100
+                )
+                (intensity / 100f).coerceIn(0f, 2.0f)
+            } else {
+                1.0f
+            }
+        } catch (e: Throwable) {
+            1.0f
+        }
+    }
+
     /** Translates a ratio from 0 to 1 to a blur radius in pixels. */
     fun blurRadiusOfRatio(ratio: Float): Float {
         if (ratio == 0f) {
             return 0f
         }
-        return MathUtils.lerp(minBlurRadius, maxBlurRadius, ratio)
+        val mult = getBlurIntensityMultiplier()
+        if (mult <= 0.01f) return 0f
+        return MathUtils.lerp(minBlurRadius, maxBlurRadius, ratio) * mult
     }
 
     /**
@@ -100,7 +120,9 @@ constructor(
         if (ratio == 0f) {
             return 0f
         }
-        return MathUtils.lerp(minBlurRadius, maxBlurRadius / 2, ratio)
+        val mult = getBlurIntensityMultiplier()
+        if (mult <= 0.01f) return 0f
+        return MathUtils.lerp(minBlurRadius, maxBlurRadius / 2, ratio) * mult
     }
 
     /** Translates a blur radius in pixels to a ratio between 0 to 1. */
@@ -122,9 +144,11 @@ constructor(
      * early-wakeup flag in SurfaceFlinger.
      */
     fun prepareBlur(radius: Int) {
-        if (!shouldBlur(radius) || earlyWakeupEnabled) return
+        val mult = getBlurIntensityMultiplier()
+        val finalRadius = (radius * mult).toInt()
+        if (!shouldBlur(finalRadius) || earlyWakeupEnabled) return
 
-        if (lastAppliedBlur == 0 && radius != 0) {
+        if (lastAppliedBlur == 0 && finalRadius != 0) {
             immediateEarlyWakeupStart(PREPARE_BLUR_TRACE_NAME)
         }
     }
@@ -142,12 +166,14 @@ constructor(
             return
         }
         updateTransactionApplier(viewRootImpl)
+        val mult = getBlurIntensityMultiplier()
+        val finalRadius = (radius * mult).toInt()
         val builder =
             SyncRtSurfaceTransactionApplier.SurfaceParams.Builder(viewRootImpl.surfaceControl)
-        if (shouldBlur(radius)) {
-            builder.withBackgroundBlurRadius(radius)
+        if (shouldBlur(finalRadius)) {
+            builder.withBackgroundBlurRadius(finalRadius)
             builder.withBackgroundBlurScale(scale)
-            if (lastAppliedBlur == 0 && radius != 0) {
+            if (lastAppliedBlur == 0 && finalRadius != 0) {
                 Trace.instantForTrack(TRACE_TAG_APP, TRACK_NAME, "notifyRendererForGpuLoadUp")
                 viewRootImpl.notifyRendererForGpuLoadUp("applyBlur")
 
@@ -158,12 +184,12 @@ constructor(
             if (
                 earlyWakeupEnabled &&
                     lastAppliedBlur != 0 &&
-                    radius == 0 &&
+                    finalRadius == 0 &&
                     !persistentEarlyWakeupRequired
             ) {
                 earlyWakeupEndNextFrame(builder, APPLY_BLUR_TRACE_NAME)
             }
-            lastAppliedBlur = radius
+            lastAppliedBlur = finalRadius
         }
         builder.withOpaque(opaque)
         transactionApplier.scheduleApply(builder.build())

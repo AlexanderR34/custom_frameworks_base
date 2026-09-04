@@ -1,4 +1,4 @@
-﻿package com.android.systemui.statusbar.phone.island
+package com.android.systemui.statusbar.phone.island
 
 import android.content.Context
 import android.database.ContentObserver
@@ -139,7 +139,7 @@ class MusicIslandController(
 
     private fun updateFeatureEnabledState() {
         mIsFeatureEnabled = Settings.System.getInt(
-            context.contentResolver, SETTING_MUSIC_ISLAND, 0
+            context.contentResolver, SETTING_MUSIC_ISLAND, 1
         ) == 1
 
         Log.d(TAG, "Music Island feature enabled: $mIsFeatureEnabled")

@@ -509,6 +509,15 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
         return new ScalingDrawableWrapper(icon, scaleFactor);
     }
 
+    private boolean isColoredIconsEnabled() {
+        try {
+            return android.provider.Settings.System.getInt(
+                    mContext.getContentResolver(), "status_bar_colored_icons", 0) != 0;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     @Nullable
     private Drawable loadDrawable(Context context, StatusBarIcon statusBarIcon) {
         if (statusBarIcon.preloadedIcon != null) {
@@ -531,7 +540,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
             if (iconDrawable instanceof AdaptiveIconDrawable) {
                 final AdaptiveIconDrawable adaptive = (AdaptiveIconDrawable) iconDrawable;
                 final Drawable monochrome = adaptive.getMonochrome();
-                if (monochrome != null) {
+                if (monochrome != null && !isColoredIconsEnabled()) {
                     return monochrome;
                 }
             }
@@ -602,9 +611,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
             mDotPaint.setAlpha((int) (alpha * 255));
             int cx = mNewStatusBarIconSize / 2;
             int cy = getHeight() / 2;
-            canvas.drawCircle(
-                    (float) cx, (float) cy,
-                    radius, mDotPaint);
+            canvas.drawCircle((float) cx, (float) cy, radius, mDotPaint);
         }
     }
 
@@ -681,7 +688,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     }
 
     private void updateIconColor() {
-        if (mShowsConversation) {
+        if (mShowsConversation || (isNotification() && isColoredIconsEnabled())) {
             setColorFilter(null);
             return;
         }

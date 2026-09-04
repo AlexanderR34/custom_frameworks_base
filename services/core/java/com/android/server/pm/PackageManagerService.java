@@ -2059,7 +2059,7 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
                 new PackageManagerLocalImpl(this));
         if (LocalManagerRegistry.getManager(DexUseManagerLocal.class) == null) {
             LocalManagerRegistry.addManager(DexUseManagerLocal.class,
-                    new DexUseManagerLocal());
+                    DexUseManagerLocal.createInstance(mContext));
         }
         LocalServices.addService(TestUtilityService.class, this);
         mTestUtilityService = LocalServices.getService(TestUtilityService.class);

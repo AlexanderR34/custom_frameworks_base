@@ -39,7 +39,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 private const val TAG = "LockscreenLyricsCtrl"
-private const val TICK_INTERVAL_MS = 150L
+private const val TICK_INTERVAL_MS = 60L
 
 @SysUISingleton
 class LockscreenLyricsController @Inject constructor(
@@ -118,7 +118,9 @@ class LockscreenLyricsController @Inject constructor(
 
     override fun onDozingChanged(dozing: Boolean) {
         isDozing = dozing
+        lyricsView?.setDozing(dozing)
         evaluateTickerState()
+        updateLyricsDisplay()
     }
 
     private fun handleMediaData(data: MediaData) {
@@ -173,7 +175,7 @@ class LockscreenLyricsController @Inject constructor(
 
     private fun evaluateTickerState() {
         val isPlaying = activeController?.playbackState?.state == PlaybackState.STATE_PLAYING
-        val shouldTick = isKeyguardShowing && !isDozing && isPlaying && (currentLyrics != null) && (lyricsView != null)
+        val shouldTick = (isKeyguardShowing || isDozing) && isPlaying && (currentLyrics != null) && (lyricsView != null)
 
         if (shouldTick && !isTicking) {
             isTicking = true
@@ -200,12 +202,13 @@ class LockscreenLyricsController @Inject constructor(
         }
 
         val index = lyrics.findCurrentIndex(position)
-        lyricsView?.updateLyrics(lyrics, index)
+        lyricsView?.updateLyrics(lyrics, index, position)
     }
 
     private fun updateLyricsDisplay() {
         val lyrics = currentLyrics
-        if (lyrics != null && isKeyguardShowing && !isDozing) {
+        if (lyrics != null && (isKeyguardShowing || isDozing)) {
+            lyricsView?.setDozing(isDozing)
             updateProgress()
         } else {
             lyricsView?.visibility = View.GONE

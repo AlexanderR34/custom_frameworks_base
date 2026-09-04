@@ -20,6 +20,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.text.BidiFormatter
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -68,16 +69,94 @@ class AppInfoProvider(private val packageInfo: PackageInfo) {
                 if (versionName != null) descriptions.add(versionName)
             }
 
-            IntroAppPreference(
-                title = title,
-                descriptions = descriptions,
-                appIcon = {
-                    Image(
-                        painter = rememberDrawablePainter(appRepository.produceIcon(app).value),
-                        contentDescription = appRepository.produceIconContentDescription(app).value,
+            val showDialog = remember { androidx.compose.runtime.mutableStateOf(false) }
+            val context = LocalContext.current
+            Box(modifier = Modifier.clickable { showDialog.value = true }) {
+                IntroAppPreference(
+                    title = title,
+                    descriptions = descriptions,
+                    appIcon = {
+                        Image(
+                            painter = rememberDrawablePainter(appRepository.produceIcon(app).value),
+                            contentDescription = appRepository.produceIconContentDescription(app).value,
+                        )
+                    },
+                )
+            }
+            if (showDialog.value) {
+                androidx.compose.runtime.DisposableEffect(showDialog.value) {
+                    val input = android.widget.EditText(context).apply {
+                        isSingleLine = true
+                        hint = "Nombre de la app"
+                    }
+                    val currentCustom = android.provider.Settings.System.getString(
+                        context.contentResolver, "custom_app_label_${app.packageName}"
                     )
-                },
-            )
+                    if (!currentCustom.isNullOrEmpty()) {
+                        input.setText(currentCustom)
+                        input.setSelection(currentCustom.length)
+                    } else {
+                        input.setText(title)
+                        input.setSelection(title.length)
+                    }
+
+                    val container = android.widget.FrameLayout(context).apply {
+                        val margin = (24 * context.resources.displayMetrics.density).toInt()
+                        val topMarginPx = (8 * context.resources.displayMetrics.density).toInt()
+                        val params = android.widget.FrameLayout.LayoutParams(
+                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            leftMargin = margin
+                            rightMargin = margin
+                            topMargin = topMarginPx
+                            bottomMargin = topMarginPx
+                        }
+                        input.layoutParams = params
+                        addView(input)
+                    }
+
+                    val dialog = androidx.appcompat.app.AlertDialog.Builder(context)
+                        .setTitle("Cambiar nombre de la app")
+                        .setView(container)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            val newName = input.text.toString().trim()
+                            if (newName.isNotEmpty()) {
+                                android.provider.Settings.System.putString(
+                                    context.contentResolver,
+                                    "custom_app_label_${app.packageName}",
+                                    newName
+                                )
+                                android.widget.Toast.makeText(context, "Nombre guardado", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            showDialog.value = false
+                        }
+                        .setNeutralButton("Restablecer") { _, _ ->
+                            android.provider.Settings.System.putString(
+                                context.contentResolver,
+                                "custom_app_label_${app.packageName}",
+                                null
+                            )
+                            android.widget.Toast.makeText(context, "Nombre restablecido", android.widget.Toast.LENGTH_SHORT).show()
+                            showDialog.value = false
+                        }
+                        .setNegativeButton(android.R.string.cancel) { _, _ ->
+                            showDialog.value = false
+                        }
+                        .setOnDismissListener {
+                            showDialog.value = false
+                        }
+                        .create()
+
+                    dialog.show()
+
+                    onDispose {
+                        if (dialog.isShowing) {
+                            dialog.dismiss()
+                        }
+                    }
+                }
+            }
         } else {
             Column(
                 modifier =
@@ -164,6 +243,87 @@ internal fun AppIcon(app: ApplicationInfo, size: Dp) {
 
 @Composable
 internal fun AppLabel(app: ApplicationInfo, isClonedAppPage: Boolean = false) {
+    val context = LocalContext.current
     val appRepository = rememberAppRepository()
-    SettingsTitle(appRepository.produceLabel(app, isClonedAppPage).value, useMediumWeight = true)
+    val label = appRepository.produceLabel(app, isClonedAppPage).value
+    val showDialog = remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    Box(modifier = Modifier.clickable { showDialog.value = true }) {
+        SettingsTitle(label, useMediumWeight = true)
+    }
+
+    if (showDialog.value) {
+        androidx.compose.runtime.DisposableEffect(showDialog.value) {
+            val input = android.widget.EditText(context).apply {
+                isSingleLine = true
+                hint = "Nombre de la app"
+            }
+            val currentCustom = android.provider.Settings.System.getString(
+                context.contentResolver, "custom_app_label_${app.packageName}"
+            )
+            if (!currentCustom.isNullOrEmpty()) {
+                input.setText(currentCustom)
+                input.setSelection(currentCustom.length)
+            } else {
+                input.setText(label)
+                input.setSelection(label.length)
+            }
+
+            val container = android.widget.FrameLayout(context).apply {
+                val margin = (24 * context.resources.displayMetrics.density).toInt()
+                val topMarginPx = (8 * context.resources.displayMetrics.density).toInt()
+                val params = android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    leftMargin = margin
+                    rightMargin = margin
+                    topMargin = topMarginPx
+                    bottomMargin = topMarginPx
+                }
+                input.layoutParams = params
+                addView(input)
+            }
+
+            val dialog = androidx.appcompat.app.AlertDialog.Builder(context)
+                .setTitle("Cambiar nombre de la app")
+                .setView(container)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    val newName = input.text.toString().trim()
+                    if (newName.isNotEmpty()) {
+                        android.provider.Settings.System.putString(
+                            context.contentResolver,
+                            "custom_app_label_${app.packageName}",
+                            newName
+                        )
+                        android.widget.Toast.makeText(context, "Nombre guardado", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    showDialog.value = false
+                }
+                .setNeutralButton("Restablecer") { _, _ ->
+                    android.provider.Settings.System.putString(
+                        context.contentResolver,
+                        "custom_app_label_${app.packageName}",
+                        null
+                    )
+                    android.widget.Toast.makeText(context, "Nombre restablecido", android.widget.Toast.LENGTH_SHORT).show()
+                    showDialog.value = false
+                }
+                .setNegativeButton(android.R.string.cancel) { _, _ ->
+                    showDialog.value = false
+                }
+                .setOnDismissListener {
+                    showDialog.value = false
+                }
+                .create()
+
+            dialog.show()
+
+            onDispose {
+                if (dialog.isShowing) {
+                    dialog.dismiss()
+                }
+            }
+        }
+    }
 }

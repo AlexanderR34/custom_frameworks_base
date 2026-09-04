@@ -1426,6 +1426,26 @@ public class CachedBluetoothDevice implements Comparable<CachedBluetoothDevice> 
         return maxState;
     }
 
+    public String getActiveAudioCodecName() {
+        synchronized (mProfileLock) {
+            for (LocalBluetoothProfile profile : mProfiles) {
+                if (profile instanceof A2dpProfile a2dpProfile) {
+                    if (a2dpProfile.isProfileReady() && a2dpProfile.getConnectionStatus(mDevice) == BluetoothProfile.STATE_CONNECTED) {
+                        String codec = a2dpProfile.getActiveCodecName(mDevice);
+                        if (!android.text.TextUtils.isEmpty(codec)) {
+                            return codec;
+                        }
+                    }
+                } else if (profile instanceof LeAudioProfile leAudioProfile) {
+                    if (leAudioProfile.isProfileReady() && leAudioProfile.getConnectionStatus(mDevice) == BluetoothProfile.STATE_CONNECTED) {
+                        return "LC3";
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * Return full summary that describes connection state of this device
      *
