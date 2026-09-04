@@ -265,35 +265,47 @@ class LockscreenLyricsView @JvmOverloads constructor(
         }
 
         val totalWordChars = wordRanges.sumOf { it.last - it.first + 1 }
-        
-        // Dynamic vocal duration: songs spend ~280ms-340ms per word on average.
-        // Long gaps between lines are instrumental pauses and should not stretch singing time.
-        val estimatedSingingDurationMs = (wordRanges.size * 300L + totalWordChars * 30L + 200L).coerceIn(900L, 4000L)
-        val activeDuration = if (rawGap <= 2200L) {
-            maxOf(400L, rawGap - 100L)
-        } else {
-            minOf(rawGap - 300L, estimatedSingingDurationMs)
+
+        // Line duration: For phrases up to 6s, the sung portion spans ~88% of the gap,
+        // matching held vowels and phrasing without cutting short.
+        val activeDuration = when {
+            rawGap <= 1500L -> maxOf(300L, rawGap - 80L)
+            rawGap <= 6000L -> (rawGap * 0.88f).toLong()
+            else -> minOf(rawGap - 800L, maxOf(3500L, (wordRanges.size * 450L + totalWordChars * 60L)))
         }
 
         val elapsed = maxOf(0L, positionMs - currentLine.timestampMs)
         val progress = (elapsed.toFloat() / activeDuration.toFloat()).coerceIn(0.0f, 1.0f)
 
-        var cumulative = 0
+        // Word weighting: gives syllables, baseline duration, and cadence sustain to the final word
+        val wordWeights = wordRanges.mapIndexed { idx, range ->
+            val charLen = (range.last - range.first + 1).toFloat()
+            val baseWeight = charLen + 2.5f
+            if (idx == wordRanges.size - 1 && wordRanges.size > 1) {
+                baseWeight * 1.7f // Final word usually holds the note/cadence
+            } else {
+                baseWeight
+            }
+        }
+        val totalWeight = wordWeights.sum()
+
+        var cumulativeWeight = 0.0f
         var activeCharEnd = 0
 
-        for (range in wordRanges) {
-            val len = range.last - range.first + 1
-            cumulative += len
-            // Vocal threshold for this word (leads smoothly into word pronunciation)
-            val wordThreshold = (cumulative - len * 0.60f) / totalWordChars.toFloat()
-            if (progress >= wordThreshold) {
+        for (i in wordRanges.indices) {
+            val range = wordRanges[i]
+            val weight = wordWeights[i]
+            val wordStart = cumulativeWeight / totalWeight
+            cumulativeWeight += weight
+
+            if (progress >= wordStart) {
                 activeCharEnd = range.last + 1
             } else {
                 break
             }
         }
 
-        if (progress >= 0.90f) {
+        if (progress >= 1.0f) {
             activeCharEnd = text.length
         }
 

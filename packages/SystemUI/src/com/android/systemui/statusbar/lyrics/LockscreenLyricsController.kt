@@ -201,8 +201,7 @@ class LockscreenLyricsController @Inject constructor(
             position += (timeDelta * playbackState.playbackSpeed).toLong()
         }
 
-        // Apply audio lead compensation (+200ms) to counteract Bluetooth/media player buffer latency
-        val syncPosition = position + 200L
+        val syncPosition = position
 
         val index = lyrics.findCurrentIndex(syncPosition)
         lyricsView?.updateLyrics(lyrics, index, syncPosition)
