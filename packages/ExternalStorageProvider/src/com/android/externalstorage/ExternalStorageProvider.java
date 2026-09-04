@@ -35,6 +35,7 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Environment;
+import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.os.storage.DiskInfo;
@@ -353,6 +354,10 @@ public class ExternalStorageProvider extends FileSystemProvider {
      */
     @Override
     protected boolean shouldHideDocument(@NonNull String documentId) {
+        if (SystemProperties.getBoolean("persist.sys.disable_scoped_storage_restrictions", false)) {
+            return false;
+        }
+
         // Don't need to hide anything on USB drives.
         if (isOnRemovableUsbStorage(documentId)) {
             return false;
@@ -375,6 +380,10 @@ public class ExternalStorageProvider extends FileSystemProvider {
      * @return true if path is restricted
      */
     private boolean isRestrictedPath(String rootId, String canonicalPath) {
+        if (SystemProperties.getBoolean("persist.sys.disable_scoped_storage_restrictions", false)) {
+            return false;
+        }
+
         if (rootId == null || canonicalPath == null) {
             return true;
         }
@@ -435,6 +444,10 @@ public class ExternalStorageProvider extends FileSystemProvider {
     @Override
     protected boolean shouldBlockDirectoryFromTree(@NonNull String documentId)
             throws FileNotFoundException {
+        if (SystemProperties.getBoolean("persist.sys.disable_scoped_storage_restrictions", false)) {
+            return false;
+        }
+
         final File dir = getFileForDocId(documentId, false);
         // The file is null or it is not a directory
         if (dir == null || !dir.isDirectory()) {
