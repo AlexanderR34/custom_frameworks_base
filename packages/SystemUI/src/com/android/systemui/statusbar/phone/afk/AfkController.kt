@@ -148,9 +148,10 @@ class AfkController @Inject constructor(
                     or WindowManager.LayoutParams.FLAG_FULLSCREEN
                     or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
                     or WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
-            PixelFormat.TRANSLUCENT
+            PixelFormat.OPAQUE
         ).apply {
-            screenBrightness = 0.0f
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF
             preferredRefreshRate = 30.0f
             preferredMinDisplayRefreshRate = 30.0f
             preferredMaxDisplayRefreshRate = 30.0f
