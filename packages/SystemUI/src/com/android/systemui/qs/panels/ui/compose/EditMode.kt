@@ -26,7 +26,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.compose.theme.LocalAndroidColorScheme
+import androidx.compose.material3.MaterialTheme
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
 
 @Composable
@@ -39,7 +39,7 @@ fun EditMode(viewModel: EditModeViewModel, modifier: Modifier = Modifier) {
     DisposableEffect(Unit) { onDispose { viewModel.stopEditing() } }
 
     Box(
-        Modifier.fillMaxSize().background(LocalAndroidColorScheme.current.underSurface)
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier.fillMaxSize()) {
             gridLayout.EditTileGrid(
