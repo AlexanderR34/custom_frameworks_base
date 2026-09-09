@@ -126,8 +126,30 @@
     <!-- Button to restart SystemUI, within the Restart Options dialog -->
     <string name="global_action_restart_systemui">SystemUI</string>
 
-    <!-- Flashlight Strength -->
-    <string name="flashlight_strength_title">Flashlight Strength</string>
-    <string name="flashlight_strength_turn_off">Turn off</string>
-    <string name="flashlight_strength_turn_on">Turn on</string>
+    <!-- Gaming Mode & Gaming Space Overlay -->
+    <string name="quick_settings_gaming_label">Gaming Space</string>
+    <string name="quick_settings_gaming_active">Active</string>
+    <string name="quick_settings_gaming_inactive">Inactive</string>
+    <string name="quick_settings_gaming_space_label">Gaming Space</string>
+    <string name="quick_settings_gaming_space_active">Active</string>
+    <string name="quick_settings_gaming_space_inactive">Inactive</string>
+    <string name="gaming_overlay_sidebar_title">Gaming Space</string>
+    <string name="gaming_action_screenshot">Screenshot</string>
+    <string name="gaming_action_record">Record</string>
+    <string name="gaming_action_recording">Recording</string>
+    <string name="gaming_action_clean_ram">Boost RAM</string>
+    <string name="gaming_action_cleaning_ram">Cleaning...</string>
+    <string name="gaming_action_wifi">Wi-Fi</string>
+    <string name="gaming_action_dnd">DND Mode</string>
+    <string name="gaming_action_touch_shield">Touch Shield</string>
+    <string name="gaming_action_afk">AFK Stream</string>
+    <string name="gaming_action_hud">Floating HUD</string>
+    <string name="gaming_action_crosshair">Crosshair</string>
+    <string name="gaming_action_timer">Timer</string>
+    <string name="gaming_mode_powersave">Power Save</string>
+    <string name="gaming_mode_balanced">Balanced</string>
+    <string name="gaming_mode_performance">Turbo</string>
+    <string name="gaming_audio_game">Game Audio</string>
+    <string name="gaming_audio_voice">Voice Audio</string>
+    <string name="gaming_brightness">Brightness</string>
 </resources>

@@ -18,6 +18,10 @@ import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import com.android.systemui.Dependency
+import com.android.systemui.plugins.statusbar.StatusBarStateController
+import com.android.systemui.statusbar.StatusBarState
+import com.android.systemui.statusbar.policy.KeyguardStateController
 
 /**
  * Controller for Status Bar Music Island (Dynamic Island / Media Notification Icon)
@@ -40,6 +44,10 @@ class MusicIslandController(
     private var mIslandView: MusicIslandView? = null
     private var mPopup: MusicIslandPopup? = null
 
+    private var mKeyguardStateController: KeyguardStateController? = null
+    private var mStatusBarStateController: StatusBarStateController? = null
+    private var mIsKeyguardShowing = false
+
     private var mActiveController: MediaController? = null
     private var mIsFeatureEnabled = false
     private var mIsPlaying = false
@@ -55,9 +63,33 @@ class MusicIslandController(
     private val mProgressTickRunnable = object : Runnable {
         override fun run() {
             updatePlaybackProgress()
-            if (mIsPlaying && mIsFeatureEnabled) {
+            if (mIsPlaying && mIsFeatureEnabled && !mIsKeyguardShowing) {
                 mainHandler.postDelayed(this, PROGRESS_TICK_INTERVAL_MS)
             }
+        }
+    }
+
+    private val mKeyguardCallback = object : KeyguardStateController.Callback {
+        override fun onKeyguardShowingChanged() {
+            mainHandler.post { updateKeyguardState() }
+        }
+
+        override fun onKeyguardFadingAwayChanged() {
+            mainHandler.post { updateKeyguardState() }
+        }
+
+        override fun onUnlockedChanged() {
+            mainHandler.post { updateKeyguardState() }
+        }
+    }
+
+    private val mStatusBarStateListener = object : StatusBarStateController.StateListener {
+        override fun onStateChanged(newState: Int) {
+            mainHandler.post { updateKeyguardState() }
+        }
+
+        override fun onDozingChanged(isDozing: Boolean) {
+            mainHandler.post { updateKeyguardState() }
         }
     }
 
@@ -94,6 +126,31 @@ class MusicIslandController(
         }
     }
 
+    private fun updateKeyguardState() {
+        val isLocked = (mKeyguardStateController?.isShowing == true) ||
+                (mStatusBarStateController?.state == StatusBarState.KEYGUARD) ||
+                (mStatusBarStateController?.state == StatusBarState.SHADE_LOCKED) ||
+                (mStatusBarStateController?.isDozing == true)
+
+        if (mIsKeyguardShowing != isLocked) {
+            mIsKeyguardShowing = isLocked
+            Log.d(TAG, "Keyguard state changed -> isLocked: $mIsKeyguardShowing")
+            if (mIsKeyguardShowing) {
+                // Completely hide music island on lock screen
+                mIslandView?.hideIsland()
+                mPopup?.dismissWithAnimation()
+            } else {
+                // Restore music island when unlocking device if media is playing
+                if (mIsPlaying && mIsFeatureEnabled) {
+                    mIslandView?.showIsland()
+                    mainHandler.removeCallbacks(mProgressTickRunnable)
+                    mainHandler.post(mProgressTickRunnable)
+                    updatePlaybackProgress()
+                }
+            }
+        }
+    }
+
     fun attachView(islandView: MusicIslandView) {
         mIslandView = islandView
 
@@ -102,7 +159,9 @@ class MusicIslandController(
         }
 
         islandView.onIslandClicked = { anchor ->
-            if (mPopup?.isShowing == true) {
+            if (mIsKeyguardShowing) {
+                // Do not show popup if locked
+            } else if (mPopup?.isShowing == true) {
                 mPopup?.dismissWithAnimation()
             } else {
                 mPopup?.showBelow(anchor)
@@ -117,11 +176,26 @@ class MusicIslandController(
         )
 
         try {
+            mKeyguardStateController = Dependency.get(KeyguardStateController::class.java)
+            mKeyguardStateController?.addCallback(mKeyguardCallback)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register KeyguardStateController callback", e)
+        }
+
+        try {
+            mStatusBarStateController = Dependency.get(StatusBarStateController::class.java)
+            mStatusBarStateController?.addCallback(mStatusBarStateListener)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register StatusBarStateController callback", e)
+        }
+
+        try {
             mMediaSessionManager.addOnActiveSessionsChangedListener(mSessionsListener, null, mainHandler)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register active sessions listener", e)
         }
 
+        updateKeyguardState()
         updateFeatureEnabledState()
         findActiveMediaSession()
     }
@@ -133,6 +207,8 @@ class MusicIslandController(
             context.contentResolver.unregisterContentObserver(mSettingsObserver)
             mMediaSessionManager.removeOnActiveSessionsChangedListener(mSessionsListener)
             mActiveController?.unregisterCallback(mMediaCallback)
+            mKeyguardStateController?.removeCallback(mKeyguardCallback)
+            mStatusBarStateController?.removeCallback(mStatusBarStateListener)
         } catch (ignored: Exception) {}
         mPopup?.dismissWithAnimation()
     }
@@ -203,7 +279,9 @@ class MusicIslandController(
 
         if (mIsPlaying) {
             mainHandler.removeCallbacks(mHideRunnable)
-            mIslandView?.showIsland()
+            if (!mIsKeyguardShowing) {
+                mIslandView?.showIsland()
+            }
 
             mainHandler.removeCallbacks(mProgressTickRunnable)
             mainHandler.post(mProgressTickRunnable)
