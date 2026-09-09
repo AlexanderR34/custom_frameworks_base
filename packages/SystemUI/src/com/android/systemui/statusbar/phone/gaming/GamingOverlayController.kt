@@ -22,6 +22,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -43,10 +44,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.phone.afk.AfkController
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CopyOnWriteArrayList
@@ -54,12 +57,14 @@ import javax.inject.Inject
 
 /**
  * Native in-OS Gaming Space & Gaming Overlay controller for SystemUI.
- * Manages in-game floating trigger handle and Material You Expressive 3 Game Booster Sidebar.
+ * Manages in-game floating trigger handle, Material You Expressive 3 Game Booster Sidebar,
+ * Touch Shield, Tactical HUD, Aiming Crosshairs, and Governor tuning.
  */
 @SysUISingleton
 class GamingOverlayController @Inject constructor(
     @Application private val context: Context,
-    @Main private val mainHandler: Handler
+    @Main private val mainHandler: Handler,
+    private val afkController: AfkController
 ) : GamingPerformanceMonitor.Listener {
 
     companion object {
@@ -72,6 +77,8 @@ class GamingOverlayController @Inject constructor(
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+    private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    private val packageManager = context.packageManager
 
     val performanceMonitor = GamingPerformanceMonitor(context, mainHandler)
     val hudOverlay = GamingHudOverlay(context)
@@ -80,7 +87,9 @@ class GamingOverlayController @Inject constructor(
 
     private var triggerView: View? = null
     private var sidebarView: View? = null
+    private var touchShieldView: View? = null
     private var isSidebarExpanded = false
+    private var isTouchShieldActive = false
     var isGamingModeEnabled = true
         private set
 
@@ -149,6 +158,33 @@ class GamingOverlayController @Inject constructor(
     init {
         performanceMonitor.addListener(this)
         mainHandler.postDelayed({ showTriggerHandle() }, 1500L)
+        startGameDetector()
+    }
+
+    private fun startGameDetector() {
+        mainHandler.postDelayed(object : Runnable {
+            override fun run() {
+                checkForegroundApp()
+                mainHandler.postDelayed(this, 3000L)
+            }
+        }, 3000L)
+    }
+
+    private fun checkForegroundApp() {
+        if (!isGamingModeEnabled) return
+        try {
+            val tasks = activityManager.getRunningTasks(1)
+            if (tasks.isNotEmpty()) {
+                val topPkg = tasks[0].topActivity?.packageName ?: return
+                val appInfo = packageManager.getApplicationInfo(topPkg, 0)
+                val isGame = (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0 ||
+                        (appInfo.category == ApplicationInfo.CATEGORY_GAME)
+
+                if (isGame && triggerView == null) {
+                    showTriggerHandle()
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     fun toggleGamingMode(): Boolean {
@@ -161,6 +197,7 @@ class GamingOverlayController @Inject constructor(
             hudOverlay.hide()
             crosshairOverlay.hide()
             tacticalTimerOverlay.hide()
+            dismissTouchShield()
         }
         notifyStateChanged()
         return isGamingModeEnabled
@@ -225,7 +262,7 @@ class GamingOverlayController @Inject constructor(
         isSidebarExpanded = true
 
         val root = FrameLayout(context).apply {
-            setBackgroundColor(Color.parseColor("#4D000000")) // Scrim
+            setBackgroundColor(Color.parseColor("#4D000000")) // Translucent Scrim
             setOnClickListener { collapseSidebar() }
         }
 
@@ -239,9 +276,9 @@ class GamingOverlayController @Inject constructor(
             layoutParams = lp
             setPadding(dp(16), dp(16), dp(16), dp(16))
             val bg = GradientDrawable().apply {
-                setColor(Color.parseColor("#E60C0F14")) // SurfaceContainerLowest alpha
+                setColor(Color.parseColor("#E60C0F14")) // SurfaceContainerLowest
                 cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), Color.parseColor("#4D00E5FF")) // OutlineVariant Monet tint
+                setStroke(dp(1), Color.parseColor("#4D00E5FF")) // OutlineVariant Monet
             }
             background = bg
             elevation = dp(24).toFloat()
@@ -269,7 +306,7 @@ class GamingOverlayController @Inject constructor(
     }
 
     private fun buildSidebarContent(container: LinearLayout) {
-        // 1. Header (Title, Admin Badge, Refresh)
+        // 1. Header (Title, Admin Badge, Close)
         val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -277,8 +314,8 @@ class GamingOverlayController @Inject constructor(
         }
 
         val tvTitle = TextView(context).apply {
-            text = "GAMING SPACE"
-            textSize = 15f
+            text = "MIKU GAMING SPACE"
+            textSize = 14f
             setTextColor(Color.parseColor("#00E5FF"))
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -341,12 +378,38 @@ class GamingOverlayController @Inject constructor(
             orientation = LinearLayout.HORIZONTAL
         }
 
-        createActionChip(actionsRow, "HUD", hudOverlay.isVisible()) { hudOverlay.show(); collapseSidebar() }
-        createActionChip(actionsRow, "Crosshair", crosshairOverlay.isVisible()) { crosshairOverlay.toggle() }
-        createActionChip(actionsRow, "Timer 30s", tacticalTimerOverlay.isShowing()) { tacticalTimerOverlay.startTimer(30, "Respawn"); collapseSidebar() }
-        createActionChip(actionsRow, "Boost RAM", false) { cleanRam() }
-        createActionChip(actionsRow, "DND", isDndEnabled()) { toggleDnd() }
-        createActionChip(actionsRow, "Wi-Fi", wifiManager?.isWifiEnabled == true) { toggleWifi() }
+        createActionChip(actionsRow, "HUD", hudOverlay.isVisible()) {
+            if (hudOverlay.isVisible()) hudOverlay.hide() else hudOverlay.show()
+            collapseSidebar()
+        }
+        createActionChip(actionsRow, "Crosshair", crosshairOverlay.isVisible()) {
+            crosshairOverlay.toggle()
+        }
+        createActionChip(actionsRow, "Timer 30s", tacticalTimerOverlay.isShowing()) {
+            tacticalTimerOverlay.startTimer(30, "Respawn")
+            collapseSidebar()
+        }
+        createActionChip(actionsRow, "Touch Shield", false) {
+            showTouchShield()
+            collapseSidebar()
+        }
+        createActionChip(actionsRow, "AFK Mode", false) {
+            afkController.toggleAfkMode()
+            collapseSidebar()
+        }
+        createActionChip(actionsRow, "Boost RAM", false) {
+            cleanRam()
+        }
+        createActionChip(actionsRow, "Screenshot", false) {
+            takeScreenshot()
+            collapseSidebar()
+        }
+        createActionChip(actionsRow, "DND", isDndEnabled()) {
+            toggleDnd()
+        }
+        createActionChip(actionsRow, "Wi-Fi", wifiManager?.isWifiEnabled == true) {
+            toggleWifi()
+        }
 
         actionsScroll.addView(actionsRow)
         container.addView(actionsScroll)
@@ -461,62 +524,125 @@ class GamingOverlayController @Inject constructor(
     private fun createHorizontalDivider(): View {
         return View(context).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
-                setMargins(0, dp(6), 0, dp(6))
+                setMargins(0, dp(8), 0, dp(4))
             }
-            setBackgroundColor(Color.parseColor("#26FFFFFF"))
+            setBackgroundColor(Color.parseColor("#1FFFFFFF"))
         }
+    }
+
+    private fun showTouchShield() {
+        if (isTouchShieldActive || touchShieldView != null) return
+        isTouchShieldActive = true
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+
+        val root = FrameLayout(context).apply {
+            setBackgroundColor(Color.parseColor("#99000000"))
+        }
+
+        val tvHint = TextView(context).apply {
+            text = "🛡️ Touch Shield Active\nDouble tap anywhere to unlock"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            val lp = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER
+            }
+            layoutParams = lp
+        }
+        root.addView(tvHint)
+
+        var lastTapTime = 0L
+        root.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                val now = System.currentTimeMillis()
+                if (now - lastTapTime < 400L) {
+                    dismissTouchShield()
+                } else {
+                    lastTapTime = now
+                }
+                true
+            } else {
+                true
+            }
+        }
+
+        touchShieldView = root
+        try {
+            windowManager.addView(root, params)
+        } catch (_: Exception) {}
+    }
+
+    private fun dismissTouchShield() {
+        if (!isTouchShieldActive) return
+        isTouchShieldActive = false
+        touchShieldView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (_: Exception) {}
+        }
+        touchShieldView = null
+    }
+
+    private fun takeScreenshot() {
+        try {
+            val intent = Intent("com.android.systemui.SCREENSHOT")
+            context.sendBroadcast(intent)
+        } catch (_: Exception) {}
     }
 
     private fun setPerformanceGovernor(mode: Int) {
-        val gov = when (mode) {
-            0 -> "powersave"
-            2 -> "performance"
-            else -> "schedutil"
-        }
-        Thread {
-            try {
-                val cpus = File("/sys/devices/system/cpu").listFiles { file -> file.name.matches("cpu[0-9]+".toRegex()) }
-                if (cpus != null) {
-                    for (cpu in cpus) {
-                        val govFile = File(cpu, "cpufreq/scaling_governor")
-                        if (govFile.exists() && govFile.canWrite()) {
-                            FileOutputStream(govFile).use { it.write(gov.toByteArray()) }
-                        }
-                    }
+        Settings.System.putInt(context.contentResolver, SETTING_GAMING_PERF_MODE, mode)
+        try {
+            val gov = when (mode) {
+                0 -> "powersave"
+                1 -> "schedutil"
+                else -> "performance"
+            }
+            for (i in 0..7) {
+                val f = File("/sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor")
+                if (f.exists() && f.canWrite()) {
+                    FileOutputStream(f).use { it.write(gov.toByteArray()) }
                 }
-            } catch (_: Exception) {}
-        }.start()
+            }
+        } catch (_: Exception) {}
     }
 
     private fun cleanRam() {
-        Thread {
-            try {
-                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                val runningApps = am.runningAppProcesses
-                if (runningApps != null) {
-                    for (proc in runningApps) {
-                        if (proc.pkgList != null && proc.importance >= ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND) {
-                            for (pkg in proc.pkgList) {
-                                if (pkg != context.packageName) {
-                                    am.killBackgroundProcesses(pkg)
-                                }
-                            }
-                        }
-                    }
+        try {
+            val procs = activityManager.runningAppProcesses ?: return
+            for (p in procs) {
+                if (p.importance >= ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND) {
+                    p.pkgList?.forEach { activityManager.killBackgroundProcesses(it) }
                 }
-                System.gc()
-            } catch (_: Exception) {}
-        }.start()
+            }
+            Toast.makeText(context, "RAM Boosted: Background tasks cleaned", Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {}
     }
 
     private fun isDndEnabled(): Boolean {
-        return notificationManager?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY
+        return try {
+            notificationManager?.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun toggleDnd() {
         try {
-            val target = if (isDndEnabled()) NotificationManager.INTERRUPTION_FILTER_ALL else NotificationManager.INTERRUPTION_FILTER_PRIORITY
-            notificationManager?.setInterruptionFilter(target)
+            if (isDndEnabled()) {
+                notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            } else {
+                notificationManager?.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+            }
         } catch (_: Exception) {}
     }
 
