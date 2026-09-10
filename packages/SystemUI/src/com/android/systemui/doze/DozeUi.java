@@ -57,6 +57,7 @@ public class DozeUi implements DozeMachine.Part {
     private DozeMachine mMachine;
     private DozeMachine.State mState = null;
     private final AlarmTimeout mTimeTicker;
+    private final AlarmTimeout mAodOffTimeout;
     private final boolean mCanAnimateTransition;
     private final DozeParameters mDozeParameters;
     private final DozeLog mDozeLog;
@@ -91,6 +92,7 @@ public class DozeUi implements DozeMachine.Part {
         mCanAnimateTransition = !params.getDisplayNeedsBlanking();
         mDozeParameters = params;
         mTimeTicker = new AlarmTimeout(alarmManager, this::onTimeTick, "doze_time_tick", bgHandler);
+        mAodOffTimeout = new AlarmTimeout(alarmManager, this::onAodTimeout, "doze_aod_off_timeout", handler);
         mDozeLog = dozeLog;
     }
 
@@ -145,6 +147,7 @@ public class DozeUi implements DozeMachine.Part {
                     mHandler.postDelayed(mWakeLock.wrap(mHost::dozeTimeTick), 500);
                 }
                 scheduleTimeTick();
+                scheduleAodTimeout();
                 break;
             case DOZE_AOD_PAUSING:
                 scheduleTimeTick();
@@ -153,9 +156,11 @@ public class DozeUi implements DozeMachine.Part {
             case DOZE_AOD_PAUSED:
             case DOZE_SUSPEND_TRIGGERS:
                 unscheduleTimeTick();
+                unscheduleAodTimeout();
                 break;
             case DOZE_REQUEST_PULSE:
                 scheduleTimeTick();
+                unscheduleAodTimeout();
                 pulseWhileDozing(mMachine.getPulseReason());
                 break;
             case INITIALIZED:
@@ -164,9 +169,33 @@ public class DozeUi implements DozeMachine.Part {
             case FINISH:
                 mHost.stopDozing();
                 unscheduleTimeTick();
+                unscheduleAodTimeout();
                 break;
         }
         updateAnimateWakeup(newState);
+    }
+
+    private void scheduleAodTimeout() {
+        int timeoutSec = android.provider.Settings.Secure.getIntForUser(
+                mContext.getContentResolver(),
+                android.provider.Settings.Secure.DOZE_ALWAYS_ON_TIMEOUT,
+                0,
+                android.os.UserHandle.USER_CURRENT);
+        if (timeoutSec > 0) {
+            mAodOffTimeout.schedule(timeoutSec * 1000L, AlarmTimeout.MODE_RESCHEDULE_IF_SCHEDULED);
+        } else {
+            mAodOffTimeout.cancel();
+        }
+    }
+
+    private void unscheduleAodTimeout() {
+        mAodOffTimeout.cancel();
+    }
+
+    private void onAodTimeout() {
+        if (mState == DozeMachine.State.DOZE_AOD || mState == DozeMachine.State.DOZE_AOD_DOCKED) {
+            mMachine.requestState(DozeMachine.State.DOZE_AOD_PAUSED);
+        }
     }
 
     private void updateAnimateWakeup(DozeMachine.State state) {

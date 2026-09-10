@@ -11270,6 +11270,18 @@ public final class Settings {
                 "doze_always_on_wallpaper_enabled";
 
         /**
+         * Timeout in seconds for Always-On Display to turn off the screen (0 = Never / Always On,
+         * 5, 15, 30, 60, 120 seconds).
+         * <p>
+         * Type: int
+         *
+         * @hide
+         */
+        @Readable
+        public static final String DOZE_ALWAYS_ON_TIMEOUT =
+                "doze_always_on_timeout";
+
+        /**
          * Whether to power down the display when no user activity is detected.
          * <p>
          * Type: int (0 for false, 1 for true)
