@@ -150,6 +150,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             addView(mBatteryIconView, mlp);
         }
 
+        updateBatteryStyle();
         updateShowPercent();
         mDualToneHandler = new DualToneHandler(context);
         // Init to not dark at all.
@@ -639,6 +640,22 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         mBatteryIconView.invalidateDrawable(mUnifiedBattery);
     }
 
+    public void updateBatteryStyle() {
+        boolean isHyperOS = Settings.System.getIntForUser(
+                getContext().getContentResolver(),
+                "status_bar_battery_style_hyperos", 0,
+                UserHandle.USER_CURRENT) == 1
+                || Settings.System.getIntForUser(
+                getContext().getContentResolver(),
+                "status_bar_battery_style", 0,
+                UserHandle.USER_CURRENT) == 1;
+
+        if (mDrawable != null) {
+            mDrawable.setHyperOSStyle(isHyperOS);
+        }
+        scaleBatteryMeterViews();
+    }
+
     /**
      * Looks up the scale factor for status bar icons and scales the battery view by that amount.
      */
@@ -654,7 +671,13 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         float mainBatteryWidth =
                 res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_width) * iconScaleFactor;
 
-        boolean displayShield = mIsBatteryDefender;
+        if (mDrawable != null && mDrawable.isHyperOSStyle()) {
+            float density = res.getDisplayMetrics().density;
+            mainBatteryWidth = 24f * density * iconScaleFactor;
+            mainBatteryHeight = 13f * density * iconScaleFactor;
+        }
+
+        boolean displayShield = mIsBatteryDefender && (mDrawable == null || !mDrawable.isHyperOSStyle());
         float fullBatteryIconHeight =
                 BatterySpecs.getFullBatteryHeight(mainBatteryHeight, displayShield);
         float fullBatteryIconWidth =

@@ -36,11 +36,16 @@ import android.annotation.DrawableRes;
 import android.app.StatusBarManager.NavbarFlags;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.RemoteException;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
@@ -457,8 +462,31 @@ public class NavigationBarView extends FrameLayout {
         return mShowSwipeUpUi && isOverviewEnabled();
     }
 
+    private boolean isHyperOSButtonsStyle() {
+        return Settings.Secure.getIntForUser(
+                getContext().getContentResolver(),
+                "nav_bar_buttons_style", 0,
+                UserHandle.USER_CURRENT) == 1;
+    }
+
+    private final ContentObserver mNavBarStyleObserver =
+            new ContentObserver(new Handler(Looper.getMainLooper())) {
+                @Override
+                public void onChange(boolean selfChange) {
+                    reloadNavIcons();
+                    updateNavButtonIcons();
+                }
+            };
+
     private void reloadNavIcons() {
-        updateIcons(Configuration.EMPTY);
+        mDockedIcon = getDrawable(R.drawable.ic_sysbar_docked);
+        mHomeDefaultIcon = getHomeDrawable();
+        int recentRes = isHyperOSButtonsStyle()
+                ? R.drawable.ic_sysbar_recent_hyperos
+                : R.drawable.ic_sysbar_recent;
+        mRecentIcon = getDrawable(recentRes);
+        mContextualButtonGroup.updateIcons(mLightIconColor, mDarkIconColor);
+        mBackIcon = getBackDrawable();
     }
 
     private void updateIcons(Configuration oldConfig) {
@@ -471,7 +499,10 @@ public class NavigationBarView extends FrameLayout {
             mHomeDefaultIcon = getHomeDrawable();
         }
         if (densityChange || dirChange) {
-            mRecentIcon = getDrawable(R.drawable.ic_sysbar_recent);
+            int recentRes = isHyperOSButtonsStyle()
+                    ? R.drawable.ic_sysbar_recent_hyperos
+                    : R.drawable.ic_sysbar_recent;
+            mRecentIcon = getDrawable(recentRes);
             mContextualButtonGroup.updateIcons(mLightIconColor, mDarkIconColor);
         }
         if (orientationChange || densityChange || dirChange) {
@@ -490,15 +521,23 @@ public class NavigationBarView extends FrameLayout {
     }
 
     public KeyButtonDrawable getBackDrawable() {
-        KeyButtonDrawable drawable = getDrawable(R.drawable.ic_sysbar_back);
+        int backRes = isHyperOSButtonsStyle()
+                ? R.drawable.ic_sysbar_back_hyperos
+                : R.drawable.ic_sysbar_back;
+        KeyButtonDrawable drawable = getDrawable(backRes);
         orientBackButton(drawable);
         return drawable;
     }
 
     public KeyButtonDrawable getHomeDrawable() {
-        KeyButtonDrawable drawable = mShowSwipeUpUi
-                ? getDrawable(R.drawable.ic_sysbar_home_quick_step)
-                : getDrawable(R.drawable.ic_sysbar_home);
+        KeyButtonDrawable drawable;
+        if (isHyperOSButtonsStyle()) {
+            drawable = getDrawable(R.drawable.ic_sysbar_home_hyperos);
+        } else {
+            drawable = mShowSwipeUpUi
+                    ? getDrawable(R.drawable.ic_sysbar_home_quick_step)
+                    : getDrawable(R.drawable.ic_sysbar_home);
+        }
         orientHomeButton(drawable);
         return drawable;
     }
@@ -1097,12 +1136,26 @@ public class NavigationBarView extends FrameLayout {
             mRotationButtonController.registerListeners(false /* registerRotationWatcher */);
         }
 
+        try {
+            getContext().getContentResolver().registerContentObserver(
+                    Settings.Secure.getUriFor("nav_bar_buttons_style"),
+                    false, mNavBarStyleObserver, UserHandle.USER_ALL);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to register nav_bar_buttons_style observer", e);
+        }
+
+        reloadNavIcons();
         updateNavButtonIcons();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        try {
+            getContext().getContentResolver().unregisterContentObserver(mNavBarStyleObserver);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to unregister nav_bar_buttons_style observer", e);
+        }
         for (int i = 0; i < mButtonDispatchers.size(); ++i) {
             mButtonDispatchers.valueAt(i).onDestroy();
         }

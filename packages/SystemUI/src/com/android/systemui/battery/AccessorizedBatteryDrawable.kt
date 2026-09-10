@@ -27,6 +27,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.drawable.DrawableWrapper
 import android.util.PathParser
+import com.android.settingslib.graph.HyperOSBatteryDrawable
 import com.android.settingslib.graph.ThemedBatteryDrawable
 import com.android.systemui.res.R
 import com.android.systemui.battery.BatterySpecs.BATTERY_HEIGHT
@@ -38,17 +39,61 @@ import com.android.systemui.battery.BatterySpecs.SHIELD_STROKE
 import com.android.systemui.battery.BatterySpecs.SHIELD_TOP_OFFSET
 
 /**
- * A battery drawable that accessorizes [ThemedBatteryDrawable] with additional information if
- * necessary.
+ * A battery drawable that accessorizes [ThemedBatteryDrawable] or [HyperOSBatteryDrawable] with
+ * additional information if necessary.
  *
  * For now, it adds a shield in the bottom-right corner when [displayShield] is true.
  */
 class AccessorizedBatteryDrawable(
     private val context: Context,
-    frameColor: Int,
+    private val frameColor: Int,
 ) : DrawableWrapper(ThemedBatteryDrawable(context, frameColor)) {
-    private val mainBatteryDrawable: ThemedBatteryDrawable
-        get() = drawable as ThemedBatteryDrawable
+    private val themedBatteryDrawable: ThemedBatteryDrawable
+        get() = (drawable as? ThemedBatteryDrawable) ?: defaultThemedDrawable
+
+    private val defaultThemedDrawable by lazy { ThemedBatteryDrawable(context, frameColor) }
+    private var hyperOSBatteryDrawable: HyperOSBatteryDrawable? = null
+
+    private var currentLevel: Int = 100
+    private var isCharging: Boolean = false
+    private var isPowerSave: Boolean = false
+    private var fgColor: Int = frameColor
+    private var bgColor: Int = Color.TRANSPARENT
+    private var singleToneColor: Int = frameColor
+
+    var isHyperOSStyle: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                if (value) {
+                    if (hyperOSBatteryDrawable == null) {
+                        hyperOSBatteryDrawable = HyperOSBatteryDrawable(context, frameColor)
+                    }
+                    drawable = hyperOSBatteryDrawable
+                } else {
+                    drawable = defaultThemedDrawable
+                }
+                syncProperties()
+                updateSizes()
+                postInvalidate()
+            }
+        }
+
+    private fun syncProperties() {
+        if (isHyperOSStyle) {
+            hyperOSBatteryDrawable?.let {
+                it.setBatteryLevel(currentLevel)
+                it.charging = isCharging
+                it.powerSaveEnabled = isPowerSave
+                it.setColors(fgColor, bgColor, singleToneColor)
+            }
+        } else {
+            themedBatteryDrawable.setBatteryLevel(currentLevel)
+            themedBatteryDrawable.charging = isCharging
+            themedBatteryDrawable.powerSaveEnabled = isPowerSave
+            themedBatteryDrawable.setColors(fgColor, bgColor, singleToneColor)
+        }
+    }
 
     private val shieldPath = Path()
     private val scaledShield = Path()
@@ -98,6 +143,11 @@ class AccessorizedBatteryDrawable(
             return
         }
 
+        if (isHyperOSStyle) {
+            drawable?.setBounds(b.left, b.top, b.right, b.bottom)
+            return
+        }
+
         val mainWidth = BatterySpecs.getMainBatteryWidth(b.width().toFloat(), displayShield)
         val mainHeight = BatterySpecs.getMainBatteryHeight(b.height().toFloat(), displayShield)
 
@@ -126,6 +176,9 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicHeight(): Int {
+        if (isHyperOSStyle) {
+            return hyperOSBatteryDrawable?.intrinsicHeight ?: (13 * density).toInt()
+        }
         val height =
             if (displayShield) {
                 BATTERY_HEIGHT_WITH_SHIELD
@@ -136,6 +189,9 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicWidth(): Int {
+        if (isHyperOSStyle) {
+            return hyperOSBatteryDrawable?.intrinsicWidth ?: (24 * density).toInt()
+        }
         val width =
             if (displayShield) {
                 BATTERY_WIDTH_WITH_SHIELD
@@ -146,6 +202,11 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun draw(c: Canvas) {
+        if (isHyperOSStyle) {
+            drawable?.draw(c)
+            return
+        }
+
         c.saveLayer(null, null)
         // Draw the main battery icon
         super.draw(c)
@@ -165,48 +226,72 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun setAlpha(p0: Int) {
-        // Unused internally -- see [ThemedBatteryDrawable.setAlpha].
+        drawable?.alpha = p0
     }
 
-    override fun setColorFilter(colorfilter: ColorFilter?) {
+    override fun setColorFilter(colorFilter: ColorFilter?) {
         super.setColorFilter(colorFilter)
         shieldPaint.colorFilter = colorFilter
+        drawable?.colorFilter = colorFilter
     }
 
     /** Sets whether the battery is currently charging. */
     fun setCharging(charging: Boolean) {
-        mainBatteryDrawable.charging = charging
+        isCharging = charging
+        if (isHyperOSStyle) {
+            hyperOSBatteryDrawable?.charging = charging
+        } else {
+            themedBatteryDrawable.charging = charging
+        }
     }
 
     /** Returns whether the battery is currently charging. */
     fun getCharging(): Boolean {
-        return mainBatteryDrawable.charging
+        return isCharging
     }
 
     /** Sets the current level (out of 100) of the battery. */
     fun setBatteryLevel(level: Int) {
-        mainBatteryDrawable.setBatteryLevel(level)
+        currentLevel = level
+        if (isHyperOSStyle) {
+            hyperOSBatteryDrawable?.setBatteryLevel(level)
+        } else {
+            themedBatteryDrawable.setBatteryLevel(level)
+        }
     }
 
     /** Sets whether power save is enabled. */
     fun setPowerSaveEnabled(powerSaveEnabled: Boolean) {
-        mainBatteryDrawable.powerSaveEnabled = powerSaveEnabled
+        isPowerSave = powerSaveEnabled
+        if (isHyperOSStyle) {
+            hyperOSBatteryDrawable?.powerSaveEnabled = powerSaveEnabled
+        } else {
+            themedBatteryDrawable.powerSaveEnabled = powerSaveEnabled
+        }
     }
 
     /** Returns whether power save is currently enabled. */
     fun getPowerSaveEnabled(): Boolean {
-        return mainBatteryDrawable.powerSaveEnabled
+        return isPowerSave
     }
 
     /** Sets the colors to use for the icon. */
     fun setColors(fgColor: Int, bgColor: Int, singleToneColor: Int) {
+        this.fgColor = fgColor
+        this.bgColor = bgColor
+        this.singleToneColor = singleToneColor
         shieldPaint.color = if (dualTone) fgColor else singleToneColor
-        mainBatteryDrawable.setColors(fgColor, bgColor, singleToneColor)
+        if (isHyperOSStyle) {
+            hyperOSBatteryDrawable?.setColors(fgColor, bgColor, singleToneColor)
+        } else {
+            themedBatteryDrawable.setColors(fgColor, bgColor, singleToneColor)
+        }
     }
 
     /** Notifies this drawable that the density might have changed. */
     fun notifyDensityChanged() {
         density = context.resources.displayMetrics.density
+        syncProperties()
     }
 
     private fun loadPaths() {
