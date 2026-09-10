@@ -259,27 +259,17 @@ class WindowingPillView(private val context: Context, attrs: AttributeSet) :
 
         background.setTint(style.backgroundColor)
 
-        if (!BubbleFlagHelper.enableBubbleToFullscreen() || taskInfo.isFreeform) {
-            floatingBtn.visibility = View.GONE
-        }
-
-        if (!Flags.enableNonDefaultDisplaySplitBugfix() && taskInfo.displayId != DEFAULT_DISPLAY) {
-            splitscreenBtn.visibility = View.GONE
-        }
-
-        // Currently split screen doesn't override task windowing mode when it's entering split.
-        // So a split task can have WINDOWING_MODE_FULLSCREEN. Use `isInSplitScreen` to check if
-        // the task is in split screen.
         fullscreenBtn.isSelected = taskInfo.isFullscreen && !isInSplitScreen
         fullscreenBtn.isEnabled = !taskInfo.isFullscreen || isInSplitScreen
         fullscreenBtn.imageTintList = style.buttonColor
         splitscreenBtn.isSelected = isInSplitScreen
         splitscreenBtn.isEnabled = !isInSplitScreen
         splitscreenBtn.imageTintList = style.buttonColor
+        floatingBtn.visibility = View.VISIBLE
         floatingBtn.isSelected = taskInfo.isPinned
         floatingBtn.isEnabled = !taskInfo.isPinned
         floatingBtn.imageTintList = style.buttonColor
-        desktopBtn.isGone = !shouldShowDesktopModeButton
+        desktopBtn.visibility = View.VISIBLE
         desktopBtn.isSelected = taskInfo.isFreeform
         desktopBtn.isEnabled = !taskInfo.isFreeform
         desktopBtn.imageTintList = style.buttonColor
