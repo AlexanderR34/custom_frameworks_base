@@ -3,6 +3,7 @@ package com.android.systemui.volume.dialog.appvolume.domain
 import android.content.Context
 import android.database.ContentObserver
 import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
@@ -62,9 +63,26 @@ constructor(
                 observer,
                 UserHandle.USER_CURRENT
             )
+
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
+                override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
+                    trySend(shouldShowAppVolume())
+                }
+            }
+            try {
+                audioManager.registerAudioPlaybackCallback(playbackCallback, handler)
+            } catch (e: Exception) {
+                // Ignore if audio playback callback not available in current process
+            }
+
             trySend(shouldShowAppVolume())
             awaitClose {
                 context.contentResolver.unregisterContentObserver(observer)
+                try {
+                    audioManager.unregisterAudioPlaybackCallback(playbackCallback)
+                } catch (e: Exception) {
+                }
             }
         }
             .stateIn(coroutineScope, SharingStarted.Eagerly, shouldShowAppVolume())

@@ -7693,6 +7693,9 @@ public class AudioService extends IAudioService.Stub
                 sendMsg(mAudioHandler, MSG_DISPATCH_AUDIO_MODE, SENDMSG_REPLACE, mode, 0,
                         /*obj*/ null, /*delay*/ 0);
                 int previousMode = mMode.getAndSet(mode);
+                if (mVolumeBoostHelper != null) {
+                    mVolumeBoostHelper.onModeChanged(mode);
+                }
                 // Note: newModeOwnerPid is always 0 when actualMode is MODE_NORMAL
                 mModeLogger.enqueue(new PhoneStateEvent(requesterPackage, requesterPid,
                         requestedMode, pid, mode));

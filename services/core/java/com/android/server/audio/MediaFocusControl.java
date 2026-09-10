@@ -1602,25 +1602,27 @@ public class MediaFocusControl implements PlayerFocusEnforcer {
                         || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
                         || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
                         || focusChangeHint == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)) {
-                if (isForCall) {
+                boolean isVoiceOrAlarm = isForCall || (aa != null && (
+                        aa.getUsage() == AudioAttributes.USAGE_VOICE_COMMUNICATION
+                        || aa.getUsage() == AudioAttributes.USAGE_VOICE_COMMUNICATION_SIGNALLING
+                        || aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION_RINGTONE
+                        || aa.getUsage() == AudioAttributes.USAGE_ALARM));
+                if (isVoiceOrAlarm) {
                     if (!mMultiAudioFocusList.isEmpty()) {
                         for (FocusRequester multifr : mMultiAudioFocusList) {
                             multifr.handleFocusLossFromGain(focusChangeHint, nfr, forceDuck);
                         }
                     }
                 } else {
-                    boolean needAdd = true;
-                    if (!mMultiAudioFocusList.isEmpty()) {
-                        for (FocusRequester multifr : mMultiAudioFocusList) {
-                            if (multifr.getClientUid() == Binder.getCallingUid()) {
-                                needAdd = false;
-                                break;
-                            }
+                    Iterator<FocusRequester> iter = mMultiAudioFocusList.iterator();
+                    while (iter.hasNext()) {
+                        FocusRequester multifr = iter.next();
+                        if (multifr.hasSameClient(clientId) || multifr.hasSameBinder(cb)) {
+                            iter.remove();
+                            multifr.release();
                         }
                     }
-                    if (needAdd) {
-                        mMultiAudioFocusList.add(nfr);
-                    }
+                    mMultiAudioFocusList.add(nfr);
                     nfr.handleFocusGainFromRequest(AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
                     notifyExtPolicyFocusGrant_syncAf(nfr.toAudioFocusInfo(),
                             AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
