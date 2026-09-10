@@ -340,10 +340,25 @@ public class DozeTriggers implements DozeMachine.Part {
                 }
                 if (isDoubleTap || isTap) {
                     mDozeHost.onSlpiTap(screenX, screenY);
+                    if (isTap && (mMachine.getState() == DozeMachine.State.DOZE_AOD_PAUSED
+                            || mMachine.getState() == DozeMachine.State.DOZE_AOD_PAUSING
+                            || mMachine.getState() == DozeMachine.State.DOZE)
+                            && mConfig.alwaysOnEnabled(mSelectedUserInteractor.getSelectedUserId())) {
+                        mMachine.requestState(DozeMachine.State.DOZE_AOD);
+                        return;
+                    }
                     gentleWakeUp(pulseReason);
                 } else if (isPickup) {
                     if (shouldDropPickupEvent())  {
                         mDozeLog.traceSensorEventDropped(pulseReason, "keyguard occluded");
+                        return;
+                    }
+                    if ((mMachine.getState() == DozeMachine.State.DOZE_AOD_PAUSED
+                            || mMachine.getState() == DozeMachine.State.DOZE_AOD_PAUSING
+                            || mMachine.getState() == DozeMachine.State.DOZE)
+                            && mConfig.alwaysOnEnabled(mSelectedUserInteractor.getSelectedUserId())
+                            && mConfig.pickupGestureAmbient(mSelectedUserInteractor.getSelectedUserId())) {
+                        mMachine.requestState(DozeMachine.State.DOZE_AOD);
                         return;
                     }
                     gentleWakeUp(pulseReason);
@@ -512,6 +527,7 @@ public class DozeTriggers implements DozeMachine.Part {
                 mWantProxSensor = true;
                 mWantSensors = true;
                 mWantTouchScreenSensors = true;
+                mInAod = true;
                 break;
             case DOZE_PULSING:
             case DOZE_PULSING_WITHOUT_UI:
