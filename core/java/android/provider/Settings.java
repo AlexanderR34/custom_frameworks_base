@@ -13352,6 +13352,35 @@ public final class Settings {
         public static final String VOLUME_DIALOG_DISMISS_TIMEOUT = "volume_dialog_dismiss_timeout";
 
         /**
+         * Whether Separate App Sound is enabled.
+         * 0 = disabled, 1 = enabled.
+         * @hide
+         */
+        @Readable
+        public static final String SEPARATE_APP_SOUND_ENABLED = "separate_app_sound_enabled";
+
+        /**
+         * Package name of the app selected for separate audio routing.
+         * @hide
+         */
+        @Readable
+        public static final String SEPARATE_APP_SOUND_PACKAGE = "separate_app_sound_package";
+
+        /**
+         * Target audio output device type (AudioDeviceInfo.TYPE_*).
+         * @hide
+         */
+        @Readable
+        public static final String SEPARATE_APP_SOUND_TARGET_DEVICE_TYPE = "separate_app_sound_target_device_type";
+
+        /**
+         * Target audio output device hardware address (MAC for BT, or empty string for internal speaker).
+         * @hide
+         */
+        @Readable
+        public static final String SEPARATE_APP_SOUND_TARGET_DEVICE_ADDRESS = "separate_app_sound_target_device_address";
+
+        /**
          * What behavior should be invoked when the volume hush gesture is triggered
          * One of VOLUME_HUSH_OFF, VOLUME_HUSH_VIBRATE, VOLUME_HUSH_MUTE, VOLUME_HUSH_CYCLE.
          *

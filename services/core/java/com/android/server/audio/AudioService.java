@@ -1555,6 +1555,8 @@ public class AudioService extends IAudioService.Stub
                         audioSystem.getAudioProductStrategies(/* filterInternal= */ true)),
                 SystemServerAdapter.getDefaultAdapter(mContext), mAudioSystem, brokerWakeLock);
 
+        mSeparateAppSoundController = new SeparateAppSoundController(mContext, mDeviceBroker, mAudioHandler.getLooper());
+
         mIsSingleVolume = AudioSystem.isSingleVolume(context);
 
         mUserManagerInternal = LocalServices.getService(UserManagerInternal.class);
@@ -2092,6 +2094,7 @@ public class AudioService extends IAudioService.Stub
         setupPermissionListener();
         scheduleLoadSoundEffects();
         mDeviceBroker.onSystemReady();
+        mSeparateAppSoundController.onSystemReady();
 
         if (mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_HDMI_CEC)) {
             synchronized (mHdmiClientLock) {
@@ -16298,6 +16301,7 @@ public class AudioService extends IAudioService.Stub
     // Audio device management
     //======================
     private final AudioDeviceBroker mDeviceBroker;
+    private final SeparateAppSoundController mSeparateAppSoundController;
 
     //======================
     // Audio policy proxy
