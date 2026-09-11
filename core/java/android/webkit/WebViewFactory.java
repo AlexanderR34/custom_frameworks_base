@@ -339,7 +339,7 @@ public final class WebViewFactory {
 
             sTimestamps.mWebViewLoadStart = SystemClock.uptimeMillis();
             final int appId = UserHandle.getAppId(android.os.Process.myUid());
-            if (appId == android.os.Process.ROOT_UID || appId == android.os.Process.SYSTEM_UID
+            if (appId == android.os.Process.ROOT_UID
                     || appId == android.os.Process.PHONE_UID || appId == android.os.Process.NFC_UID
                     || appId == android.os.Process.BLUETOOTH_UID) {
                 throw new UnsupportedOperationException(
