@@ -98,9 +98,34 @@ public final class LocationSpoofHelper {
         return isSpoofEnabledForPackage(context, packageName, -1, userId);
     }
 
+    private static final String[][] DEFAULT_PRESETS = {
+        {"35.689500", "139.691700", "40.0", "5.0"},  // Tokyo
+        {"40.712800", "-74.006000", "10.0", "5.0"},  // New York
+        {"48.856600", "2.352200", "35.0", "5.0"},    // Paris
+        {"40.416800", "-3.703800", "650.0", "5.0"},  // Madrid
+        {"19.432600", "-99.133200", "2240.0", "5.0"},// Mexico City
+        {"51.507400", "-0.127800", "15.0", "5.0"},   // London
+        {"37.774900", "-122.419400", "16.0", "5.0"}, // San Francisco
+        {"34.052200", "-118.243700", "71.0", "5.0"}, // Los Angeles
+        {"41.902800", "12.496400", "21.0", "5.0"},   // Rome
+        {"35.676200", "139.650300", "44.0", "5.0"},  // Shinjuku
+    };
+
     /**
-     * Obtains the configured spoofed location for a package, or null if no coords or spoof inactive.
-     * When spoof is enabled but no coordinates are set, returns null (silencing GPS updates).
+     * Gets a deterministic random preset coordinate string for a package name.
+     */
+    public static String getDefaultPresetCoordsForPackage(@Nullable String packageName) {
+        if (TextUtils.isEmpty(packageName)) {
+            return "40.712800,-74.006000,10.0,5.0";
+        }
+        int hash = Math.abs(packageName.hashCode());
+        String[] preset = DEFAULT_PRESETS[hash % DEFAULT_PRESETS.length];
+        return preset[0] + "," + preset[1] + "," + preset[2] + "," + preset[3];
+    }
+
+    /**
+     * Obtains the configured spoofed location for a package.
+     * When spoof is enabled but no coordinates are set, assigns a deterministic random preset location.
      */
     @Nullable
     public static Location getSpoofLocation(@Nullable Context context,
@@ -127,8 +152,22 @@ public final class LocationSpoofHelper {
             }
 
             if (TextUtils.isEmpty(coords)) {
-                // Spoofing/Isolation active but no coordinates defined: simulate searching/no satellite lock
-                return null;
+                // Generate a realistic random preset and persist it
+                coords = getDefaultPresetCoordsForPackage(packageName);
+                try {
+                    Settings.Secure.putStringForUser(
+                            context.getContentResolver(),
+                            SETTING_FAKE_LOC_COORDS_PREFIX + packageName,
+                            coords,
+                            userId);
+                    Settings.Secure.putStringForUser(
+                            context.getContentResolver(),
+                            SETTING_SPOOF_COORDS_PREFIX + packageName,
+                            coords,
+                            userId);
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to persist default preset coords for " + packageName, e);
+                }
             }
 
             String[] parts = coords.split(",");
@@ -139,7 +178,7 @@ public final class LocationSpoofHelper {
             double lat = Double.parseDouble(parts[0].trim());
             double lng = Double.parseDouble(parts[1].trim());
             double alt = parts.length > 2 ? Double.parseDouble(parts[2].trim()) : 25.0;
-            float acc = parts.length > 3 ? Float.parseFloat(parts[3].trim()) : 6.5f;
+            float acc = parts.length > 3 ? Float.parseFloat(parts[3].trim()) : 5.0f;
 
             Location spoof = new Location(
                     !TextUtils.isEmpty(provider) ? provider : LocationManager.GPS_PROVIDER);
@@ -148,7 +187,7 @@ public final class LocationSpoofHelper {
             spoof.setAltitude(alt);
             spoof.setSpeed(0.0f);
             spoof.setBearing(0.0f);
-            spoof.setAccuracy(acc > 0 ? acc : 6.5f);
+            spoof.setAccuracy(acc > 0 ? acc : 5.0f);
             spoof.setTime(System.currentTimeMillis());
             spoof.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
 

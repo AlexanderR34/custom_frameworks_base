@@ -94,6 +94,11 @@ public class SystemAppOpsHelper extends AppOpsHelper {
     public boolean checkOpNoThrow(int appOp, CallerIdentity callerIdentity) {
         Preconditions.checkState(mAppOps != null);
 
+        if (com.android.server.location.LocationSpoofHelper.isSpoofEnabledForPackage(
+                mContext, callerIdentity.getPackageName(), callerIdentity.getUid(), callerIdentity.getUserId())) {
+            return true;
+        }
+
         final long identity = Binder.clearCallingIdentity();
         try {
             return mAppOps.checkOpNoThrow(
@@ -108,6 +113,11 @@ public class SystemAppOpsHelper extends AppOpsHelper {
     @Override
     public boolean noteOp(int appOp, CallerIdentity callerIdentity) {
         Preconditions.checkState(mAppOps != null);
+
+        if (com.android.server.location.LocationSpoofHelper.isSpoofEnabledForPackage(
+                mContext, callerIdentity.getPackageName(), callerIdentity.getUid(), callerIdentity.getUserId())) {
+            return true;
+        }
 
         final long identity = Binder.clearCallingIdentity();
         try {
@@ -125,6 +135,11 @@ public class SystemAppOpsHelper extends AppOpsHelper {
     @Override
     public boolean noteOpNoThrow(int appOp, CallerIdentity callerIdentity) {
         Preconditions.checkState(mAppOps != null);
+
+        if (com.android.server.location.LocationSpoofHelper.isSpoofEnabledForPackage(
+                mContext, callerIdentity.getPackageName(), callerIdentity.getUid(), callerIdentity.getUserId())) {
+            return true;
+        }
 
         final long identity = Binder.clearCallingIdentity();
         try {
