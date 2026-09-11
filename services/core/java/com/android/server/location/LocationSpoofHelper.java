@@ -17,6 +17,7 @@
 package com.android.server.location;
 
 import android.annotation.Nullable;
+import android.app.AppOpsManager;
 import android.content.Context;
 import android.location.Location;
 import android.location.LocationManager;
@@ -26,44 +27,75 @@ import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 
-import java.util.Locale;
-
 /**
  * Helper utility to manage per-app location spoofing and isolation.
  */
 public final class LocationSpoofHelper {
 
     private static final String TAG = "LocationSpoofHelper";
+    public static final String SETTING_FAKE_LOC_ENABLED_PREFIX = "fake_loc_enabled_";
+    public static final String SETTING_FAKE_LOC_COORDS_PREFIX = "fake_loc_coords_";
     public static final String SETTING_SPOOF_PKG_PREFIX = "location_spoof_pkg_";
     public static final String SETTING_SPOOF_COORDS_PREFIX = "location_spoof_coords_";
-    public static final String SETTING_SPOOF_GLOBAL_ENABLED = "location_spoof_global_enabled";
 
     private LocationSpoofHelper() {}
 
     /**
-     * Checks if location spoofing is active for the given package.
+     * Checks if location spoofing or fake permissions isolation is active for the given package and UID.
      */
     public static boolean isSpoofEnabledForPackage(@Nullable Context context,
-            @Nullable String packageName, int userId) {
+            @Nullable String packageName, int uid, int userId) {
         if (context == null || TextUtils.isEmpty(packageName)) {
             return false;
         }
 
-        // Never spoof system server itself
+        // Never spoof or isolate system server itself
         if ("android".equals(packageName) || "com.android.systemui".equals(packageName)) {
             return false;
         }
 
         try {
-            return Settings.Secure.getIntForUser(
+            // 1. Check explicit Secure Settings toggle (fake_loc_enabled_ or location_spoof_pkg_)
+            int fakeLocEnabled = Settings.Secure.getIntForUser(
+                    context.getContentResolver(),
+                    SETTING_FAKE_LOC_ENABLED_PREFIX + packageName,
+                    -1,
+                    userId);
+            if (fakeLocEnabled == 1) {
+                return true;
+            } else if (fakeLocEnabled == 0) {
+                return false;
+            }
+
+            int spoofPkg = Settings.Secure.getIntForUser(
                     context.getContentResolver(),
                     SETTING_SPOOF_PKG_PREFIX + packageName,
                     0,
-                    userId) == 1;
+                    userId);
+            if (spoofPkg == 1) {
+                return true;
+            }
+
+            // 2. Check AppOpsManager MODE_IGNORED (Fake permissions isolation)
+            if (uid > 0) {
+                AppOpsManager aom = context.getSystemService(AppOpsManager.class);
+                if (aom != null) {
+                    int fineMode = aom.checkOpNoThrow(AppOpsManager.OP_FINE_LOCATION, uid, packageName);
+                    int coarseMode = aom.checkOpNoThrow(AppOpsManager.OP_COARSE_LOCATION, uid, packageName);
+                    if (fineMode == AppOpsManager.MODE_IGNORED || coarseMode == AppOpsManager.MODE_IGNORED) {
+                        return true;
+                    }
+                }
+            }
         } catch (Exception e) {
-            Log.e(TAG, "Error checking spoof status for " + packageName, e);
-            return false;
+            Log.e(TAG, "Error checking spoof/isolation status for " + packageName, e);
         }
+        return false;
+    }
+
+    public static boolean isSpoofEnabledForPackage(@Nullable Context context,
+            @Nullable String packageName, int userId) {
+        return isSpoofEnabledForPackage(context, packageName, -1, userId);
     }
 
     /**
@@ -72,23 +104,30 @@ public final class LocationSpoofHelper {
      */
     @Nullable
     public static Location getSpoofLocation(@Nullable Context context,
-            @Nullable String packageName, @Nullable String provider, int userId) {
+            @Nullable String packageName, int uid, @Nullable String provider, int userId) {
         if (context == null || TextUtils.isEmpty(packageName)) {
             return null;
         }
 
-        if (!isSpoofEnabledForPackage(context, packageName, userId)) {
+        if (!isSpoofEnabledForPackage(context, packageName, uid, userId)) {
             return null;
         }
 
         try {
+            // Check both fake_loc_coords_ and location_spoof_coords_
             String coords = Settings.Secure.getStringForUser(
                     context.getContentResolver(),
-                    SETTING_SPOOF_COORDS_PREFIX + packageName,
+                    SETTING_FAKE_LOC_COORDS_PREFIX + packageName,
                     userId);
+            if (TextUtils.isEmpty(coords)) {
+                coords = Settings.Secure.getStringForUser(
+                        context.getContentResolver(),
+                        SETTING_SPOOF_COORDS_PREFIX + packageName,
+                        userId);
+            }
 
             if (TextUtils.isEmpty(coords)) {
-                // Spoofing active but no coordinates defined: simulate searching/no satellite lock
+                // Spoofing/Isolation active but no coordinates defined: simulate searching/no satellite lock
                 return null;
             }
 
@@ -99,8 +138,8 @@ public final class LocationSpoofHelper {
 
             double lat = Double.parseDouble(parts[0].trim());
             double lng = Double.parseDouble(parts[1].trim());
-            double alt = parts.length > 2 ? Double.parseDouble(parts[2].trim()) : 15.0;
-            float acc = parts.length > 3 ? Float.parseFloat(parts[3].trim()) : 3.5f;
+            double alt = parts.length > 2 ? Double.parseDouble(parts[2].trim()) : 25.0;
+            float acc = parts.length > 3 ? Float.parseFloat(parts[3].trim()) : 6.5f;
 
             Location spoof = new Location(
                     !TextUtils.isEmpty(provider) ? provider : LocationManager.GPS_PROVIDER);
@@ -109,11 +148,11 @@ public final class LocationSpoofHelper {
             spoof.setAltitude(alt);
             spoof.setSpeed(0.0f);
             spoof.setBearing(0.0f);
-            spoof.setAccuracy(acc > 0 ? acc : 3.5f);
+            spoof.setAccuracy(acc > 0 ? acc : 6.5f);
             spoof.setTime(System.currentTimeMillis());
             spoof.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
 
-            // Ensure isFromMockProvider returns false to pass security/anti-mock checks
+            // Ensure isFromMockProvider returns false to pass security/anti-mock checks of 3rd party apps
             spoof.setMock(false);
 
             return spoof;
@@ -121,5 +160,11 @@ public final class LocationSpoofHelper {
             Log.e(TAG, "Error generating spoofed location for " + packageName, e);
             return null;
         }
+    }
+
+    @Nullable
+    public static Location getSpoofLocation(@Nullable Context context,
+            @Nullable String packageName, @Nullable String provider, int userId) {
+        return getSpoofLocation(context, packageName, -1, provider, userId);
     }
 }

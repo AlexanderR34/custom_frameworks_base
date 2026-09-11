@@ -950,11 +950,11 @@ public class LocationProviderManager extends
 
             String pkg = getIdentity().getPackageName();
             if (com.android.server.location.LocationSpoofHelper.isSpoofEnabledForPackage(
-                    mContext, pkg, getIdentity().getUserId())) {
+                    mContext, pkg, getIdentity().getUid(), getIdentity().getUserId())) {
                 Location spoof = com.android.server.location.LocationSpoofHelper.getSpoofLocation(
-                        mContext, pkg, mName, getIdentity().getUserId());
+                        mContext, pkg, getIdentity().getUid(), mName, getIdentity().getUserId());
                 if (spoof == null) {
-                    // Spoofing active but no coordinates configured: silence GPS updates
+                    // Spoofing / Isolation active but no coordinates configured: silence GPS updates
                     return null;
                 }
                 fineLocationResult = LocationResult.wrap(spoof);
@@ -1845,9 +1845,9 @@ public class LocationProviderManager extends
         }
 
         if (com.android.server.location.LocationSpoofHelper.isSpoofEnabledForPackage(
-                mContext, identity.getPackageName(), identity.getUserId())) {
+                mContext, identity.getPackageName(), identity.getUid(), identity.getUserId())) {
             return com.android.server.location.LocationSpoofHelper.getSpoofLocation(
-                    mContext, identity.getPackageName(), mName, identity.getUserId());
+                    mContext, identity.getPackageName(), identity.getUid(), mName, identity.getUserId());
         }
 
         Location location = getPermittedLocation(

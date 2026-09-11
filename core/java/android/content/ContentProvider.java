@@ -291,7 +291,7 @@ public abstract class ContentProvider implements ContentInterface, ComponentCall
                     setCallingAttributionSource(original);
                 }
                 if (cursor == null) {
-                    return null;
+                    return new MatrixCursor(new String[0], 0);
                 }
 
                 // Return an empty cursor for all columns.
