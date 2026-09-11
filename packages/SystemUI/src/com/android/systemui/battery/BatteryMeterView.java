@@ -313,8 +313,11 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             return;
         }
         mPowerSaveEnabled = isPowerSave;
-        if (!NewStatusBarIcons.isEnabled()) {
+        if (mDrawable != null) {
             mDrawable.setPowerSaveEnabled(isPowerSave);
+        }
+        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
+            // Updated in mDrawable
         } else {
             setBatteryDrawableState(
                     new BatteryDrawableState(
@@ -523,7 +526,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     void updateShowPercent() {
-        if (!NewStatusBarIcons.isEnabled()) {
+        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
             updateShowPercentLegacy();
             return;
         }
@@ -612,7 +615,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     void scaleBatteryMeterViews() {
-        if (!NewStatusBarIcons.isEnabled()) {
+        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
             scaleBatteryMeterViewsLegacy();
             return;
         }
@@ -653,7 +656,21 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mDrawable != null) {
             mDrawable.setHyperOSStyle(isHyperOS);
         }
-        scaleBatteryMeterViews();
+
+        if (isHyperOS) {
+            mBatteryIconView.setImageDrawable(mDrawable);
+            scaleBatteryMeterViewsLegacy();
+            onDarkChangedLegacy(new ArrayList<>(), 0, DarkIconDispatcher.DEFAULT_ICON_TINT);
+        } else {
+            if (NewStatusBarIcons.isEnabled()) {
+                mBatteryIconView.setImageDrawable(mUnifiedBattery);
+                scaleBatteryMeterViews();
+            } else {
+                mBatteryIconView.setImageDrawable(mDrawable);
+                scaleBatteryMeterViewsLegacy();
+            }
+        }
+        updateShowPercent();
     }
 
     /**
@@ -713,7 +730,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     public void onDarkChanged(ArrayList<Rect> areas, float darkIntensity, int tint) {
         if (mIsStaticColor) return;
 
-        if (!NewStatusBarIcons.isEnabled()) {
+        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
             onDarkChangedLegacy(areas, darkIntensity, tint);
             return;
         }
