@@ -43,6 +43,14 @@ import com.android.systemui.statusbar.core.StatusBarEventForwardingModernization
 import com.android.systemui.statusbar.data.repository.StatusBarConfigurationController
 import com.android.systemui.statusbar.gesture.StatusBarLongPressGestureDetector
 import com.android.systemui.statusbar.layout.StatusBarContentInsetsProvider
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
+import android.util.TypedValue
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import com.android.systemui.statusbar.policy.Clock
 import com.android.systemui.statusbar.policy.ConfigurationController
 import com.android.systemui.statusbar.window.StatusBarWindowControllerStore
@@ -89,9 +97,11 @@ private constructor(
 ) : ViewController<PhoneStatusBarView>(view) {
 
     private lateinit var clock: Clock
+    private var rightClock: Clock? = null
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
     private var musicIslandController: com.android.systemui.statusbar.phone.island.MusicIslandController? = null
+    private var clockPositionSettingObserver: ContentObserver? = null
 
     private val shadeInvocationSplitRatio: Float =
         resources.getFloat(R.dimen.config_invocationGestureSplitRatio)
@@ -181,6 +191,7 @@ private constructor(
 
     override fun onViewAttached() {
         clock = mView.requireViewById(R.id.clock)
+        rightClock = mView.findViewById(R.id.right_clock)
 
         addDarkReceivers()
 
@@ -207,6 +218,9 @@ private constructor(
             musicIslandController = com.android.systemui.statusbar.phone.island.MusicIslandController(mView.context)
             musicIslandController?.attachView(musicIslandView)
         }
+
+        registerClockPositionObserver()
+        updateClockAndIslandPosition()
     }
 
     private fun addCursorSupportToIconContainers() {
@@ -261,6 +275,7 @@ private constructor(
 
     @VisibleForTesting
     public override fun onViewDetached() {
+        unregisterClockPositionObserver()
         musicIslandController?.detach()
         musicIslandController = null
         removeDarkReceivers()
@@ -325,10 +340,106 @@ private constructor(
 
     private fun addDarkReceivers() {
         darkIconDispatcher.addDarkReceiver(clock)
+        rightClock?.let { darkIconDispatcher.addDarkReceiver(it) }
     }
 
     private fun removeDarkReceivers() {
         darkIconDispatcher.removeDarkReceiver(clock)
+        rightClock?.let { darkIconDispatcher.removeDarkReceiver(it) }
+    }
+
+    private fun registerClockPositionObserver() {
+        val handler = Handler(Looper.getMainLooper())
+        clockPositionSettingObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                updateClockAndIslandPosition()
+            }
+        }
+        try {
+            mView.context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor("status_bar_clock_position"),
+                false,
+                clockPositionSettingObserver!!,
+                UserHandle.USER_ALL
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register clock position observer", e)
+        }
+    }
+
+    private fun unregisterClockPositionObserver() {
+        clockPositionSettingObserver?.let {
+            try {
+                mView.context.contentResolver.unregisterContentObserver(it)
+            } catch (ignored: Exception) {}
+        }
+        clockPositionSettingObserver = null
+    }
+
+    private fun updateClockAndIslandPosition() {
+        val position = try {
+            Settings.System.getIntForUser(
+                mView.context.contentResolver,
+                "status_bar_clock_position",
+                0,
+                UserHandle.USER_CURRENT
+            )
+        } catch (e: Exception) {
+            0
+        }
+
+        val leftContainer: LinearLayout? =
+            mView.findViewById(R.id.status_bar_start_side_except_heads_up)
+        val musicIslandView: com.android.systemui.statusbar.phone.island.MusicIslandView? =
+            mView.findViewById(R.id.music_island_view)
+
+        if (position == 1) {
+            // Posición Derecha (al lado de la batería)
+            clock.visibility = View.GONE
+            rightClock?.visibility = View.VISIBLE
+
+            // Desplazar la isla musical hacia donde estaba anteriormente el reloj (inicio)
+            if (leftContainer != null && musicIslandView != null) {
+                val clockIndex = leftContainer.indexOfChild(clock)
+                val islandIndex = leftContainer.indexOfChild(musicIslandView)
+                if (clockIndex != -1 && islandIndex != -1 && islandIndex > clockIndex) {
+                    leftContainer.removeView(musicIslandView)
+                    val newClockIndex = leftContainer.indexOfChild(clock)
+                    leftContainer.addView(musicIslandView, newClockIndex)
+                }
+                (musicIslandView.layoutParams as? ViewGroup.MarginLayoutParams)?.apply {
+                    marginStart = resources.getDimensionPixelSize(
+                        R.dimen.status_bar_left_clock_starting_padding
+                    )
+                    marginEnd = TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_DIP, 6f, resources.displayMetrics
+                    ).toInt()
+                    musicIslandView.layoutParams = this
+                }
+            }
+        } else {
+            // Posición Izquierda (original / predeterminada)
+            clock.visibility = View.VISIBLE
+            rightClock?.visibility = View.GONE
+
+            // Regresar la isla musical a su posición original (después del reloj)
+            if (leftContainer != null && musicIslandView != null) {
+                val clockIndex = leftContainer.indexOfChild(clock)
+                val islandIndex = leftContainer.indexOfChild(musicIslandView)
+                if (clockIndex != -1 && islandIndex != -1 && islandIndex < clockIndex) {
+                    leftContainer.removeView(musicIslandView)
+                    val newClockIndex = leftContainer.indexOfChild(clock)
+                    leftContainer.addView(musicIslandView, newClockIndex + 1)
+                }
+                (musicIslandView.layoutParams as? ViewGroup.MarginLayoutParams)?.apply {
+                    marginStart = 0
+                    marginEnd = TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_DIP, 6f, resources.displayMetrics
+                    ).toInt()
+                    musicIslandView.layoutParams = this
+                }
+            }
+        }
     }
 
     @Deprecated(

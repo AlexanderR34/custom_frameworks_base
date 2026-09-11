@@ -187,6 +187,21 @@
                      android:layout_gravity="center_vertical"
                      android:layout_width="wrap_content"
                      android:layout_height="@dimen/status_bar_icon_container_height" />
+
+                <!-- Right Clock: positioned right after system_icons / battery -->
+                <com.android.systemui.statusbar.policy.Clock
+                    android:id="@+id/right_clock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/status_bar_icon_container_height"
+                    android:layout_gravity="center_vertical"
+                    android:textAppearance="@style/TextAppearance.StatusBar.Default"
+                    android:singleLine="true"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="@dimen/status_bar_left_clock_end_padding"
+                    android:gravity="center_vertical|end"
+                    android:visibility="gone"
+                />
             </com.android.keyguard.AlphaOptimizedLinearLayout>
         </FrameLayout>
     </LinearLayout>

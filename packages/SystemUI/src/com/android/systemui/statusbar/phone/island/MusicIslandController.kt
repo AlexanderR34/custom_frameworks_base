@@ -317,9 +317,11 @@ class MusicIslandController(
         if (bitmap != null) {
             val dominantColor = extractDominantColor(bitmap)
             mIslandView?.setRingColor(dominantColor)
+            mPopup?.applyMonetTheme(dominantColor)
         } else {
             val defaultColor = context.getColor(android.R.color.system_accent1_500)
             mIslandView?.setRingColor(defaultColor)
+            mPopup?.applyMonetTheme(defaultColor)
         }
 
         updatePlaybackProgress()

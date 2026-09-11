@@ -124,18 +124,99 @@ class MusicIslandPopup(
         )
     }
 
-    fun setMonetColors(primaryContainer: Int, onPrimaryContainer: Int) {
-        val root = mPopupView.findViewById<View>(R.id.music_island_popup_root)
-        if (root?.background is GradientDrawable) {
-            (root.background as GradientDrawable).setColor(primaryContainer)
+    fun applyMonetTheme(artworkColor: Int? = null) {
+        val res = context.resources
+        val isDark = (res.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+        // 1. Resolve Monet Dynamic Colors
+        val cardBgColor = try {
+            if (isDark) {
+                context.getColor(com.android.internal.R.color.system_surface_container_high_dark)
+            } else {
+                context.getColor(com.android.internal.R.color.system_surface_container_high_light)
+            }
+        } catch (e: Exception) {
+            if (isDark) Color.parseColor("#2B2930") else Color.parseColor("#ECE6F0")
         }
 
-        mBtnPrev.setColorFilter(onPrimaryContainer)
-        mBtnPlayPause.setColorFilter(onPrimaryContainer)
-        mBtnNext.setColorFilter(onPrimaryContainer)
+        val buttonBgColor = try {
+            if (isDark) {
+                context.getColor(com.android.internal.R.color.system_surface_container_highest_dark)
+            } else {
+                context.getColor(com.android.internal.R.color.system_surface_container_highest_light)
+            }
+        } catch (e: Exception) {
+            if (isDark) Color.parseColor("#36343B") else Color.parseColor("#E6E0E9")
+        }
+
+        val iconTintColor = try {
+            if (isDark) {
+                context.getColor(com.android.internal.R.color.system_on_surface_dark)
+            } else {
+                context.getColor(com.android.internal.R.color.system_on_surface_light)
+            }
+        } catch (e: Exception) {
+            if (isDark) Color.parseColor("#E6E1E5") else Color.parseColor("#1D1B20")
+        }
+
+        val strokeColor = if (isDark) Color.argb(40, 255, 255, 255) else Color.argb(30, 0, 0, 0)
+
+        // 2. Apply dynamic background to root popup container
+        val root = mPopupView.findViewById<View>(R.id.music_island_popup_root)
+        val rootShape = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_DIP, 24f, res.displayMetrics
+            )
+            setColor(cardBgColor)
+            setStroke(
+                android.util.TypedValue.applyDimension(
+                    android.util.TypedValue.COMPLEX_UNIT_DIP, 1f, res.displayMetrics
+                ).toInt(),
+                strokeColor
+            )
+        }
+        root?.background = rootShape
+
+        // 3. Apply squircle dynamic backgrounds to buttons
+        fun createButtonBg(radiusDp: Float): android.graphics.drawable.Drawable {
+            val content = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = android.util.TypedValue.applyDimension(
+                    android.util.TypedValue.COMPLEX_UNIT_DIP, radiusDp, res.displayMetrics
+                )
+                setColor(buttonBgColor)
+            }
+            val rippleColor = Color.argb(
+                50,
+                Color.red(iconTintColor),
+                Color.green(iconTintColor),
+                Color.blue(iconTintColor)
+            )
+            return android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(rippleColor),
+                content,
+                null
+            )
+        }
+
+        mBtnPrev.background = createButtonBg(14f)
+        mBtnPlayPause.background = createButtonBg(16f)
+        mBtnNext.background = createButtonBg(14f)
+
+        // 4. Apply icon tints
+        mBtnPrev.setColorFilter(iconTintColor)
+        mBtnPlayPause.setColorFilter(iconTintColor)
+        mBtnNext.setColorFilter(iconTintColor)
+    }
+
+    fun setMonetColors(primaryContainer: Int, onPrimaryContainer: Int) {
+        applyMonetTheme()
     }
 
     fun showBelow(anchorView: View) {
+        applyMonetTheme()
         if (mPopupWindow.isShowing) {
             resetAutoDismissTimer()
             return
