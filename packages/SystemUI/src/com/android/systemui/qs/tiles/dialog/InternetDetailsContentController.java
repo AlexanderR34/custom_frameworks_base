@@ -632,7 +632,7 @@ public class InternetDetailsContentController implements AccessPointController.A
 
             if (mText != null) {
                 float x = bounds.right;
-                float y = bounds.top + (bounds.height() * 0.38f);
+                float y = bounds.bottom - (bounds.height() * 0.12f);
                 canvas.drawText(mText, x, y, mTextPaint);
             }
         }
