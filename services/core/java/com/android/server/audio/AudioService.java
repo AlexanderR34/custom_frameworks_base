@@ -1555,8 +1555,6 @@ public class AudioService extends IAudioService.Stub
                         audioSystem.getAudioProductStrategies(/* filterInternal= */ true)),
                 SystemServerAdapter.getDefaultAdapter(mContext), mAudioSystem, brokerWakeLock);
 
-        mSeparateAppSoundController = new SeparateAppSoundController(mContext, mDeviceBroker, mAudioHandler.getLooper());
-
         mIsSingleVolume = AudioSystem.isSingleVolume(context);
 
         mUserManagerInternal = LocalServices.getService(UserManagerInternal.class);
@@ -1771,6 +1769,8 @@ public class AudioService extends IAudioService.Stub
         } else {
             mAudioHandler = new AudioHandler(looper);
         }
+
+        mSeparateAppSoundController = new SeparateAppSoundController(mContext, mDeviceBroker, mAudioHandler.getLooper());
 
         mSoundDoseHelper = new SoundDoseHelper(this, mContext, mAudioHandler, mSettings,
                 mVolumeController);
