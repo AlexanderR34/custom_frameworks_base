@@ -248,8 +248,8 @@ public class SeparateAppSoundController {
 
     private void handleAllBtDisconnected() {
         if (mCurrentInternalDevice != AudioSystem.DEVICE_NONE
-                && (mCurrentInternalDevice & AudioSystem.DEVICE_OUT_ALL_A2DP) != 0
-                || (mCurrentInternalDevice & AudioSystem.DEVICE_OUT_ALL_BLE) != 0) {
+                && (AudioSystem.DEVICE_OUT_ALL_A2DP_SET.contains(mCurrentInternalDevice)
+                || AudioSystem.DEVICE_OUT_ALL_BLE_SET.contains(mCurrentInternalDevice))) {
             Log.w(TAG, "All BT down, resetting separate sound route");
             clearCurrentRoutingInternal();
         }

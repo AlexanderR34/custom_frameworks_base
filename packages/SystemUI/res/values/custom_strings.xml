@@ -152,4 +152,9 @@
     <string name="gaming_audio_game">Game Audio</string>
     <string name="gaming_audio_voice">Voice Audio</string>
     <string name="gaming_brightness">Brightness</string>
+
+    <!-- Flashlight Strength Dialog -->
+    <string name="flashlight_strength_title">Flashlight strength</string>
+    <string name="flashlight_strength_turn_off">Turn off</string>
+    <string name="flashlight_strength_turn_on">Turn on</string>
 </resources>

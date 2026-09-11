@@ -108,7 +108,7 @@ class GamingCrosshairOverlay(private val context: Context) {
                     canvas.drawLine(cx - radius, cy, cx - dp(3), cy, paint)
                     canvas.drawLine(cx + dp(3), cy, cx + radius, cy, paint)
                     canvas.drawLine(cx, cy - radius, cx, cy - dp(3), paint)
-                    canvas.drawLine(cx, cy + dp(3), cy, cx, cy + radius, paint)
+                    canvas.drawLine(cx, cy + dp(3), cx, cy + radius, paint)
                     canvas.drawCircle(cx, cy, dp(2).toFloat(), fillPaint)
                 }
                 1 -> {
