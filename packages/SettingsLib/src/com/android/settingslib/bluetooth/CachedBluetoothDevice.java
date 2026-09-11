@@ -1815,20 +1815,29 @@ public class CachedBluetoothDevice implements Comparable<CachedBluetoothDevice> 
                     lowBatteryColorRes);
         }
 
+        CharSequence result;
         if (isTwsBatteryAvailable(leftBattery, rightBattery)) {
-            return mContext.getString(stringRes, Utils.formatPercentage(leftBattery),
+            result = mContext.getString(stringRes, Utils.formatPercentage(leftBattery),
                     Utils.formatPercentage(rightBattery));
         } else if (leftBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN
                 && !BluetoothUtils.getBooleanMetaData(mDevice,
                 BluetoothDevice.METADATA_IS_UNTETHERED_HEADSET)) {
-            return mContext.getString(stringRes, Utils.formatPercentage(leftBattery));
+            result = mContext.getString(stringRes, Utils.formatPercentage(leftBattery));
         } else if (rightBattery > BluetoothDevice.BATTERY_LEVEL_UNKNOWN
                 && !BluetoothUtils.getBooleanMetaData(mDevice,
                 BluetoothDevice.METADATA_IS_UNTETHERED_HEADSET)) {
-            return mContext.getString(stringRes, Utils.formatPercentage(rightBattery));
+            result = mContext.getString(stringRes, Utils.formatPercentage(rightBattery));
         } else {
-            return mContext.getString(stringRes, batteryLevelPercentageString);
+            result = mContext.getString(stringRes, batteryLevelPercentageString);
         }
+
+        if (profileConnected && (mIsActiveDeviceA2dp || mIsActiveDeviceLeAudio || isConnectedA2dpDevice() || isConnectedLeAudioDevice())) {
+            String codec = getActiveAudioCodecName();
+            if (!android.text.TextUtils.isEmpty(codec) && result != null && result.length() > 0) {
+                result = result + " \u2022 " + codec;
+            }
+        }
+        return result;
     }
 
     @VisibleForTesting
