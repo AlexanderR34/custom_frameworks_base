@@ -18,11 +18,16 @@ package com.android.systemui.statusbar.phone.gaming
 
 import android.animation.ValueAnimator
 import android.app.ActivityManager
+import android.app.ActivityTaskManager
+import android.app.GameManager
 import android.app.NotificationManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -45,13 +50,17 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import com.android.systemui.CoreStartable
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.res.R
+import com.android.systemui.shared.system.TaskStackChangeListener
+import com.android.systemui.shared.system.TaskStackChangeListeners
 import com.android.systemui.statusbar.phone.afk.AfkController
 import java.io.File
 import java.io.FileOutputStream
+import java.io.PrintWriter
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 
@@ -65,7 +74,7 @@ class GamingOverlayController @Inject constructor(
     @Application private val context: Context,
     @Main private val mainHandler: Handler,
     private val afkController: AfkController
-) : GamingPerformanceMonitor.Listener {
+) : CoreStartable, GamingPerformanceMonitor.Listener {
 
     companion object {
         private const val TAG = "GamingOverlayController"
@@ -79,6 +88,7 @@ class GamingOverlayController @Inject constructor(
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
     private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     private val packageManager = context.packageManager
+    private val taskManager by lazy { ActivityTaskManager.getService() }
 
     val performanceMonitor = GamingPerformanceMonitor(context, mainHandler)
     val hudOverlay = GamingHudOverlay(context)
@@ -90,6 +100,7 @@ class GamingOverlayController @Inject constructor(
     private var touchShieldView: View? = null
     private var isSidebarExpanded = false
     private var isTouchShieldActive = false
+    private var currentActiveGame: String? = null
     var isGamingModeEnabled = true
         private set
 
@@ -155,42 +166,142 @@ class GamingOverlayController @Inject constructor(
         callbacks.forEach { it.onGamingStateChanged(isGamingModeEnabled) }
     }
 
-    init {
-        performanceMonitor.addListener(this)
-        mainHandler.postDelayed({ showTriggerHandle() }, 1500L)
-        startGameDetector()
+    private val taskStackChangeListener = object : TaskStackChangeListener {
+        override fun onTaskStackChanged() {
+            mainHandler.post { checkForegroundApp() }
+        }
     }
 
-    private fun startGameDetector() {
-        mainHandler.postDelayed(object : Runnable {
-            override fun run() {
-                checkForegroundApp()
-                mainHandler.postDelayed(this, 3000L)
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                mainHandler.post {
+                    collapseSidebar()
+                    dismissTouchShield()
+                }
             }
-        }, 3000L)
+        }
     }
 
-    private fun checkForegroundApp() {
-        if (!isGamingModeEnabled) return
-        try {
-            val tasks = activityManager.getRunningTasks(1)
-            if (tasks.isNotEmpty()) {
-                val topPkg = tasks[0].topActivity?.packageName ?: return
-                val appInfo = packageManager.getApplicationInfo(topPkg, 0)
-                val isGame = (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0 ||
-                        (appInfo.category == ApplicationInfo.CATEGORY_GAME)
+    private val settingsObserver = object : ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean) {
+            updateSettingsState()
+            checkForegroundApp()
+        }
+    }
 
-                if (isGame && triggerView == null) {
-                    showTriggerHandle()
+    override fun start() {
+        performanceMonitor.addListener(this)
+        updateSettingsState()
+
+        TaskStackChangeListeners.getInstance().registerTaskStackListener(taskStackChangeListener)
+
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        context.registerReceiver(screenOffReceiver, filter, Context.RECEIVER_EXPORTED)
+
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(SETTING_GAMING_MODE),
+            false,
+            settingsObserver
+        )
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor("gamespace_game_list"),
+            false,
+            settingsObserver
+        )
+
+        mainHandler.postDelayed({ checkForegroundApp() }, 1000L)
+    }
+
+    private fun updateSettingsState() {
+        isGamingModeEnabled = Settings.System.getInt(
+            context.contentResolver,
+            SETTING_GAMING_MODE,
+            1
+        ) == 1
+    }
+
+    private fun isAppGame(packageName: String): Boolean {
+        // 1. Check GameSpace list in settings
+        val gameList = Settings.System.getString(context.contentResolver, "gamespace_game_list")
+        if (!gameList.isNullOrEmpty()) {
+            val matches = gameList.split(";").any { it.split("=").firstOrNull() == packageName }
+            if (matches) return true
+        }
+
+        // 2. Check ApplicationInfo category / flags
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            if ((appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0 ||
+                appInfo.category == ApplicationInfo.CATEGORY_GAME) {
+                return true
+            }
+        } catch (_: Exception) {}
+
+        // 3. Check GameManager API
+        try {
+            val gm = context.getSystemService(GameManager::class.java)
+            if (gm != null) {
+                val mode = gm.getGameMode(packageName)
+                if (mode != GameManager.GAME_MODE_UNSUPPORTED) {
+                    return true
                 }
             }
         } catch (_: Exception) {}
+
+        return false
+    }
+
+    private fun checkForegroundApp() {
+        if (!isGamingModeEnabled) {
+            if (triggerView != null) hideTriggerHandle()
+            if (isSidebarExpanded) collapseSidebar()
+            currentActiveGame = null
+            return
+        }
+
+        try {
+            val focusedTask = taskManager.focusedRootTaskInfo
+            val topPkg = focusedTask?.topActivity?.packageName
+            if (topPkg.isNullOrEmpty() || topPkg == context.packageName) {
+                return
+            }
+
+            val isGame = isAppGame(topPkg)
+            if (isGame) {
+                currentActiveGame = topPkg
+                if (triggerView == null) {
+                    showTriggerHandle()
+                }
+            } else {
+                currentActiveGame = null
+                if (triggerView != null) {
+                    hideTriggerHandle()
+                }
+                if (isSidebarExpanded) {
+                    collapseSidebar()
+                }
+                if (hudOverlay.isVisible()) {
+                    hudOverlay.hide()
+                }
+                if (crosshairOverlay.isVisible()) {
+                    crosshairOverlay.hide()
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check foreground app", e)
+        }
     }
 
     fun toggleGamingMode(): Boolean {
         isGamingModeEnabled = !isGamingModeEnabled
+        Settings.System.putInt(
+            context.contentResolver,
+            SETTING_GAMING_MODE,
+            if (isGamingModeEnabled) 1 else 0
+        )
         if (isGamingModeEnabled) {
-            showTriggerHandle()
+            checkForegroundApp()
         } else {
             hideTriggerHandle()
             collapseSidebar()
@@ -255,6 +366,14 @@ class GamingOverlayController @Inject constructor(
             } catch (_: Exception) {}
         }
         triggerView = null
+    }
+
+    override fun dump(pw: PrintWriter, args: Array<out String>) {
+        pw.println("GamingOverlayController:")
+        pw.println("  isGamingModeEnabled: $isGamingModeEnabled")
+        pw.println("  currentActiveGame: $currentActiveGame")
+        pw.println("  isSidebarExpanded: $isSidebarExpanded")
+        pw.println("  isTriggerShowing: ${triggerView != null}")
     }
 
     fun expandSidebar() {

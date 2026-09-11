@@ -54,6 +54,7 @@ import com.android.systemui.statusbar.ImmersiveModeConfirmation
 import com.android.systemui.statusbar.gesture.GesturePointerEventListener
 import com.android.systemui.statusbar.notification.InstantAppNotifier
 import com.android.systemui.statusbar.notification.headsup.StatusBarHeadsUpChangeListener
+import com.android.systemui.statusbar.phone.gaming.GamingOverlayController
 import com.android.systemui.statusbar.policy.GameSpaceManager
 import com.android.systemui.stylus.StylusUsiPowerStartable
 import com.android.systemui.temporarydisplay.chipbar.ChipbarCoordinator
@@ -343,4 +344,10 @@ abstract class SystemUICoreStartableModule {
     @IntoMap
     @ClassKey(GameSpaceManager::class)
     abstract fun bindGameSpaceManager(impl: GameSpaceManager): CoreStartable
+
+    /** Inject into GamingOverlayController. */
+    @Binds
+    @IntoMap
+    @ClassKey(GamingOverlayController::class)
+    abstract fun bindGamingOverlayController(impl: GamingOverlayController): CoreStartable
 }
