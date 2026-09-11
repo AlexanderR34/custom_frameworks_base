@@ -31,8 +31,12 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.ContentObserver;
 import android.media.AudioDeviceInfo;
+import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioSystem;
+import android.media.audiopolicy.AudioMix;
+import android.media.audiopolicy.AudioMixingRule;
+import android.media.audiopolicy.AudioPolicy;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -67,6 +71,7 @@ public class SeparateAppSoundController {
     private int mCurrentRoutedUid = Process.INVALID_UID;
     private int mCurrentInternalDevice = AudioSystem.DEVICE_NONE;
     private String mCurrentRoutedAddress = "";
+    private AudioPolicy mAudioPolicy = null;
 
     public SeparateAppSoundController(@NonNull Context context, @NonNull AudioDeviceBroker broker, @NonNull Looper looper) {
         mContext = Objects.requireNonNull(context);
@@ -201,34 +206,67 @@ public class SeparateAppSoundController {
         String address = matchedDevice.getAddress() != null ? matchedDevice.getAddress() : "";
 
         if (mCurrentRoutedUid == uid && mCurrentInternalDevice == internalDeviceType
-                && TextUtils.equals(mCurrentRoutedAddress, address)) {
+                && TextUtils.equals(mCurrentRoutedAddress, address) && mAudioPolicy != null) {
             if (DEBUG) Log.d(TAG, "Audio routing already applied for UID: " + uid);
             return;
         }
 
-        if (mCurrentRoutedUid != Process.INVALID_UID && mCurrentRoutedUid != uid) {
-            clearCurrentRoutingInternal();
-        }
+        clearCurrentRoutingInternal();
 
-        int status = AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
-        if (status == AudioSystem.SUCCESS) {
-            mCurrentRoutedUid = uid;
-            mCurrentInternalDevice = internalDeviceType;
-            mCurrentRoutedAddress = address;
-            Log.i(TAG, "Successfully routed UID: " + uid + " (" + mTargetPackage + ") to device 0x"
-                    + Integer.toHexString(internalDeviceType) + " addr: " + address);
-        } else {
-            Log.e(TAG, "Failed AudioSystem.setUidDeviceAffinities for UID: " + uid + " error: " + status);
+        try {
+            AudioMixingRule rule = new AudioMixingRule.Builder()
+                    .addMixRule(AudioMixingRule.RULE_MATCH_UID, uid)
+                    .setTargetMixRole(AudioMixingRule.MIX_ROLE_PLAYERS)
+                    .build();
+
+            AudioMix mix = new AudioMix.Builder(rule)
+                    .setFormat(new AudioFormat.Builder().build())
+                    .setRouteFlags(AudioMix.ROUTE_FLAG_RENDER)
+                    .setDevice(matchedDevice)
+                    .build();
+
+            AudioPolicy policy = new AudioPolicy.Builder(mContext)
+                    .addMix(mix)
+                    .setLooper(mHandler.getLooper())
+                    .build();
+
+            int result = mAudioManager.registerAudioPolicy(policy);
+            if (result == AudioManager.SUCCESS) {
+                mAudioPolicy = policy;
+                mCurrentRoutedUid = uid;
+                mCurrentInternalDevice = internalDeviceType;
+                mCurrentRoutedAddress = address;
+                AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
+                Log.i(TAG, "Successfully routed UID: " + uid + " (" + mTargetPackage + ") to device "
+                        + matchedDevice.getProductName() + " (0x" + Integer.toHexString(internalDeviceType) + " addr: " + address + ")");
+            } else {
+                Log.e(TAG, "Failed to register AudioPolicy for UID: " + uid + " error: " + result);
+                int status = AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
+                if (status == AudioSystem.SUCCESS) {
+                    mCurrentRoutedUid = uid;
+                    mCurrentInternalDevice = internalDeviceType;
+                    mCurrentRoutedAddress = address;
+                    Log.i(TAG, "Fallback: routed UID: " + uid + " via setUidDeviceAffinities");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Exception creating AudioPolicy for UID: " + uid, e);
         }
     }
 
     private synchronized void clearCurrentRoutingInternal() {
-        if (mCurrentRoutedUid != Process.INVALID_UID) {
-            Log.i(TAG, "Clearing preferred route for UID: " + mCurrentRoutedUid);
-            int status = AudioSystem.removeUidDeviceAffinities(mCurrentRoutedUid);
-            if (status != AudioSystem.SUCCESS) {
-                Log.w(TAG, "Failed to clear preferred device for UID: " + mCurrentRoutedUid + " status: " + status);
+        if (mAudioPolicy != null) {
+            Log.i(TAG, "Clearing AudioPolicy route for UID: " + mCurrentRoutedUid);
+            try {
+                mAudioManager.unregisterAudioPolicy(mAudioPolicy);
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to unregister AudioPolicy", e);
             }
+            mAudioPolicy = null;
+        }
+        if (mCurrentRoutedUid != Process.INVALID_UID) {
+            Log.i(TAG, "Clearing preferred affinities for UID: " + mCurrentRoutedUid);
+            AudioSystem.removeUidDeviceAffinities(mCurrentRoutedUid);
             mCurrentRoutedUid = Process.INVALID_UID;
             mCurrentInternalDevice = AudioSystem.DEVICE_NONE;
             mCurrentRoutedAddress = "";
