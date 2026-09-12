@@ -98,13 +98,6 @@ public abstract class LocationPermissionsHelper {
             return false;
         }
 
-        if (com.android.server.location.LocationSpoofHelper.isSpoofEnabledForPackage(
-                null, identity.getPackageName(), identity.getUid(), identity.getUserId())) {
-            if (hasPermission(LocationPermissions.asPermission(permissionLevel), identity)) {
-                return true;
-            }
-        }
-
         if (!hasPermission(LocationPermissions.asPermission(permissionLevel), identity)) {
             return false;
         }

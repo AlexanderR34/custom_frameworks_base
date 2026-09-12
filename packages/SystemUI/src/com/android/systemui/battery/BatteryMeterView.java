@@ -244,7 +244,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         mDrawable.setBatteryLevel(level);
         updatePercentText();
 
-        if (NewStatusBarIcons.isEnabled()) {
+        if (NewStatusBarIcons.isEnabled() && (mDrawable == null || !mDrawable.isHyperOSStyle())) {
             Drawable attr = mUnifiedBatteryState.getAttribution();
             if (isCharging != wasCharging) {
                 attr = getBatteryAttribution(isCharging);
@@ -414,7 +414,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     void updatePercentText() {
-        if (!NewStatusBarIcons.isEnabled()) {
+        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
             updatePercentTextLegacy();
             return;
         }
@@ -488,6 +488,9 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mBatteryPercentView != null) {
             mEstimateText = null;
             String percentText = NumberFormat.getPercentInstance().format(mLevel / 100f);
+            if (mDrawable != null && mDrawable.isHyperOSStyle()) {
+                percentText = mLevel + "%";
+            }
             // Setting text actually triggers a layout pass (because the text view is set to
             // wrap_content width and TextView always relayouts for this). Avoid needless
             // relayout if the text didn't actually change.
@@ -574,6 +577,12 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                 || mShowPercentMode == MODE_ON
                 || mShowPercentMode == MODE_ESTIMATE;
         shouldShow = shouldShow && !mBatteryStateUnknown;
+
+        if (mDrawable != null && mDrawable.isHyperOSStyle()) {
+            if (mShowPercentMode != MODE_OFF && !mBatteryStateUnknown) {
+                shouldShow = true;
+            }
+        }
 
         if (shouldShow) {
             if (!showing) {

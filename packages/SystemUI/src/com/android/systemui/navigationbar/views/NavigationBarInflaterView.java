@@ -42,6 +42,8 @@ import com.android.systemui.navigationbar.views.buttons.ButtonDispatcher;
 import com.android.systemui.navigationbar.views.buttons.KeyButtonView;
 import com.android.systemui.navigationbar.views.buttons.ReverseLinearLayout;
 import com.android.systemui.navigationbar.views.buttons.ReverseLinearLayout.ReverseRelativeLayout;
+import android.os.UserHandle;
+import android.provider.Settings;
 import com.android.systemui.res.R;
 import com.android.systemui.shared.system.QuickStepContract;
 
@@ -162,7 +164,26 @@ public class NavigationBarInflaterView extends FrameLayout {
                 : mLauncherProxyService.shouldShowSwipeUpUI()
                         ? R.string.config_navBarLayoutQuickstep
                         : R.string.config_navBarLayout;
-        return getContext().getString(defaultResource);
+        String layout = getContext().getString(defaultResource);
+        if (isReverseOrder() && !QuickStepContract.isGesturalMode(mNavBarMode)) {
+            layout = swapBackAndRecent(layout);
+        }
+        return layout;
+    }
+
+    private boolean isReverseOrder() {
+        return Settings.Secure.getIntForUser(
+                getContext().getContentResolver(),
+                Settings.Secure.NAVIGATIONBAR_KEY_ORDER, 0,
+                UserHandle.USER_CURRENT) != 0;
+    }
+
+    private String swapBackAndRecent(String layout) {
+        if (layout == null || !layout.contains(BACK) || !layout.contains(RECENT)) {
+            return layout;
+        }
+        String temp = "___TEMP_ORDER___";
+        return layout.replace(BACK, temp).replace(RECENT, BACK).replace(temp, RECENT);
     }
 
     private void onNavigationModeChanged(int mode) {

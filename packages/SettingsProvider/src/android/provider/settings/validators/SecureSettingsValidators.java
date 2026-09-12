@@ -307,6 +307,8 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.NAV_BAR_KIDS_MODE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.NAVIGATIONBAR_KEY_ORDER,
                 new DiscreteValueValidator(new String[] {"0", "1"}));
+        VALIDATORS.put(Secure.NAV_BAR_BUTTONS_STYLE,
+                new DiscreteValueValidator(new String[] {"0", "1"}));
         VALIDATORS.put(
                 Secure.NAVIGATION_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2"}));
         VALIDATORS.put(Secure.NAVIGATION_MODE_RESTORE,

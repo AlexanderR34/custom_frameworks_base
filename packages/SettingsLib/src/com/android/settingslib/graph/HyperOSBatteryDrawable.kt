@@ -23,9 +23,10 @@ import kotlin.math.max
  * Visual design:
  * - Horizontal pill shape with rounded outer frame and terminal cap on the right.
  * - Inner progress fill that smoothly reduces from right to left as battery discharges.
+ * - Prominent bold charging lightning bolt with outline.
  * - Dynamic color states:
  *   - Normal: Tinted with status bar icon color (adaptive white / dark).
- *   - Charging: Vibrant green fill with a centered white lightning bolt.
+ *   - Charging: Vibrant green fill with a bold white lightning bolt.
  *   - Power Saver: Amber / Yellow fill.
  *   - Low Battery (<= 15%): Warning red fill.
  */
@@ -81,12 +82,13 @@ class HyperOSBatteryDrawable(
         isDither = true
     }
 
-    // Bolt stroke paint for contrast if needed
+    // Bolt stroke paint for sharp contrast matching HyperOS design
     private val boltStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(80, 0, 0, 0)
+        color = Color.argb(220, 0, 0, 0)
         style = Paint.Style.STROKE
-        strokeWidth = 0.5f * density
+        strokeWidth = 1.3f * density
         strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
     }
 
     private val frameRect = RectF()
@@ -124,9 +126,9 @@ class HyperOSBatteryDrawable(
 
         val stroke = framePaint.strokeWidth
         val halfStroke = stroke / 2f
-        val capWidth = max(1.5f * density, width * 0.05f)
-        val capHeight = max(4.0f * density, height * 0.38f)
-        val rightMargin = capWidth + 1.0f * density
+        val capWidth = max(1.6f * density, width * 0.06f)
+        val capHeight = max(4.5f * density, height * 0.40f)
+        val rightMargin = capWidth + 1.2f * density
 
         // Battery outer pill frame
         frameRect.set(
@@ -146,7 +148,7 @@ class HyperOSBatteryDrawable(
         )
 
         // Inner cavity for fill
-        val inset = stroke + 1.2f * density
+        val inset = stroke + 1.0f * density
         innerCavityRect.set(
             frameRect.left + inset,
             frameRect.top + inset,
@@ -154,20 +156,20 @@ class HyperOSBatteryDrawable(
             frameRect.bottom - inset
         )
 
-        // Generate lightning bolt path centered in the battery
-        val centerX = innerCavityRect.centerX()
-        val centerY = innerCavityRect.centerY()
-        val boltW = innerCavityRect.height() * 0.55f
-        val boltH = innerCavityRect.height() * 0.85f
+        // Generate large, bold HyperOS lightning bolt path centered on the battery body
+        val centerX = frameRect.centerX()
+        val centerY = frameRect.centerY()
+        val boltW = height * 0.72f
+        val boltH = height * 1.15f
 
         boltPath.reset()
-        // Standard sleek charging lightning bolt
-        boltPath.moveTo(centerX + boltW * 0.1f, centerY - boltH * 0.5f)
-        boltPath.lineTo(centerX - boltW * 0.5f, centerY + boltH * 0.05f)
-        boltPath.lineTo(centerX - boltW * 0.05f, centerY + boltH * 0.05f)
-        boltPath.lineTo(centerX - boltW * 0.1f, centerY + boltH * 0.5f)
-        boltPath.lineTo(centerX + boltW * 0.5f, centerY - boltH * 0.05f)
-        boltPath.lineTo(centerX + boltW * 0.05f, centerY - boltH * 0.05f)
+        // Sharp, bold HyperOS lightning bolt
+        boltPath.moveTo(centerX + boltW * 0.14f, centerY - boltH * 0.50f)
+        boltPath.lineTo(centerX - boltW * 0.46f, centerY + boltH * 0.04f)
+        boltPath.lineTo(centerX - boltW * 0.04f, centerY + boltH * 0.04f)
+        boltPath.lineTo(centerX - boltW * 0.14f, centerY + boltH * 0.50f)
+        boltPath.lineTo(centerX + boltW * 0.46f, centerY - boltH * 0.04f)
+        boltPath.lineTo(centerX + boltW * 0.04f, centerY - boltH * 0.04f)
         boltPath.close()
     }
 
@@ -207,7 +209,7 @@ class HyperOSBatteryDrawable(
             canvas.drawRoundRect(levelRect, innerCornerRadius, innerCornerRadius, fillPaint)
         }
 
-        // 5. Draw charging bolt if plugged in
+        // 5. Draw prominent charging bolt if plugged in
         if (charging) {
             canvas.drawPath(boltPath, boltStrokePaint)
             canvas.drawPath(boltPath, boltPaint)
@@ -219,6 +221,7 @@ class HyperOSBatteryDrawable(
         capPaint.alpha = alpha
         fillPaint.alpha = alpha
         boltPaint.alpha = alpha
+        boltStrokePaint.alpha = alpha
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
@@ -234,7 +237,7 @@ class HyperOSBatteryDrawable(
     override fun getIntrinsicHeight(): Int = (13 * density).toInt()
 
     companion object {
-        // HyperOS Vibrant charging green (matches screenshot 2)
+        // HyperOS Vibrant charging green
         const val COLOR_CHARGING_GREEN = 0xFF34C759.toInt()
         // HyperOS Amber / Yellow for power saver mode
         const val COLOR_POWERSAVE_YELLOW = 0xFFF59E0B.toInt()

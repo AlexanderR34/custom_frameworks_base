@@ -38,6 +38,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.graphics.Canvas;
+import android.net.Uri;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -469,10 +470,13 @@ public class NavigationBarView extends FrameLayout {
                 UserHandle.USER_CURRENT) == 1;
     }
 
-    private final ContentObserver mNavBarStyleObserver =
+    private final ContentObserver mNavBarCustomObserver =
             new ContentObserver(new Handler(Looper.getMainLooper())) {
                 @Override
-                public void onChange(boolean selfChange) {
+                public void onChange(boolean selfChange, Uri uri) {
+                    if (mNavigationInflaterView != null) {
+                        mNavigationInflaterView.onLikelyDefaultLayoutChange();
+                    }
                     reloadNavIcons();
                     updateNavButtonIcons();
                 }
@@ -896,6 +900,7 @@ public class NavigationBarView extends FrameLayout {
 
         updateOrientationViews();
         reloadNavIcons();
+        updateNavButtonIcons();
     }
 
     @Override
@@ -1139,11 +1144,17 @@ public class NavigationBarView extends FrameLayout {
         try {
             getContext().getContentResolver().registerContentObserver(
                     Settings.Secure.getUriFor("nav_bar_buttons_style"),
-                    false, mNavBarStyleObserver, UserHandle.USER_ALL);
+                    false, mNavBarCustomObserver, UserHandle.USER_ALL);
+            getContext().getContentResolver().registerContentObserver(
+                    Settings.Secure.getUriFor(Settings.Secure.NAVIGATIONBAR_KEY_ORDER),
+                    false, mNavBarCustomObserver, UserHandle.USER_ALL);
         } catch (Exception e) {
-            Log.w(TAG, "Failed to register nav_bar_buttons_style observer", e);
+            Log.w(TAG, "Failed to register nav bar custom observers", e);
         }
 
+        if (mNavigationInflaterView != null) {
+            mNavigationInflaterView.onLikelyDefaultLayoutChange();
+        }
         reloadNavIcons();
         updateNavButtonIcons();
     }
@@ -1152,9 +1163,9 @@ public class NavigationBarView extends FrameLayout {
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         try {
-            getContext().getContentResolver().unregisterContentObserver(mNavBarStyleObserver);
+            getContext().getContentResolver().unregisterContentObserver(mNavBarCustomObserver);
         } catch (Exception e) {
-            Log.w(TAG, "Failed to unregister nav_bar_buttons_style observer", e);
+            Log.w(TAG, "Failed to unregister nav bar custom observers", e);
         }
         for (int i = 0; i < mButtonDispatchers.size(); ++i) {
             mButtonDispatchers.valueAt(i).onDestroy();

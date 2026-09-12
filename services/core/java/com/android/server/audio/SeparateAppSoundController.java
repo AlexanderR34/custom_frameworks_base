@@ -78,7 +78,6 @@ public class SeparateAppSoundController {
     private final List<Integer> mCurrentRoutedUids = new ArrayList<>();
     private int mCurrentInternalDevice = AudioSystem.DEVICE_NONE;
     private String mCurrentRoutedAddress = "";
-    private AudioPolicy mAudioPolicy = null;
 
     public SeparateAppSoundController(@NonNull Context context, @NonNull AudioDeviceBroker broker, @NonNull Looper looper) {
         mContext = Objects.requireNonNull(context);
@@ -224,7 +223,7 @@ public class SeparateAppSoundController {
         String address = matchedDevice.getAddress() != null ? matchedDevice.getAddress() : "";
 
         if (mCurrentRoutedUids.equals(targetUids) && mCurrentInternalDevice == internalDeviceType
-                && TextUtils.equals(mCurrentRoutedAddress, address) && mAudioPolicy != null) {
+                && TextUtils.equals(mCurrentRoutedAddress, address)) {
             if (DEBUG) Log.d(TAG, "Audio routing already applied for UIDs: " + targetUids);
             return;
         }
@@ -232,63 +231,28 @@ public class SeparateAppSoundController {
         clearCurrentRoutingInternal();
 
         try {
-            AudioMixingRule.Builder ruleBuilder = new AudioMixingRule.Builder();
+            boolean allSucceeded = true;
             for (int uid : targetUids) {
-                ruleBuilder.addMixRule(AudioMixingRule.RULE_MATCH_UID, uid);
-            }
-            ruleBuilder.setTargetMixRole(AudioMixingRule.MIX_ROLE_PLAYERS);
-            AudioMixingRule rule = ruleBuilder.build();
-
-            AudioMix mix = new AudioMix.Builder(rule)
-                    .setFormat(new AudioFormat.Builder().build())
-                    .setRouteFlags(AudioMix.ROUTE_FLAG_RENDER)
-                    .setDevice(matchedDevice)
-                    .build();
-
-            AudioPolicy policy = new AudioPolicy.Builder(mContext)
-                    .addMix(mix)
-                    .setLooper(mHandler.getLooper())
-                    .build();
-
-            int result = mAudioManager.registerAudioPolicy(policy);
-            if (result == AudioManager.SUCCESS) {
-                mAudioPolicy = policy;
-                mCurrentRoutedUids.clear();
-                mCurrentRoutedUids.addAll(targetUids);
-                mCurrentInternalDevice = internalDeviceType;
-                mCurrentRoutedAddress = address;
-
-                for (int uid : targetUids) {
-                    AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
+                int res = AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
+                if (res != AudioSystem.SUCCESS) {
+                    Log.e(TAG, "AudioSystem.setUidDeviceAffinities failed for uid " + uid + " with code: " + res);
+                    allSucceeded = false;
                 }
-                Log.i(TAG, "Successfully routed UIDs: " + targetUids + " (" + mTargetPackages + ") to device "
-                        + matchedDevice.getProductName() + " (0x" + Integer.toHexString(internalDeviceType) + " addr: " + address + ")");
-            } else {
-                Log.e(TAG, "Failed to register AudioPolicy for UIDs: " + targetUids + " error: " + result);
-                mCurrentRoutedUids.clear();
-                mCurrentRoutedUids.addAll(targetUids);
-                mCurrentInternalDevice = internalDeviceType;
-                mCurrentRoutedAddress = address;
-                for (int uid : targetUids) {
-                    AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
-                }
-                Log.i(TAG, "Fallback: routed UIDs: " + targetUids + " via setUidDeviceAffinities");
             }
+
+            mCurrentRoutedUids.clear();
+            mCurrentRoutedUids.addAll(targetUids);
+            mCurrentInternalDevice = internalDeviceType;
+            mCurrentRoutedAddress = address;
+
+            Log.i(TAG, "Successfully applied separate app sound for UIDs: " + targetUids + " (" + mTargetPackages + ") to device "
+                    + matchedDevice.getProductName() + " (0x" + Integer.toHexString(internalDeviceType) + " addr: " + address + ")");
         } catch (Exception e) {
-            Log.e(TAG, "Exception creating AudioPolicy for UIDs: " + targetUids, e);
+            Log.e(TAG, "Exception applying UID device affinities for UIDs: " + targetUids, e);
         }
     }
 
     private synchronized void clearCurrentRoutingInternal() {
-        if (mAudioPolicy != null) {
-            Log.i(TAG, "Clearing AudioPolicy route for UIDs: " + mCurrentRoutedUids);
-            try {
-                mAudioManager.unregisterAudioPolicy(mAudioPolicy);
-            } catch (Exception e) {
-                Log.w(TAG, "Failed to unregister AudioPolicy", e);
-            }
-            mAudioPolicy = null;
-        }
         if (!mCurrentRoutedUids.isEmpty()) {
             Log.i(TAG, "Clearing preferred affinities for UIDs: " + mCurrentRoutedUids);
             for (int uid : mCurrentRoutedUids) {

@@ -191,26 +191,8 @@ class GamingOverlayController @Inject constructor(
     }
 
     override fun start() {
-        performanceMonitor.addListener(this)
+        // Native SystemUI overlay disabled in favor of dedicated Miku GamingSidebar
         updateSettingsState()
-
-        TaskStackChangeListeners.getInstance().registerTaskStackListener(taskStackChangeListener)
-
-        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
-        context.registerReceiver(screenOffReceiver, filter, Context.RECEIVER_EXPORTED)
-
-        context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor(SETTING_GAMING_MODE),
-            false,
-            settingsObserver
-        )
-        context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor("gamespace_game_list"),
-            false,
-            settingsObserver
-        )
-
-        mainHandler.postDelayed({ checkForegroundApp() }, 1000L)
     }
 
     private fun updateSettingsState() {
@@ -315,48 +297,7 @@ class GamingOverlayController @Inject constructor(
     }
 
     fun showTriggerHandle() {
-        if (!isGamingModeEnabled || triggerView != null) return
-
-        val handle = View(context).apply {
-            val bg = GradientDrawable().apply {
-                setColor(Color.parseColor("#E600E5FF"))
-                cornerRadii = floatArrayOf(0f, 0f, dp(8).toFloat(), dp(8).toFloat(), dp(8).toFloat(), dp(8).toFloat(), 0f, 0f)
-            }
-            background = bg
-            elevation = dp(6).toFloat()
-        }
-
-        handle.setOnClickListener {
-            expandSidebar()
-        }
-
-        var startY = 0
-        var touchY = 0f
-        handle.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startY = triggerLayoutParams.y
-                    touchY = event.rawY
-                    false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val delta = (event.rawY - touchY).toInt()
-                    if (Math.abs(delta) > dp(5)) {
-                        triggerLayoutParams.y = startY + delta
-                        try {
-                            windowManager.updateViewLayout(triggerView, triggerLayoutParams)
-                        } catch (_: Exception) {}
-                    }
-                    false
-                }
-                else -> false
-            }
-        }
-
-        triggerView = handle
-        try {
-            windowManager.addView(handle, triggerLayoutParams)
-        } catch (_: Exception) {}
+        // Disabled: Blue trigger handle replaced by dedicated Miku GamingSidebar
     }
 
     fun hideTriggerHandle() {

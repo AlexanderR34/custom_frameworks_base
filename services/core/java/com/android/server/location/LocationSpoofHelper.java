@@ -55,7 +55,7 @@ public final class LocationSpoofHelper {
         }
 
         try {
-            // 1. Check explicit Secure Settings toggle (fake_loc_enabled_ or location_spoof_pkg_)
+            // Check explicit Secure Settings toggle (fake_loc_enabled_ or location_spoof_pkg_)
             int fakeLocEnabled = Settings.Secure.getIntForUser(
                     context.getContentResolver(),
                     SETTING_FAKE_LOC_ENABLED_PREFIX + packageName,
@@ -75,20 +75,8 @@ public final class LocationSpoofHelper {
             if (spoofPkg == 1) {
                 return true;
             }
-
-            // 2. Check AppOpsManager MODE_IGNORED (Fake permissions isolation)
-            if (uid > 0) {
-                AppOpsManager aom = context.getSystemService(AppOpsManager.class);
-                if (aom != null) {
-                    int fineMode = aom.checkOpNoThrow(AppOpsManager.OP_FINE_LOCATION, uid, packageName);
-                    int coarseMode = aom.checkOpNoThrow(AppOpsManager.OP_COARSE_LOCATION, uid, packageName);
-                    if (fineMode == AppOpsManager.MODE_IGNORED || coarseMode == AppOpsManager.MODE_IGNORED) {
-                        return true;
-                    }
-                }
-            }
         } catch (Exception e) {
-            Log.e(TAG, "Error checking spoof/isolation status for " + packageName, e);
+            Log.e(TAG, "Error checking spoof status for " + packageName, e);
         }
         return false;
     }

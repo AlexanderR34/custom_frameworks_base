@@ -13578,6 +13578,14 @@ public final class Settings {
         public static final String NAVIGATIONBAR_KEY_ORDER = "navigationbar_key_order";
 
         /**
+         * Style of the 3-button navigation bar's buttons.
+         * 0 = AOSP standard
+         * 1 = HyperOS
+         * @hide
+         */
+        public static final String NAV_BAR_BUTTONS_STYLE = "nav_bar_buttons_style";
+
+        /**
          * Navigation bar mode.
          *  0 = 3 button
          *  1 = 2 button

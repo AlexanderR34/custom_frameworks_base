@@ -16,10 +16,17 @@
 
 package com.android.systemui.statusbar.pipeline.battery.ui.composable
 
+import android.database.ContentObserver
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +53,7 @@ import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onLayoutRectChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
@@ -155,6 +163,109 @@ private fun Int.scaledLevel(): Float {
 }
 
 /**
+ * HyperOS-style Battery Composable.
+ */
+@Composable
+fun HyperOSBattery(
+    level: Int,
+    isCharging: Boolean,
+    isPowerSave: Boolean,
+    colorsProvider: () -> BatteryColors,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    Canvas(
+        modifier = modifier.fillMaxSize().sysuiResTag(BatteryViewModel.TEST_TAG),
+        contentDescription = contentDescription,
+    ) {
+        val w = size.width
+        val h = size.height
+        val colors = colorsProvider()
+
+        val strokeWidth = (1.5f * (h / 13f)).coerceAtLeast(1.5f)
+        val halfStroke = strokeWidth / 2f
+        val capWidth = (1.5f * (h / 13f)).coerceAtLeast(1.5f)
+        val capHeight = h * 0.42f
+        val capCornerRadius = capWidth / 2f
+        val rightMargin = capWidth + strokeWidth
+
+        val frameRect = androidx.compose.ui.geometry.Rect(
+            left = halfStroke,
+            top = halfStroke,
+            right = w - rightMargin,
+            bottom = h - halfStroke,
+        )
+        val frameCornerRadius = androidx.compose.ui.geometry.CornerRadius(frameRect.height / 3.2f)
+
+        // 1. Draw outer pill frame
+        drawRoundRect(
+            color = colors.fill,
+            topLeft = frameRect.topLeft,
+            size = frameRect.size,
+            cornerRadius = frameCornerRadius,
+            style = Stroke(width = strokeWidth),
+        )
+
+        // 2. Draw terminal cap
+        val capTop = (h - capHeight) / 2f
+        drawRoundRect(
+            color = colors.fill,
+            topLeft = Offset(frameRect.right + (strokeWidth * 0.8f), capTop),
+            size = Size(capWidth, capHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(capCornerRadius),
+        )
+
+        // 3. Determine active fill color
+        val activeFillColor = when {
+            isCharging -> Color(0xFF34C759)
+            isPowerSave -> Color(0xFFF59E0B)
+            level <= 15 -> Color(0xFFEF4444)
+            else -> colors.fill
+        }
+
+        // 4. Draw inner fill
+        val inset = strokeWidth * 1.5f
+        val innerLeft = frameRect.left + inset
+        val innerTop = frameRect.top + inset
+        val innerMaxRight = frameRect.right - inset
+        val innerBottom = frameRect.bottom - inset
+        val innerWidth = (innerMaxRight - innerLeft).coerceAtLeast(0f)
+        val innerHeight = (innerBottom - innerTop).coerceAtLeast(0f)
+
+        val currentFillWidth = (innerWidth * (level.coerceIn(0, 100) / 100f)).coerceIn(0f, innerWidth)
+        if (currentFillWidth > 0f && innerHeight > 0f) {
+            val innerCornerRadius = androidx.compose.ui.geometry.CornerRadius(innerHeight / 3.2f)
+            drawRoundRect(
+                color = activeFillColor,
+                topLeft = Offset(innerLeft, innerTop),
+                size = Size(currentFillWidth, innerHeight),
+                cornerRadius = innerCornerRadius,
+            )
+        }
+
+        // 5. Draw charging bolt if plugged in
+        if (isCharging && innerHeight > 0f) {
+            val centerX = innerLeft + (innerWidth / 2f)
+            val centerY = innerTop + (innerHeight / 2f)
+            val boltW = innerHeight * 0.60f
+            val boltH = innerHeight * 0.95f
+
+            val boltPath = androidx.compose.ui.graphics.Path().apply {
+                moveTo(centerX + boltW * 0.1f, centerY - boltH * 0.5f)
+                lineTo(centerX - boltW * 0.5f, centerY + boltH * 0.05f)
+                lineTo(centerX - boltW * 0.05f, centerY + boltH * 0.05f)
+                lineTo(centerX - boltW * 0.1f, centerY + boltH * 0.5f)
+                lineTo(centerX + boltW * 0.5f, centerY - boltH * 0.05f)
+                lineTo(centerX + boltW * 0.05f, centerY - boltH * 0.05f)
+                close()
+            }
+            drawPath(boltPath, Color.Black.copy(alpha = 0.35f), style = Stroke(width = strokeWidth * 0.5f))
+            drawPath(boltPath, Color.White)
+        }
+    }
+}
+
+/**
  * A battery icon that will optionally display the percentage inside. Battery state attributions are
  * layered on top with a cutout path around them for visibility.
  *
@@ -167,7 +278,48 @@ fun UnifiedBattery(
     isDarkProvider: () -> IsAreaDark,
     modifier: Modifier,
 ) {
+    val context = LocalContext.current
     var bounds by remember { mutableStateOf(Rect()) }
+    var isHyperOSStyle by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                "status_bar_battery_style_hyperos",
+                0,
+                UserHandle.USER_CURRENT
+            ) == 1 || Settings.System.getIntForUser(
+                context.contentResolver,
+                "status_bar_battery_style",
+                0,
+                UserHandle.USER_CURRENT
+            ) == 1
+        )
+    }
+
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                isHyperOSStyle = Settings.System.getIntForUser(
+                    context.contentResolver,
+                    "status_bar_battery_style_hyperos",
+                    0,
+                    UserHandle.USER_CURRENT
+                ) == 1 || Settings.System.getIntForUser(
+                    context.contentResolver,
+                    "status_bar_battery_style",
+                    0,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            }
+        }
+        val uri1 = Settings.System.getUriFor("status_bar_battery_style_hyperos")
+        val uri2 = Settings.System.getUriFor("status_bar_battery_style")
+        context.contentResolver.registerContentObserver(uri1, false, observer, UserHandle.USER_CURRENT)
+        context.contentResolver.registerContentObserver(uri2, false, observer, UserHandle.USER_CURRENT)
+        onDispose {
+            context.contentResolver.unregisterContentObserver(observer)
+        }
+    }
 
     val colorProvider = {
         if (isDarkProvider().isDarkTheme(bounds)) {
@@ -177,20 +329,40 @@ fun UnifiedBattery(
         }
     }
 
-    BatteryLayout(
-        attribution = viewModel.attribution,
-        levelProvider = { viewModel.level },
-        isFullProvider = { viewModel.isFull },
-        glyphsProvider = { viewModel.glyphList },
-        colorsProvider = colorProvider,
-        modifier =
-            modifier.sysuiResTag(BatteryViewModel.TEST_TAG).onLayoutRectChanged {
-                relativeLayoutBounds ->
-                bounds =
-                    with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
-            },
-        contentDescription = viewModel.contentDescription.load() ?: "",
-    )
+    val contentDesc = viewModel.contentDescription.load() ?: ""
+
+    if (isHyperOSStyle) {
+        HyperOSBattery(
+            level = viewModel.level ?: 100,
+            isCharging = viewModel.isCharging,
+            isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
+            colorsProvider = colorProvider,
+            modifier =
+                modifier
+                    .aspectRatio(24f / 13f)
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds =
+                            with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    },
+            contentDescription = contentDesc,
+        )
+    } else {
+        BatteryLayout(
+            attribution = viewModel.attribution,
+            levelProvider = { viewModel.level },
+            isFullProvider = { viewModel.isFull },
+            glyphsProvider = { viewModel.glyphList },
+            colorsProvider = colorProvider,
+            modifier =
+                modifier.sysuiResTag(BatteryViewModel.TEST_TAG).onLayoutRectChanged {
+                    relativeLayoutBounds ->
+                    bounds =
+                        with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                },
+            contentDescription = contentDesc,
+        )
+    }
 }
 
 @Composable
