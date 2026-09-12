@@ -362,6 +362,12 @@ private constructor(
                 clockPositionSettingObserver!!,
                 UserHandle.USER_ALL
             )
+            mView.context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor("status_bar_battery_style_hyperos"),
+                false,
+                clockPositionSettingObserver!!,
+                UserHandle.USER_ALL
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register clock position observer", e)
         }
@@ -377,15 +383,30 @@ private constructor(
     }
 
     private fun updateClockAndIslandPosition() {
-        val position = try {
+        val isHyperOSEnabled = try {
             Settings.System.getIntForUser(
                 mView.context.contentResolver,
-                "status_bar_clock_position",
+                "status_bar_battery_style_hyperos",
                 0,
                 UserHandle.USER_CURRENT
-            )
+            ) == 1
         } catch (e: Exception) {
+            false
+        }
+
+        val position = if (isHyperOSEnabled) {
             0
+        } else {
+            try {
+                Settings.System.getIntForUser(
+                    mView.context.contentResolver,
+                    "status_bar_clock_position",
+                    0,
+                    UserHandle.USER_CURRENT
+                )
+            } catch (e: Exception) {
+                0
+            }
         }
 
         val leftContainer: LinearLayout? =

@@ -73,12 +73,14 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
         // Set some top-level views to gone before we get started
         val systemInfoView = view.requireViewById<View>(R.id.status_bar_end_side_content)
         val clockView = view.requireViewById<View>(R.id.clock)
+        val rightClockView = view.findViewById<View>(R.id.right_clock)
         val notificationIconsArea = view.requireViewById<View>(R.id.notificationIcons)
         val networkTrafficView = view.requireViewById<View>(R.id.network_traffic_holder)
 
         // GONE because this shouldn't take space in the layout
         systemInfoView.hideInitially()
         clockView.hideInitially()
+        rightClockView?.hideInitially()
         notificationIconsArea.hideInitially()
 
         view.repeatWhenAttached {
@@ -142,7 +144,40 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
                 }
 
                 if (!ClockModernization.isEnabled) {
-                    launch { viewModel.isClockVisible.collect { clockView.adjustVisibility(it) } }
+                    val rightClockView: View? = view.findViewById(R.id.right_clock)
+                    launch {
+                        viewModel.isClockVisible.collect { visibilityModel ->
+                            val isHyperOSEnabled = try {
+                                android.provider.Settings.System.getIntForUser(
+                                    view.context.contentResolver,
+                                    "status_bar_battery_style_hyperos",
+                                    0,
+                                    android.os.UserHandle.USER_CURRENT
+                                ) == 1
+                            } catch (e: Exception) {
+                                false
+                            }
+
+                            val isRightClock = !isHyperOSEnabled && try {
+                                android.provider.Settings.System.getIntForUser(
+                                    view.context.contentResolver,
+                                    "status_bar_clock_position",
+                                    0,
+                                    android.os.UserHandle.USER_CURRENT
+                                ) == 1
+                            } catch (e: Exception) {
+                                false
+                            }
+
+                            if (isRightClock) {
+                                clockView.visibility = View.GONE
+                                rightClockView?.adjustVisibility(visibilityModel)
+                            } else {
+                                rightClockView?.visibility = View.GONE
+                                clockView.adjustVisibility(visibilityModel)
+                            }
+                        }
+                    }
                 }
 
                 launch {
