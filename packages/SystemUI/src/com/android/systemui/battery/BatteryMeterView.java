@@ -113,6 +113,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
         setOrientation(LinearLayout.HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        setBaselineAligned(false);
 
         TypedArray atts = context.obtainStyledAttributes(attrs, R.styleable.BatteryMeterView,
                 defStyle, 0);
@@ -134,17 +135,19 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                     .newBatteryDrawable(context, mUnifiedBatteryState);
             mBatteryIconView.setImageDrawable(mUnifiedBattery);
 
-            final MarginLayoutParams mlp = new MarginLayoutParams(
+            final LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
                     getResources().getDimensionPixelSize(
                             R.dimen.status_bar_battery_unified_icon_width),
                     getResources().getDimensionPixelSize(
                             R.dimen.status_bar_battery_unified_icon_height));
+            mlp.gravity = Gravity.CENTER_VERTICAL;
             addView(mBatteryIconView, mlp);
         } else {
             mBatteryIconView.setImageDrawable(mDrawable);
-            final MarginLayoutParams mlp = new MarginLayoutParams(
+            final LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
                     getResources().getDimensionPixelSize(R.dimen.status_bar_battery_icon_width),
                     getResources().getDimensionPixelSize(R.dimen.status_bar_battery_icon_height));
+            mlp.gravity = Gravity.CENTER_VERTICAL;
             mlp.setMargins(0, 0, 0,
                     getResources().getDimensionPixelOffset(R.dimen.battery_margin_bottom));
             addView(mBatteryIconView, mlp);
@@ -386,12 +389,12 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mPercentageStyleId != 0) { // Only set if specified as attribute
             mBatteryPercentView.setTextAppearance(mPercentageStyleId);
         }
-        float fontHeight = mBatteryPercentView.getPaint().getFontMetricsInt(null);
-        mBatteryPercentView.setLineHeight(TypedValue.COMPLEX_UNIT_PX, fontHeight);
         if (mTextColor != 0) mBatteryPercentView.setTextColor(mTextColor);
-        addView(mBatteryPercentView, new LayoutParams(
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LayoutParams.WRAP_CONTENT,
-                (int) Math.ceil(fontHeight)));
+                LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.CENTER_VERTICAL;
+        addView(mBatteryPercentView, lp);
     }
 
     /**
@@ -647,6 +650,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         LinearLayout.LayoutParams scaledLayoutParams = new LinearLayout.LayoutParams(
                 Math.round(mainBatteryWidth),
                 Math.round(mainBatteryHeight));
+        scaledLayoutParams.gravity = Gravity.CENTER_VERTICAL;
 
         mBatteryIconView.setLayoutParams(scaledLayoutParams);
         mBatteryIconView.invalidateDrawable(mUnifiedBattery);
@@ -723,11 +727,14 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             marginTop = 0;
         }
 
-        int marginBottom = res.getDimensionPixelSize(R.dimen.battery_margin_bottom);
+        int marginBottom = (mDrawable != null && mDrawable.isHyperOSStyle())
+                ? 0
+                : res.getDimensionPixelSize(R.dimen.battery_margin_bottom);
 
         LinearLayout.LayoutParams scaledLayoutParams = new LinearLayout.LayoutParams(
                 Math.round(fullBatteryIconWidth),
                 Math.round(fullBatteryIconHeight));
+        scaledLayoutParams.gravity = Gravity.CENTER_VERTICAL;
         scaledLayoutParams.setMargins(0, marginTop, 0, marginBottom);
 
         mDrawable.setDisplayShield(displayShield);

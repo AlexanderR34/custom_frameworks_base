@@ -374,6 +374,7 @@ fun UnifiedBattery(
                 isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
                 colorsProvider = colorProvider,
                 modifier = Modifier
+                    .align(Alignment.CenterVertically)
                     .aspectRatio(24f / 13f)
                     .fillMaxHeight(),
                 contentDescription = contentDesc,
@@ -386,6 +387,7 @@ fun UnifiedBattery(
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterVertically),
                 )
             }
         }
