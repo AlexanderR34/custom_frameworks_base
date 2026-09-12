@@ -43,56 +43,72 @@ public class PerAppResolutionController implements CompatScaleProvider {
 
     private final ActivityTaskManagerService mAtmService;
     private final Context mContext;
+    private final Handler mHandler;
     private final Map<String, Float> mScaleMap = new ConcurrentHashMap<>();
+    private final ContentObserver mObserver;
+    private boolean mObserverRegistered = false;
 
     public PerAppResolutionController(@NonNull ActivityTaskManagerService atmService,
                                      @NonNull Context context,
                                      @NonNull Handler handler) {
         mAtmService = atmService;
         mContext = context;
+        mHandler = handler;
 
-        ContentObserver observer = new ContentObserver(handler) {
+        mObserver = new ContentObserver(handler) {
             @Override
             public void onChange(boolean selfChange, @Nullable Uri uri) {
                 updateScaleMap();
             }
         };
+    }
 
-        try {
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.Global.getUriFor(SETTING_KEY),
-                    false, observer, UserHandle.USER_ALL);
-            mContext.getContentResolver().registerContentObserver(
-                    Settings.System.getUriFor(SETTING_KEY),
-                    false, observer, UserHandle.USER_ALL);
-        } catch (Exception e) {
-            Slog.e(TAG, "Failed to register content observer for " + SETTING_KEY, e);
+    public void onSystemReady() {
+        mHandler.post(this::init);
+    }
+
+    private synchronized void init() {
+        if (!mObserverRegistered) {
+            try {
+                mContext.getContentResolver().registerContentObserver(
+                        Settings.Global.getUriFor(SETTING_KEY),
+                        false, mObserver, UserHandle.USER_ALL);
+                mContext.getContentResolver().registerContentObserver(
+                        Settings.System.getUriFor(SETTING_KEY),
+                        false, mObserver, UserHandle.USER_ALL);
+                mObserverRegistered = true;
+            } catch (Throwable t) {
+                Slog.w(TAG, "Failed to register content observer for " + SETTING_KEY + ": " + t.getMessage());
+            }
         }
-
         updateScaleMap();
     }
 
     private void updateScaleMap() {
-        String data = Settings.Global.getString(mContext.getContentResolver(), SETTING_KEY);
-        if (TextUtils.isEmpty(data)) {
-            data = Settings.System.getString(mContext.getContentResolver(), SETTING_KEY);
-        }
+        try {
+            String data = Settings.Global.getString(mContext.getContentResolver(), SETTING_KEY);
+            if (TextUtils.isEmpty(data)) {
+                data = Settings.System.getString(mContext.getContentResolver(), SETTING_KEY);
+            }
 
-        mScaleMap.clear();
-        if (!TextUtils.isEmpty(data)) {
-            String[] entries = data.split(",");
-            for (String entry : entries) {
-                String[] parts = entry.trim().split(":");
-                if (parts.length == 2) {
-                    try {
-                        String pkg = parts[0].trim();
-                        float scale = Float.parseFloat(parts[1].trim());
-                        if (scale >= 0.20f && scale <= 1.0f) {
-                            mScaleMap.put(pkg, scale);
-                        }
-                    } catch (NumberFormatException ignored) {}
+            mScaleMap.clear();
+            if (!TextUtils.isEmpty(data)) {
+                String[] entries = data.split(",");
+                for (String entry : entries) {
+                    String[] parts = entry.trim().split(":");
+                    if (parts.length == 2) {
+                        try {
+                            String pkg = parts[0].trim();
+                            float scale = Float.parseFloat(parts[1].trim());
+                            if (scale >= 0.20f && scale <= 1.0f) {
+                                mScaleMap.put(pkg, scale);
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
                 }
             }
+        } catch (Throwable t) {
+            Slog.w(TAG, "Failed to update scale map: " + t.getMessage());
         }
     }
 

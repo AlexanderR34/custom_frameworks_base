@@ -834,6 +834,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     private Set<Integer> mProfileOwnerUids = new ArraySet<Integer>();
 
     private CutoutFullscreenController mCutoutFullscreenController;
+    private PerAppResolutionController mPerAppResolutionController;
 
     private final class SettingObserver extends ContentObserver {
         private final Uri mFontScaleUri = Settings.System.getUriFor(FONT_SCALE);
@@ -913,6 +914,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
             mGrammaticalManagerInternal = LocalServices.getService(
                     GrammaticalInflectionManagerInternal.class);
             mPackageUpdateManager.onSystemReady();
+            if (mPerAppResolutionController != null) {
+                mPerAppResolutionController.onSystemReady();
+            }
         }
     }
 
@@ -1052,9 +1056,10 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         mKeyguardController = mTaskSupervisor.getKeyguardController();
         mPackageConfigPersister = new PackageConfigPersister(mTaskSupervisor.mPersisterQueue, this);
         mPackageUpdateManager = new PackageUpdateManager(this);
+        mPerAppResolutionController = new PerAppResolutionController(this, mContext, mH);
         mCompatModePackages.registerCompatScaleProvider(
                 CompatScaleProvider.COMPAT_SCALE_MODE_SYSTEM_FIRST,
-                new PerAppResolutionController(this, mContext, mH));
+                mPerAppResolutionController);
     }
 
     public void onActivityManagerInternalAdded() {
