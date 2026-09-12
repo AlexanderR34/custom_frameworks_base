@@ -23,8 +23,14 @@ import android.os.Looper
 import android.os.UserHandle
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -353,9 +359,9 @@ fun UnifiedBattery(
             UserHandle.USER_CURRENT
         ) == 1
 
-        androidx.compose.foundation.layout.Row(
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = modifier
                 .sysuiResTag(BatteryViewModel.TEST_TAG)
                 .onLayoutRectChanged { relativeLayoutBounds ->
@@ -369,16 +375,16 @@ fun UnifiedBattery(
                 colorsProvider = colorProvider,
                 modifier = Modifier
                     .aspectRatio(24f / 13f)
-                    .androidx.compose.foundation.layout.fillMaxHeight(),
+                    .fillMaxHeight(),
                 contentDescription = contentDesc,
             )
             if (showPercent && viewModel.level != null) {
                 val textColor = if (isDarkProvider().isDarkTheme(bounds)) Color.White else Color.Black
-                androidx.compose.material3.Text(
+                Text(
                     text = "${viewModel.level}%",
                     color = textColor,
                     fontSize = 11.5.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
             }
