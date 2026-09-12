@@ -303,7 +303,7 @@ public abstract class WMShellModule {
             DesktopState desktopState,
             DesktopConfig desktopConfig,
             InteractionJankMonitor interactionJankMonitor) {
-        if (desktopModeWindowDecorViewModel.isPresent()) {
+        if (desktopState.canEnterDesktopMode() && desktopModeWindowDecorViewModel.isPresent()) {
             return desktopModeWindowDecorViewModel.get();
         }
         return new CaptionWindowDecorViewModel(

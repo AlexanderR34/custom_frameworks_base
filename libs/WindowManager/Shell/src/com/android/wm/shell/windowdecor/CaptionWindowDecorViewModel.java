@@ -419,6 +419,14 @@ public class CaptionWindowDecorViewModel implements WindowDecorViewModel, FocusT
                         mRootTaskDisplayAreaOrganizer.getDisplayAreaInfo(taskInfo.displayId);
                 mTaskOperations.maximizeTask(taskInfo,
                         rootDisplayAreaInfo.configuration.windowConfiguration.getWindowingMode());
+            } else if (id == R.id.pin_window) {
+                RunningTaskInfo taskInfo = mTaskOrganizer.getRunningTaskInfo(mTaskId);
+                if (taskInfo != null) {
+                    boolean isAlwaysOnTop = taskInfo.configuration.windowConfiguration.isAlwaysOnTop();
+                    final WindowContainerTransaction wct = new WindowContainerTransaction();
+                    wct.setAlwaysOnTop(mTaskToken, !isAlwaysOnTop);
+                    mSyncQueue.queue(wct);
+                }
             }
         }
 

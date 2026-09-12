@@ -57,4 +57,8 @@
     <item type="id" name="action_snap_right"/>
     <item type="id" name="action_maximize_restore"/>
     <item type="id" name="action_exit_fullscreen"/>
+
+    <!-- Window decoration buttons -->
+    <item type="id" name="back_button"/>
+    <item type="id" name="pin_window"/>
 </resources>

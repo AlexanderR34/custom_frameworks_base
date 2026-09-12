@@ -154,7 +154,7 @@ class CaptionVisibilityHelper(
             return false
         }
 
-        return desktopState.canEnterDesktopModeOrShowAppHandle &&
+        return (desktopState.canEnterDesktopModeOrShowAppHandle || taskInfo.isFreeform) &&
             taskInfo.windowingMode != WindowConfiguration.WINDOWING_MODE_PINNED &&
             !taskInfo.configuration.windowConfiguration.isAlwaysOnTop &&
             !taskInfo.isBubble()
