@@ -107,6 +107,7 @@ public class PerAppResolutionController implements CompatScaleProvider {
                     }
                 }
             }
+            Slog.d(TAG, "updateScaleMap: loaded " + mScaleMap.size() + " entries (" + data + ")");
         } catch (Throwable t) {
             Slog.w(TAG, "Failed to update scale map: " + t.getMessage());
         }
@@ -118,7 +119,9 @@ public class PerAppResolutionController implements CompatScaleProvider {
         if (packageName == null) return null;
         Float scale = mScaleMap.get(packageName);
         if (scale != null && scale >= 0.20f && scale < 0.999f) {
-            return new CompatScale(scale, scale);
+            float compatFactor = 1.0f / scale;
+            Slog.d(TAG, "Applying resolution scale for " + packageName + ": scale=" + scale + " -> compatFactor=" + compatFactor);
+            return new CompatScale(compatFactor);
         }
         return null;
     }
