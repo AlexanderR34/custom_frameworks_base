@@ -384,10 +384,22 @@ fun UnifiedBattery(
                 Text(
                     text = "${viewModel.level}%",
                     color = textColor,
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    modifier = Modifier.align(Alignment.CenterVertically),
+                    style = androidx.compose.ui.text.TextStyle(
+                        platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                            includeFontPadding = false,
+                        ),
+                        lineHeight = 11.sp,
+                        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+                        ),
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .androidx.compose.foundation.layout.offset(y = (-1.5).dp),
                 )
             }
         }
