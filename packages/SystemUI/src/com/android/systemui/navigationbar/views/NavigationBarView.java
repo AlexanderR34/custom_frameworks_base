@@ -464,10 +464,18 @@ public class NavigationBarView extends FrameLayout {
     }
 
     private boolean isHyperOSButtonsStyle() {
-        return Settings.Secure.getIntForUser(
-                getContext().getContentResolver(),
-                "nav_bar_buttons_style", 0,
-                UserHandle.USER_CURRENT) == 1;
+        try {
+            return Settings.Secure.getIntForUser(
+                    getContext().getContentResolver(),
+                    "nav_bar_buttons_style", 0,
+                    UserHandle.USER_CURRENT) == 1
+                    || Settings.System.getIntForUser(
+                    getContext().getContentResolver(),
+                    "nav_bar_buttons_style", 0,
+                    UserHandle.USER_CURRENT) == 1;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private final ContentObserver mNavBarCustomObserver =
@@ -1144,6 +1152,9 @@ public class NavigationBarView extends FrameLayout {
         try {
             getContext().getContentResolver().registerContentObserver(
                     Settings.Secure.getUriFor("nav_bar_buttons_style"),
+                    false, mNavBarCustomObserver, UserHandle.USER_ALL);
+            getContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor("nav_bar_buttons_style"),
                     false, mNavBarCustomObserver, UserHandle.USER_ALL);
             getContext().getContentResolver().registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.NAVIGATIONBAR_KEY_ORDER),

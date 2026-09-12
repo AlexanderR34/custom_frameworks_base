@@ -195,9 +195,9 @@ fun HyperOSBattery(
             right = w - rightMargin,
             bottom = h - halfStroke,
         )
-        val frameCornerRadius = androidx.compose.ui.geometry.CornerRadius(frameRect.height / 3.2f)
+        val frameCornerRadius = androidx.compose.ui.geometry.CornerRadius(frameRect.height / 2.8f)
 
-        // 1. Draw outer pill frame
+        // 1. Draw outer pill frame (ALWAYS colors.fill - white / adaptive theme)
         drawRoundRect(
             color = colors.fill,
             topLeft = frameRect.topLeft,
@@ -206,7 +206,7 @@ fun HyperOSBattery(
             style = Stroke(width = strokeWidth),
         )
 
-        // 2. Draw terminal cap
+        // 2. Draw terminal cap (ALWAYS colors.fill)
         val capTop = (h - capHeight) / 2f
         drawRoundRect(
             color = colors.fill,
@@ -215,16 +215,8 @@ fun HyperOSBattery(
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(capCornerRadius),
         )
 
-        // 3. Determine active fill color
-        val activeFillColor = when {
-            isCharging -> Color(0xFF34C759)
-            isPowerSave -> Color(0xFFF59E0B)
-            level <= 15 -> Color(0xFFEF4444)
-            else -> colors.fill
-        }
-
-        // 4. Draw inner fill
-        val inset = strokeWidth * 1.5f
+        // 3. Inner cavity dimensions
+        val inset = strokeWidth + (1.2f * (h / 13f))
         val innerLeft = frameRect.left + inset
         val innerTop = frameRect.top + inset
         val innerMaxRight = frameRect.right - inset
@@ -232,35 +224,55 @@ fun HyperOSBattery(
         val innerWidth = (innerMaxRight - innerLeft).coerceAtLeast(0f)
         val innerHeight = (innerBottom - innerTop).coerceAtLeast(0f)
 
-        val currentFillWidth = (innerWidth * (level.coerceIn(0, 100) / 100f)).coerceIn(0f, innerWidth)
-        if (currentFillWidth > 0f && innerHeight > 0f) {
-            val innerCornerRadius = androidx.compose.ui.geometry.CornerRadius(innerHeight / 3.2f)
+        if (innerWidth > 0f && innerHeight > 0f) {
+            val innerCornerRadius = androidx.compose.ui.geometry.CornerRadius(innerHeight / 3.0f)
+
+            // 4. Draw cavity background so unfilled battery level is visible
             drawRoundRect(
-                color = activeFillColor,
+                color = colors.fill.copy(alpha = 0.18f),
                 topLeft = Offset(innerLeft, innerTop),
-                size = Size(currentFillWidth, innerHeight),
+                size = Size(innerWidth, innerHeight),
                 cornerRadius = innerCornerRadius,
             )
-        }
 
-        // 5. Draw charging bolt if plugged in
-        if (isCharging && innerHeight > 0f) {
-            val centerX = innerLeft + (innerWidth / 2f)
-            val centerY = innerTop + (innerHeight / 2f)
-            val boltW = innerHeight * 0.60f
-            val boltH = innerHeight * 0.95f
-
-            val boltPath = androidx.compose.ui.graphics.Path().apply {
-                moveTo(centerX + boltW * 0.1f, centerY - boltH * 0.5f)
-                lineTo(centerX - boltW * 0.5f, centerY + boltH * 0.05f)
-                lineTo(centerX - boltW * 0.05f, centerY + boltH * 0.05f)
-                lineTo(centerX - boltW * 0.1f, centerY + boltH * 0.5f)
-                lineTo(centerX + boltW * 0.5f, centerY - boltH * 0.05f)
-                lineTo(centerX + boltW * 0.05f, centerY - boltH * 0.05f)
-                close()
+            // 5. Determine active fill color for the inner level progress
+            val activeFillColor = when {
+                isCharging -> Color(0xFF34C759)
+                isPowerSave -> Color(0xFFF59E0B)
+                level <= 15 -> Color(0xFFEF4444)
+                else -> colors.fill
             }
-            drawPath(boltPath, Color.Black.copy(alpha = 0.35f), style = Stroke(width = strokeWidth * 0.5f))
-            drawPath(boltPath, Color.White)
+
+            // 6. Draw dynamic level progress fill
+            val currentFillWidth = (innerWidth * (level.coerceIn(0, 100) / 100f)).coerceIn(0f, innerWidth)
+            if (currentFillWidth > 0f) {
+                drawRoundRect(
+                    color = activeFillColor,
+                    topLeft = Offset(innerLeft, innerTop),
+                    size = Size(currentFillWidth, innerHeight),
+                    cornerRadius = innerCornerRadius,
+                )
+            }
+
+            // 7. Draw large, bold charging bolt if plugged in
+            if (isCharging) {
+                val centerX = frameRect.left + (frameRect.width / 2f)
+                val centerY = frameRect.top + (frameRect.height / 2f)
+                val boltW = h * 0.85f
+                val boltH = h * 1.35f
+
+                val boltPath = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(centerX + boltW * 0.12f, centerY - boltH * 0.50f)
+                    lineTo(centerX - boltW * 0.50f, centerY + boltH * 0.05f)
+                    lineTo(centerX - boltW * 0.05f, centerY + boltH * 0.05f)
+                    lineTo(centerX - boltW * 0.12f, centerY + boltH * 0.50f)
+                    lineTo(centerX + boltW * 0.50f, centerY - boltH * 0.05f)
+                    lineTo(centerX + boltW * 0.05f, centerY - boltH * 0.05f)
+                    close()
+                }
+                drawPath(boltPath, Color.Black.copy(alpha = 0.5f), style = Stroke(width = strokeWidth * 0.8f))
+                drawPath(boltPath, Color.White)
+            }
         }
     }
 }
