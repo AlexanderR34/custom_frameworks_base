@@ -33,6 +33,7 @@ import android.animation.PropertyValuesHolder;
 import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.annotation.DrawableRes;
+import android.app.ActivityManager;
 import android.app.StatusBarManager.NavbarFlags;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -69,6 +70,7 @@ import androidx.annotation.Nullable;
 import com.android.app.animation.Interpolators;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.settingslib.Utils;
+import com.android.systemui.Dependency;
 import com.android.systemui.Gefingerpoken;
 import com.android.systemui.model.SysUiState;
 import com.android.systemui.navigationbar.ScreenPinningNotify;
@@ -92,6 +94,7 @@ import com.android.systemui.shared.system.QuickStepContract;
 import com.android.systemui.statusbar.phone.AutoHideController;
 import com.android.systemui.statusbar.phone.CentralSurfaces;
 import com.android.systemui.statusbar.phone.LightBarTransitionsController;
+import com.android.systemui.tuner.TunerService;
 import com.android.systemui.utils.windowmanager.WindowManagerUtils;
 import com.android.wm.shell.back.BackAnimation;
 import com.android.wm.shell.pip.Pip;
@@ -465,18 +468,32 @@ public class NavigationBarView extends FrameLayout {
 
     private boolean isHyperOSButtonsStyle() {
         try {
-            return Settings.Secure.getIntForUser(
-                    getContext().getContentResolver(),
-                    "nav_bar_buttons_style", 0,
-                    UserHandle.USER_CURRENT) == 1
-                    || Settings.System.getIntForUser(
-                    getContext().getContentResolver(),
-                    "nav_bar_buttons_style", 0,
-                    UserHandle.USER_CURRENT) == 1;
+            android.content.ContentResolver cr = getContext().getContentResolver();
+            int currentUserId = ActivityManager.getCurrentUser();
+            return Settings.Secure.getIntForUser(cr, "nav_bar_buttons_style", 0, currentUserId) == 1
+                    || Settings.System.getIntForUser(cr, "nav_bar_buttons_style", 0, currentUserId) == 1
+                    || Settings.Secure.getInt(cr, "nav_bar_buttons_style", 0) == 1
+                    || Settings.System.getInt(cr, "nav_bar_buttons_style", 0) == 1
+                    || Settings.Secure.getIntForUser(cr, "nav_bar_buttons_style", 0, UserHandle.USER_CURRENT) == 1
+                    || Settings.System.getIntForUser(cr, "nav_bar_buttons_style", 0, UserHandle.USER_CURRENT) == 1;
         } catch (Exception e) {
             return false;
         }
     }
+
+    private final TunerService.Tunable mTunable = new TunerService.Tunable() {
+        @Override
+        public void onTuningChanged(String key, String newValue) {
+            if ("nav_bar_buttons_style".equals(key)
+                    || Settings.Secure.NAVIGATIONBAR_KEY_ORDER.equals(key)) {
+                if (mNavigationInflaterView != null) {
+                    mNavigationInflaterView.onLikelyDefaultLayoutChange();
+                }
+                reloadNavIcons();
+                updateNavButtonIcons();
+            }
+        }
+    };
 
     private final ContentObserver mNavBarCustomObserver =
             new ContentObserver(new Handler(Looper.getMainLooper())) {
@@ -1152,15 +1169,31 @@ public class NavigationBarView extends FrameLayout {
         try {
             getContext().getContentResolver().registerContentObserver(
                     Settings.Secure.getUriFor("nav_bar_buttons_style"),
+                    false, mNavBarCustomObserver);
+            getContext().getContentResolver().registerContentObserver(
+                    Settings.Secure.getUriFor("nav_bar_buttons_style"),
                     false, mNavBarCustomObserver, UserHandle.USER_ALL);
+            getContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor("nav_bar_buttons_style"),
+                    false, mNavBarCustomObserver);
             getContext().getContentResolver().registerContentObserver(
                     Settings.System.getUriFor("nav_bar_buttons_style"),
                     false, mNavBarCustomObserver, UserHandle.USER_ALL);
             getContext().getContentResolver().registerContentObserver(
                     Settings.Secure.getUriFor(Settings.Secure.NAVIGATIONBAR_KEY_ORDER),
+                    false, mNavBarCustomObserver);
+            getContext().getContentResolver().registerContentObserver(
+                    Settings.Secure.getUriFor(Settings.Secure.NAVIGATIONBAR_KEY_ORDER),
                     false, mNavBarCustomObserver, UserHandle.USER_ALL);
         } catch (Exception e) {
             Log.w(TAG, "Failed to register nav bar custom observers", e);
+        }
+
+        try {
+            Dependency.get(TunerService.class).addTunable(
+                    mTunable, "nav_bar_buttons_style", Settings.Secure.NAVIGATIONBAR_KEY_ORDER);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to add tunable for nav bar buttons style", e);
         }
 
         if (mNavigationInflaterView != null) {
@@ -1177,6 +1210,11 @@ public class NavigationBarView extends FrameLayout {
             getContext().getContentResolver().unregisterContentObserver(mNavBarCustomObserver);
         } catch (Exception e) {
             Log.w(TAG, "Failed to unregister nav bar custom observers", e);
+        }
+        try {
+            Dependency.get(TunerService.class).removeTunable(mTunable);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to remove tunable for nav bar buttons style", e);
         }
         for (int i = 0; i < mButtonDispatchers.size(); ++i) {
             mButtonDispatchers.valueAt(i).onDestroy();

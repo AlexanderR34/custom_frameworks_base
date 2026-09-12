@@ -30,13 +30,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.ContentObserver;
+import android.media.AudioDeviceAttributes;
 import android.media.AudioDeviceInfo;
-import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioSystem;
-import android.media.audiopolicy.AudioMix;
-import android.media.audiopolicy.AudioMixingRule;
-import android.media.audiopolicy.AudioPolicy;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -47,17 +44,14 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Controller for Separate App Sound (One UI style per-app independent audio routing).
  * Routes specific applications' audio playback exclusively to a designated physical
- * audio device (e.g., built-in speaker, Bluetooth A2DP/LE Audio) via AudioPolicy dynamic mixes
- * and native UID device affinities.
+ * audio device (e.g., built-in speaker, Bluetooth A2DP/LE Audio) via native UID device affinities
+ * and dynamic stream refreshes.
  */
 public class SeparateAppSoundController {
     private static final String TAG = "AS.SeparateAppSound";
@@ -214,7 +208,7 @@ public class SeparateAppSoundController {
 
         AudioDeviceInfo matchedDevice = findConnectedAudioDevice(mTargetDeviceType, mTargetDeviceAddress);
         if (matchedDevice == null) {
-            Log.w(TAG, "Target device not currently attached to audio server. Clearing preferred route.");
+            Log.w(TAG, "Target device not currently attached to audio server. Clearing route.");
             clearCurrentRoutingInternal();
             return;
         }
@@ -222,42 +216,53 @@ public class SeparateAppSoundController {
         int internalDeviceType = AudioDeviceInfo.convertDeviceTypeToInternalDevice(matchedDevice.getType());
         String address = matchedDevice.getAddress() != null ? matchedDevice.getAddress() : "";
 
-        if (mCurrentRoutedUids.equals(targetUids) && mCurrentInternalDevice == internalDeviceType
+        if (mCurrentRoutedUids.equals(targetUids)
+                && mCurrentInternalDevice == internalDeviceType
                 && TextUtils.equals(mCurrentRoutedAddress, address)) {
-            if (DEBUG) Log.d(TAG, "Audio routing already applied for UIDs: " + targetUids);
             return;
         }
 
         clearCurrentRoutingInternal();
 
         try {
-            boolean allSucceeded = true;
+            AudioDeviceAttributes attributes = new AudioDeviceAttributes(
+                    AudioDeviceAttributes.ROLE_OUTPUT,
+                    internalDeviceType,
+                    address
+            );
+
             for (int uid : targetUids) {
-                int res = AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
-                if (res != AudioSystem.SUCCESS) {
-                    Log.e(TAG, "AudioSystem.setUidDeviceAffinities failed for uid " + uid + " with code: " + res);
-                    allSucceeded = false;
-                }
+                int status = AudioSystem.setUidDeviceAffinities(uid, new int[]{internalDeviceType}, new String[]{address});
+                Log.i(TAG, "AudioSystem.setUidDeviceAffinities UID=" + uid
+                        + " to dev=0x" + Integer.toHexString(internalDeviceType) + " result=" + status);
             }
+
+            // Forzar a AudioFlinger/AudioPolicy a reevaluar y mover las pistas que ya están en reproducción
+            mAudioManager.setParameters("restarting=false");
 
             mCurrentRoutedUids.clear();
             mCurrentRoutedUids.addAll(targetUids);
             mCurrentInternalDevice = internalDeviceType;
             mCurrentRoutedAddress = address;
 
-            Log.i(TAG, "Successfully applied separate app sound for UIDs: " + targetUids + " (" + mTargetPackages + ") to device "
-                    + matchedDevice.getProductName() + " (0x" + Integer.toHexString(internalDeviceType) + " addr: " + address + ")");
+            Log.i(TAG, "Applied separate app sound for UIDs: " + targetUids + " to device "
+                    + matchedDevice.getProductName() + " (type=0x" + Integer.toHexString(internalDeviceType) + ")");
         } catch (Exception e) {
-            Log.e(TAG, "Exception applying UID device affinities for UIDs: " + targetUids, e);
+            Log.e(TAG, "Exception applying Separate App Sound routing", e);
         }
     }
 
     private synchronized void clearCurrentRoutingInternal() {
         if (!mCurrentRoutedUids.isEmpty()) {
-            Log.i(TAG, "Clearing preferred affinities for UIDs: " + mCurrentRoutedUids);
+            Log.i(TAG, "Clearing preferred routes for UIDs: " + mCurrentRoutedUids);
             for (int uid : mCurrentRoutedUids) {
-                AudioSystem.removeUidDeviceAffinities(uid);
+                try {
+                    AudioSystem.removeUidDeviceAffinities(uid);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error clearing routing for uid " + uid, e);
+                }
             }
+            mAudioManager.setParameters("restarting=false");
             mCurrentRoutedUids.clear();
             mCurrentInternalDevice = AudioSystem.DEVICE_NONE;
             mCurrentRoutedAddress = "";
@@ -306,6 +311,18 @@ public class SeparateAppSoundController {
     @Nullable
     private AudioDeviceInfo findConnectedAudioDevice(int type, @NonNull String address) {
         AudioDeviceInfo[] devices = mAudioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        if (devices == null) return null;
+
+        // 1. If non-empty address is specified (e.g. for Bluetooth MAC), match by address first
+        if (!TextUtils.isEmpty(address)) {
+            for (AudioDeviceInfo device : devices) {
+                if (TextUtils.equals(device.getAddress(), address)) {
+                    return device;
+                }
+            }
+        }
+
+        // 2. Match exact type
         for (AudioDeviceInfo device : devices) {
             if (device.getType() == type) {
                 if (TextUtils.isEmpty(address) || TextUtils.equals(device.getAddress(), address)) {
@@ -313,7 +330,26 @@ public class SeparateAppSoundController {
                 }
             }
         }
+
+        // 3. If target type is Bluetooth, fallback to any connected Bluetooth audio output
+        if (isBluetoothType(type)) {
+            for (AudioDeviceInfo device : devices) {
+                if (isBluetoothType(device.getType())) {
+                    return device;
+                }
+            }
+        }
+
         return null;
+    }
+
+    private static boolean isBluetoothType(int type) {
+        return type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                || type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                || type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                || type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+                || type == AudioDeviceInfo.TYPE_BLE_BROADCAST
+                || type == AudioDeviceInfo.TYPE_HEARING_AID;
     }
 
     private final class SettingsObserver extends ContentObserver {

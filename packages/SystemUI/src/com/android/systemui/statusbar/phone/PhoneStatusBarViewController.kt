@@ -368,6 +368,12 @@ private constructor(
                 clockPositionSettingObserver!!,
                 UserHandle.USER_ALL
             )
+            mView.context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor("status_bar_battery_style"),
+                false,
+                clockPositionSettingObserver!!,
+                UserHandle.USER_ALL
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register clock position observer", e)
         }
@@ -387,6 +393,11 @@ private constructor(
             Settings.System.getIntForUser(
                 mView.context.contentResolver,
                 "status_bar_battery_style_hyperos",
+                0,
+                UserHandle.USER_CURRENT
+            ) == 1 || Settings.System.getIntForUser(
+                mView.context.contentResolver,
+                "status_bar_battery_style",
                 0,
                 UserHandle.USER_CURRENT
             ) == 1

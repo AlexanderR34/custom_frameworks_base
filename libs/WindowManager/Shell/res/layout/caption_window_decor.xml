@@ -62,6 +62,7 @@
         android:background="?android:selectableItemBackgroundBorderless"
         android:tint="#FFFFFFFF"
         android:contentDescription="Pin window"
+        android:visibility="gone"
         android:duplicateParentState="true" />
 
     <ImageButton

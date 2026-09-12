@@ -109,11 +109,22 @@ class HyperOSBatteryDrawable(
     fun setColors(fgColor: Int, bgColor: Int, singleToneColor: Int) {
         fillColor = singleToneColor
         backgroundColor = bgColor
-        framePaint.color = fillColor
-        capPaint.color = fillColor
-        val isDark = Color.valueOf(fillColor).luminance() < 0.5
+        val isDark = Color.valueOf(singleToneColor).luminance() < 0.5
+        val neutralColor = if (isDark) Color.BLACK else Color.WHITE
+
+        val isColored = isTintColored(singleToneColor)
+        val outerColor = if (isColored) neutralColor else singleToneColor
+        framePaint.color = outerColor
+        capPaint.color = outerColor
         cavityPaint.color = if (isDark) Color.argb(30, 0, 0, 0) else Color.argb(45, 255, 255, 255)
         invalidateSelf()
+    }
+
+    private fun isTintColored(color: Int): Boolean {
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        return kotlin.math.abs(r - g) > 25 || kotlin.math.abs(g - b) > 25 || kotlin.math.abs(r - b) > 25
     }
 
     override fun onBoundsChange(bounds: Rect) {

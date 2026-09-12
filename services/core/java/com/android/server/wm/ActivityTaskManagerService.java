@@ -1052,6 +1052,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         mKeyguardController = mTaskSupervisor.getKeyguardController();
         mPackageConfigPersister = new PackageConfigPersister(mTaskSupervisor.mPersisterQueue, this);
         mPackageUpdateManager = new PackageUpdateManager(this);
+        mCompatModePackages.registerCompatScaleProvider(
+                CompatScaleProvider.COMPAT_SCALE_MODE_SYSTEM_FIRST,
+                new PerAppResolutionController(this, mContext, mH));
     }
 
     public void onActivityManagerInternalAdded() {

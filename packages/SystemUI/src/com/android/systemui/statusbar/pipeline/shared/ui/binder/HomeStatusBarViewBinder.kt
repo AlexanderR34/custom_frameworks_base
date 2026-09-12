@@ -153,6 +153,11 @@ class HomeStatusBarViewBinderImpl @Inject constructor() : HomeStatusBarViewBinde
                                     "status_bar_battery_style_hyperos",
                                     0,
                                     android.os.UserHandle.USER_CURRENT
+                                ) == 1 || android.provider.Settings.System.getIntForUser(
+                                    view.context.contentResolver,
+                                    "status_bar_battery_style",
+                                    0,
+                                    android.os.UserHandle.USER_CURRENT
                                 ) == 1
                             } catch (e: Exception) {
                                 false

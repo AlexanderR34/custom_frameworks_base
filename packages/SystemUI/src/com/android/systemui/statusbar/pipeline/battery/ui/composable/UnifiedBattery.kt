@@ -57,6 +57,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastFirst
 import androidx.compose.ui.util.fastFirstOrNull
 import com.android.systemui.common.ui.compose.load
@@ -344,21 +346,43 @@ fun UnifiedBattery(
     val contentDesc = viewModel.contentDescription.load() ?: ""
 
     if (isHyperOSStyle) {
-        HyperOSBattery(
-            level = viewModel.level ?: 100,
-            isCharging = viewModel.isCharging,
-            isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
-            colorsProvider = colorProvider,
-            modifier =
-                modifier
+        val showPercent = viewModel.glyphList.isNotEmpty() || Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.SHOW_BATTERY_PERCENT,
+            0,
+            UserHandle.USER_CURRENT
+        ) == 1
+
+        androidx.compose.foundation.layout.Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+            modifier = modifier
+                .sysuiResTag(BatteryViewModel.TEST_TAG)
+                .onLayoutRectChanged { relativeLayoutBounds ->
+                    bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                },
+        ) {
+            HyperOSBattery(
+                level = viewModel.level ?: 100,
+                isCharging = viewModel.isCharging,
+                isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
+                colorsProvider = colorProvider,
+                modifier = Modifier
                     .aspectRatio(24f / 13f)
-                    .sysuiResTag(BatteryViewModel.TEST_TAG)
-                    .onLayoutRectChanged { relativeLayoutBounds ->
-                        bounds =
-                            with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
-                    },
-            contentDescription = contentDesc,
-        )
+                    .androidx.compose.foundation.layout.fillMaxHeight(),
+                contentDescription = contentDesc,
+            )
+            if (showPercent && viewModel.level != null) {
+                val textColor = if (isDarkProvider().isDarkTheme(bounds)) Color.White else Color.Black
+                androidx.compose.material3.Text(
+                    text = "${viewModel.level}%",
+                    color = textColor,
+                    fontSize = 11.5.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
+        }
     } else {
         BatteryLayout(
             attribution = viewModel.attribution,
