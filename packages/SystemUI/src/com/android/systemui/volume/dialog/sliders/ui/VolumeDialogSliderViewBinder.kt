@@ -321,7 +321,7 @@ private fun HyperOSVolumeVerticalLayout(
             // Main Volume Slider Capsule
             Box(
                 modifier = Modifier
-                    .size(width = 62.dp, height = 210.dp)
+                    .size(width = 62.dp, height = 232.dp)
                     .clip(RoundedCornerShape(31.dp))
                     .background(Color(0x8A1A1A1A))
                     .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))

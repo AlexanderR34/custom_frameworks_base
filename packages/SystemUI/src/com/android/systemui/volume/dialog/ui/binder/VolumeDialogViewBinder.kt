@@ -200,7 +200,7 @@ constructor(
             mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
                 width = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 height = ConstraintLayout.LayoutParams.WRAP_CONTENT
-                verticalBias = 0.20f
+                verticalBias = 0.18f
                 marginEnd = (8 * root.resources.displayMetrics.density).toInt()
             }
         }
