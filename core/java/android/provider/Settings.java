@@ -6852,6 +6852,13 @@ public final class Settings {
         public static final String HYPEROS_VOLUME_PANEL_STYLE = "hyperos_volume_panel_style";
 
         /**
+         * Whether to show dual call volume slider during active phone/voice calls
+         * @hide
+         */
+        @Readable
+        public static final String SHOW_CALL_VOLUME_SLIDER = "show_call_volume_slider";
+
+        /**
          * Whether to show Wi-Fi standard icon (e.g. Wi-Fi 4/5/6/7)
          * @hide
          */
@@ -7386,6 +7393,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(GAMESPACE_SUPPRESS_FULLSCREEN_INTENT);
             PRIVATE_SETTINGS.add(CUSTOM_BLUR_INTENSITY);
             PRIVATE_SETTINGS.add(HYPEROS_VOLUME_PANEL_STYLE);
+            PRIVATE_SETTINGS.add(SHOW_CALL_VOLUME_SLIDER);
             PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);
         }
 

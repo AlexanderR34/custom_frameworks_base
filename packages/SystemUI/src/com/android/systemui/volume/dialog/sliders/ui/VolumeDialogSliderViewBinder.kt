@@ -85,6 +85,7 @@ import com.android.systemui.volume.ui.compose.slider.Haptics
 import com.android.systemui.volume.ui.compose.slider.Slider
 import com.android.systemui.volume.ui.compose.slider.SliderIcon
 import javax.inject.Inject
+import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -302,119 +303,221 @@ private fun HyperOSVolumeVerticalLayout(
     val currentVal = sliderStateModel.value.coerceIn(min, max)
     val progressFraction = ((currentVal - min) / range).coerceIn(0f, 1f)
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    val showCallSlider = remember {
+        Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.SHOW_CALL_VOLUME_SLIDER,
+            1,
+            UserHandle.USER_CURRENT
+        ) == 1
+    }
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager }
+    val isInCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
+        audioManager.mode == AudioManager.MODE_IN_COMMUNICATION ||
+        audioManager.mode == AudioManager.MODE_RINGTONE ||
+        (telecomManager?.isInCall == true)
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
         modifier = Modifier
             .wrapContentSize()
             .padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
-        // Main Volume Slider Capsule
-        Box(
-            modifier = Modifier
-                .size(width = 62.dp, height = 232.dp)
-                .clip(RoundedCornerShape(31.dp))
-                .background(Color(0x8A1A1A1A))
-                .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))
-                .pointerInput(min, max, range) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            viewModel.onSliderDragStarted()
-                        },
-                        onDragEnd = {
-                            viewModel.onSliderDragFinished()
-                        },
-                        onDragCancel = {
-                            viewModel.onSliderDragFinished()
-                        },
-                        onVerticalDrag = { change, _ ->
-                            change.consume()
-                            val touchY = change.position.y
+        // Dual Call Volume Slider (31dp width, shown ONLY when in active call)
+        if (showCallSlider && isInCall) {
+            HyperOSCallVolumeVerticalCapsule(context = context)
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.wrapContentSize()
+        ) {
+            // Main Volume Slider Capsule
+            Box(
+                modifier = Modifier
+                    .size(width = 62.dp, height = 232.dp)
+                    .clip(RoundedCornerShape(31.dp))
+                    .background(Color(0x8A1A1A1A))
+                    .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))
+                    .pointerInput(min, max, range) {
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                viewModel.onSliderDragStarted()
+                            },
+                            onDragEnd = {
+                                viewModel.onSliderDragFinished()
+                            },
+                            onDragCancel = {
+                                viewModel.onSliderDragFinished()
+                            },
+                            onVerticalDrag = { change, _ ->
+                                change.consume()
+                                val touchY = change.position.y
+                                val heightPx = size.height.toFloat()
+                                val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                val targetVal = min + frac * range
+                                overscrollViewModel.setSlider(targetVal, min, max)
+                                viewModel.setStreamVolume(targetVal, true)
+                            }
+                        )
+                    }
+                    .pointerInput(min, max, range) {
+                        detectTapGestures { offset ->
+                            val touchY = offset.y
                             val heightPx = size.height.toFloat()
                             val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
                             val targetVal = min + frac * range
                             overscrollViewModel.setSlider(targetVal, min, max)
                             viewModel.setStreamVolume(targetVal, true)
+                            viewModel.onSliderChangeFinished(targetVal)
                         }
+                    }
+            ) {
+                // White solid progress fill from bottom
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(progressFraction)
+                        .align(Alignment.BottomCenter)
+                        .clip(RoundedCornerShape(31.dp))
+                        .background(Color.White)
+                )
+
+                // Top 3 dots ••• (Expand / Sound Settings button)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 15.dp)
+                        .clickable {
+                            viewModel.openVolumePanel()
+                        }
+                        .padding(4.dp)
+                ) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .size(4.5.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFB0B0B0))
+                        )
+                    }
+                }
+
+                // Dynamic Speaker Icon with Animated Waves
+                val speakerIconRes = when {
+                    progressFraction <= 0.01f || sliderStateModel.isDisabled -> R.drawable.ic_hyperos_speaker_mute
+                    progressFraction < 0.34f -> R.drawable.ic_hyperos_speaker_low
+                    progressFraction < 0.67f -> R.drawable.ic_hyperos_speaker_mid
+                    else -> R.drawable.ic_hyperos_speaker_high
+                }
+
+                val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 18.dp)
+                        .size(26.dp)
+                ) {
+                    androidx.compose.material3.Icon(
+                        painter = painterResource(id = speakerIconRes),
+                        contentDescription = sliderStateModel.label,
+                        tint = iconTint,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
-                .pointerInput(min, max, range) {
-                    detectTapGestures { offset ->
-                        val touchY = offset.y
+            }
+
+            // HyperOS Ringer Mode Toggle Button (Stadium Pill: 62dp x 48dp)
+            HyperOSRingerPill(context = context)
+
+            // HyperOS DND Mode Toggle Button (Stadium Pill: 62dp x 48dp)
+            HyperOSDndPill(context = context)
+        }
+    }
+}
+
+/**
+ * Dedicated Dual In-Call Volume Slider Capsule (31dp x 232dp) for voice/VoIP calls.
+ */
+@Composable
+private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val minCallVol = remember { audioManager.getStreamMinVolume(AudioManager.STREAM_VOICE_CALL).toFloat() }
+    val maxCallVol = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL).toFloat() }
+    val range = (maxCallVol - minCallVol).coerceAtLeast(1f)
+
+    var currentCallVol by remember {
+        mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toFloat())
+    }
+    val progressFraction = ((currentCallVol - minCallVol) / range).coerceIn(0f, 1f)
+    val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+
+    Box(
+        modifier = Modifier
+            .size(width = 31.dp, height = 232.dp)
+            .clip(RoundedCornerShape(15.5.dp))
+            .background(Color(0x8A1A1A1A))
+            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(15.5.dp))
+            .pointerInput(minCallVol, maxCallVol, range) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        val touchY = change.position.y
                         val heightPx = size.height.toFloat()
                         val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                        val targetVal = min + frac * range
-                        overscrollViewModel.setSlider(targetVal, min, max)
-                        viewModel.setStreamVolume(targetVal, true)
-                        viewModel.onSliderChangeFinished(targetVal)
+                        val targetVal = (minCallVol + frac * range).roundToInt()
+                        currentCallVol = targetVal.toFloat()
+                        try {
+                            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, targetVal, 0)
+                        } catch (_: Exception) {}
                     }
-                }
-        ) {
-            // White solid progress fill from bottom
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(progressFraction)
-                    .align(Alignment.BottomCenter)
-                    .clip(RoundedCornerShape(31.dp))
-                    .background(Color.White)
-            )
-
-            // Top 3 dots ••• (Expand / Sound Settings button)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 15.dp)
-                    .clickable {
-                        viewModel.openVolumePanel()
-                    }
-                    .padding(4.dp)
-            ) {
-                repeat(3) {
-                    Box(
-                        modifier = Modifier
-                            .size(4.5.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFB0B0B0))
-                    )
-                }
-            }
-
-            // Dynamic Speaker Icon with Animated Waves
-            // Selects wave count based on volume level: Mute -> Low (1 wave) -> Mid (2 waves) -> High (3 waves)
-            val speakerIconRes = when {
-                progressFraction <= 0.01f || sliderStateModel.isDisabled -> R.drawable.ic_hyperos_speaker_mute
-                progressFraction < 0.34f -> R.drawable.ic_hyperos_speaker_low
-                progressFraction < 0.67f -> R.drawable.ic_hyperos_speaker_mid
-                else -> R.drawable.ic_hyperos_speaker_high
-            }
-
-            // When covered by white fill (progress >= 0.20): Blue #2A72E5. Otherwise: Light grey #EEEEEE.
-            val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 18.dp)
-                    .size(26.dp)
-            ) {
-                androidx.compose.material3.Icon(
-                    painter = painterResource(id = speakerIconRes),
-                    contentDescription = sliderStateModel.label,
-                    tint = iconTint,
-                    modifier = Modifier.size(26.dp)
                 )
             }
+            .pointerInput(minCallVol, maxCallVol, range) {
+                detectTapGestures { offset ->
+                    val touchY = offset.y
+                    val heightPx = size.height.toFloat()
+                    val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                    val targetVal = (minCallVol + frac * range).roundToInt()
+                    currentCallVol = targetVal.toFloat()
+                    try {
+                        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, targetVal, 0)
+                    } catch (_: Exception) {}
+                }
+            }
+    ) {
+        // White solid progress fill from bottom
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(progressFraction)
+                .align(Alignment.BottomCenter)
+                .clip(RoundedCornerShape(15.5.dp))
+                .background(Color.White)
+        )
+
+        // Bottom Call Phone Icon with Audio Waves
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .size(18.dp)
+        ) {
+            androidx.compose.material3.Icon(
+                painter = painterResource(id = R.drawable.ic_hyperos_call_volume),
+                contentDescription = "Call Volume",
+                tint = iconTint,
+                modifier = Modifier.size(18.dp)
+            )
         }
-
-        // HyperOS Ringer Mode Toggle Button (Stadium Pill: 62dp x 48dp)
-        HyperOSRingerPill(context = context)
-
-        // HyperOS DND Mode Toggle Button (Stadium Pill: 62dp x 48dp)
-        HyperOSDndPill(context = context)
     }
 }
 

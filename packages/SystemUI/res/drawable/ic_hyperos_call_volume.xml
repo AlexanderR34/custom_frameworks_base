@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Phone handset -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.62,10.79 C8.06,13.62 10.38,15.93 13.21,17.38 L15.41,15.18 C15.69,14.9 16.08,14.82 16.43,14.93 C17.55,15.3 18.75,15.5 20,15.5 C20.55,15.5 21,15.95 21,16.5 L21,20 C21,20.55 20.55,21 20,21 C10.61,21 3,13.39 3,4 C3,3.45 3.45,3 4,3 L7.5,3 C8.05,3 8.5,3.45 8.5,4 C8.5,5.25 8.7,6.45 9.07,7.57 C9.18,7.92 9.1,8.31 8.82,8.59 L6.62,10.79 Z" />
+    <!-- Call sound waves -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M14.5,4.5 C16.5,5.8 18.2,8.1 18.2,10.5 C18.2,10.9 17.8,11.2 17.4,11.2 C17.0,11.2 16.6,10.9 16.6,10.5 C16.6,8.6 15.2,6.7 13.6,5.6 C13.2,5.3 13.1,4.8 13.4,4.4 C13.7,4.0 14.2,4.1 14.5,4.5 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M17.5,2.0 C20.5,3.8 22.5,7.2 22.5,10.5 C22.5,10.9 22.1,11.2 21.7,11.2 C21.3,11.2 21.0,10.9 21.0,10.5 C21.0,7.7 19.3,4.8 16.7,3.2 C16.3,2.9 16.2,2.4 16.5,2.0 C16.8,1.6 17.2,1.7 17.5,2.0 Z" />
+</vector>
