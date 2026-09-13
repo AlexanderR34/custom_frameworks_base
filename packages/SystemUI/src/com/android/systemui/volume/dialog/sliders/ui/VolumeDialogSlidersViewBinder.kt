@@ -70,23 +70,36 @@ constructor(
                     arrayOf(mainSliderContainer, background, bottomSection, topSection),
                 )
 
-                val floatingSliderViewBinders = uiModel.floatingSliderComponent
-                val floatingSliderViewLayoutId =
-                    if (viewModel.isVolumeDialogVertical) {
-                        R.layout.volume_dialog_slider_floating
-                    } else {
-                        R.layout.volume_dialog_slider_floating_horizontal
+                val isHyperOS = android.provider.Settings.System.getIntForUser(
+                    view.context.contentResolver,
+                    android.provider.Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+                    0,
+                    android.os.UserHandle.USER_CURRENT
+                ) == 1
+
+                if (isHyperOS && viewModel.isVolumeDialogVertical) {
+                    floatingSlidersContainer.removeAllViews()
+                    floatingSlidersContainer.visibility = View.GONE
+                } else {
+                    floatingSlidersContainer.visibility = View.VISIBLE
+                    val floatingSliderViewBinders = uiModel.floatingSliderComponent
+                    val floatingSliderViewLayoutId =
+                        if (viewModel.isVolumeDialogVertical) {
+                            R.layout.volume_dialog_slider_floating
+                        } else {
+                            R.layout.volume_dialog_slider_floating_horizontal
+                        }
+                    floatingSlidersContainer.ensureChildCount(
+                        viewLayoutId = floatingSliderViewLayoutId,
+                        count = floatingSliderViewBinders.size,
+                    )
+                    floatingSliderViewBinders.fastForEachIndexed { index, sliderComponent ->
+                        val sliderContainer = floatingSlidersContainer.getChildAt(index)
+                        if (viewModel.showBlur) {
+                            sliderContainer.updateBackground()
+                        }
+                        bindSlider(sliderComponent, sliderContainer, arrayOf(sliderContainer))
                     }
-                floatingSlidersContainer.ensureChildCount(
-                    viewLayoutId = floatingSliderViewLayoutId,
-                    count = floatingSliderViewBinders.size,
-                )
-                floatingSliderViewBinders.fastForEachIndexed { index, sliderComponent ->
-                    val sliderContainer = floatingSlidersContainer.getChildAt(index)
-                    if (viewModel.showBlur) {
-                        sliderContainer.updateBackground()
-                    }
-                    bindSlider(sliderComponent, sliderContainer, arrayOf(sliderContainer))
                 }
             }
             .launchInTraced("VDSVB#sliders", this)
