@@ -260,8 +260,11 @@ public class Clock extends TextView implements
         }
     };
 
-    final void updateClock() {
+    public final void updateClock() {
         if (mDemoMode) return;
+        if (mCalendar == null) {
+            mCalendar = Calendar.getInstance(TimeZone.getDefault());
+        }
         mCalendar.setTimeInMillis(System.currentTimeMillis());
         CharSequence smallTime = getSmallTime();
         // Setting text actually triggers a layout pass (because the text view is set to
@@ -270,7 +273,9 @@ public class Clock extends TextView implements
         if (!TextUtils.equals(smallTime, getText())) {
             setText(smallTime);
         }
-        setContentDescription(mContentDescriptionFormat.format(mCalendar.getTime()));
+        if (mContentDescriptionFormat != null) {
+            setContentDescription(mContentDescriptionFormat.format(mCalendar.getTime()));
+        }
     }
 
     @Override

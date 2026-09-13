@@ -374,6 +374,12 @@ private constructor(
                 clockPositionSettingObserver!!,
                 UserHandle.USER_ALL
             )
+            mView.context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(Settings.System.SHOW_BATTERY_PERCENT),
+                false,
+                clockPositionSettingObserver!!,
+                UserHandle.USER_ALL
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register clock position observer", e)
         }
@@ -390,14 +396,30 @@ private constructor(
 
     private fun updateClockAndIslandPosition() {
         val isHyperOSEnabled = try {
-            Settings.System.getIntForUser(
-                mView.context.contentResolver,
-                "status_bar_battery_style_hyperos",
-                0,
-                UserHandle.USER_CURRENT
-            ) == 1 || Settings.System.getIntForUser(
+            val style = Settings.System.getIntForUser(
                 mView.context.contentResolver,
                 "status_bar_battery_style",
+                -1,
+                UserHandle.USER_CURRENT
+            )
+            if (style != -1) {
+                style == 1
+            } else {
+                Settings.System.getIntForUser(
+                    mView.context.contentResolver,
+                    "status_bar_battery_style_hyperos",
+                    0,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            }
+        } catch (e: Exception) {
+            false
+        }
+
+        val showBatteryPercent = try {
+            Settings.System.getIntForUser(
+                mView.context.contentResolver,
+                Settings.System.SHOW_BATTERY_PERCENT,
                 0,
                 UserHandle.USER_CURRENT
             ) == 1
@@ -405,19 +427,21 @@ private constructor(
             false
         }
 
-        val position = if (isHyperOSEnabled) {
+        val clockPositionSetting = try {
+            Settings.System.getIntForUser(
+                mView.context.contentResolver,
+                "status_bar_clock_position",
+                0,
+                UserHandle.USER_CURRENT
+            )
+        } catch (e: Exception) {
+            0
+        }
+
+        val position = if (isHyperOSEnabled && showBatteryPercent) {
             0
         } else {
-            try {
-                Settings.System.getIntForUser(
-                    mView.context.contentResolver,
-                    "status_bar_clock_position",
-                    0,
-                    UserHandle.USER_CURRENT
-                )
-            } catch (e: Exception) {
-                0
-            }
+            clockPositionSetting
         }
 
         val leftContainer: LinearLayout? =
@@ -428,7 +452,15 @@ private constructor(
         if (position == 1) {
             // Posición Derecha (al lado de la batería)
             clock.visibility = View.GONE
-            rightClock?.visibility = View.VISIBLE
+            rightClock?.apply {
+                visibility = View.VISIBLE
+                alpha = 1f
+                (this as? com.android.systemui.statusbar.policy.Clock)?.let {
+                    if (it.isAttachedToWindow) {
+                        it.updateClock()
+                    }
+                }
+            }
 
             // Desplazar la isla musical hacia donde estaba anteriormente el reloj (inicio)
             if (leftContainer != null && musicIslandView != null) {
@@ -451,7 +483,15 @@ private constructor(
             }
         } else {
             // Posición Izquierda (original / predeterminada)
-            clock.visibility = View.VISIBLE
+            clock.apply {
+                visibility = View.VISIBLE
+                alpha = 1f
+                (this as? com.android.systemui.statusbar.policy.Clock)?.let {
+                    if (it.isAttachedToWindow) {
+                        it.updateClock()
+                    }
+                }
+            }
             rightClock?.visibility = View.GONE
 
             // Regresar la isla musical a su posición original (después del reloj)
