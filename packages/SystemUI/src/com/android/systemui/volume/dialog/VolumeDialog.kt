@@ -62,7 +62,9 @@ constructor(
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             )
-            if (blurUtils.supportsBlursOnWindows()) {
+            val isBlurDisabled = android.os.SystemProperties.getBoolean("persist.sysui.disableBlur", false) ||
+                android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50) <= 0
+            if (!isBlurDisabled) {
                 addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
             }
             addPrivateFlags(WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
@@ -72,8 +74,9 @@ constructor(
             attributes =
                 attributes.apply {
                     title = "VolumeDialog" // Not the same as Window#setTitle
-                    if (blurUtils.supportsBlursOnWindows()) {
-                        val blurRadius = blurUtils.blurRadiusOfRatio(1f).toInt().coerceAtLeast(1)
+                    if (!isBlurDisabled) {
+                        val intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
+                        val blurRadius = (80 * (intensity / 50f)).toInt().coerceIn(20, 150)
                         setBlurBehindRadius(blurRadius)
                     }
                     layoutInDisplayCutoutMode =

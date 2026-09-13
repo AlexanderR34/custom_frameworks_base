@@ -202,10 +202,14 @@ constructor(
         val soundAssistantContainer = root.findViewById<View>(R.id.volume_dialog_sound_assistant_container)
         val soundAssistantButton = root.findViewById<View>(R.id.volume_dialog_sound_assistant_button)
 
+        val isBlurDisabled = android.os.SystemProperties.getBoolean("persist.sysui.disableBlur", false) ||
+            android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50) <= 0
+
         if (isHyperOS && isVolumeDialogVertical) {
             dialog.window?.let { window ->
-                if (blurUtils.supportsBlursOnWindows()) {
-                    val blurRadius = blurUtils.blurRadiusOfRatio(1f).toInt().coerceAtLeast(1)
+                if (!isBlurDisabled) {
+                    val intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
+                    val blurRadius = (80 * (intensity / 50f)).toInt().coerceIn(20, 150)
                     window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
                     window.attributes = window.attributes.apply {
                         setBlurBehindRadius(blurRadius)
@@ -275,8 +279,11 @@ constructor(
                 .setMinimumVisibleChange(ANIMATION_MINIMUM_VISIBLE_CHANGE)
                 .addUpdateListener { _, value, _ ->
                     view.applyAnimationProgress(value)
-                    if (blurUtils.supportsBlursOnWindows()) {
-                        val blurRadius = blurUtils.blurRadiusOfRatio(value).toInt()
+                    val isBlurOff = android.os.SystemProperties.getBoolean("persist.sysui.disableBlur", false) ||
+                        android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50) <= 0
+                    if (!isBlurOff) {
+                        val intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
+                        val blurRadius = (80 * (intensity / 50f) * value).toInt().coerceAtLeast(0)
                         dialog.window?.let { win ->
                             win.attributes = win.attributes.apply {
                                 setBlurBehindRadius(blurRadius)
