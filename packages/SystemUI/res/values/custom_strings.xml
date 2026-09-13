@@ -22,15 +22,6 @@
     <string name="status_bar_icons_title">Status bar icons</string>
 
     <!-- Custom QS tiles -->
-    <!-- AFK Mode QS tile -->
-    <string name="quick_settings_afk_label">AFK Mode</string>
-    <string name="quick_settings_afk_active">Active</string>
-    <string name="quick_settings_afk_inactive">Inactive</string>
-    <string name="accessibility_quick_settings_afk_on">AFK mode on.</string>
-    <string name="accessibility_quick_settings_afk_off">AFK mode off.</string>
-    <string name="afk_mode_overlay_title">AFK Mode Active</string>
-    <string name="afk_mode_overlay_desc">Double tap or hold to unlock</string>
-
     <!-- Ambient display QS tile -->
     <string name="quick_settings_ambient_display_label">Ambient display</string>
     <string name="accessibility_quick_settings_ambient_display_off">Ambient display off.</string>
@@ -125,33 +116,6 @@
     <string name="global_action_restart_download_progress">Restarting to download mode\u2026</string>
     <!-- Button to restart SystemUI, within the Restart Options dialog -->
     <string name="global_action_restart_systemui">SystemUI</string>
-
-    <!-- Gaming Mode & Gaming Space Overlay -->
-    <string name="quick_settings_gaming_label">Gaming Space</string>
-    <string name="quick_settings_gaming_active">Active</string>
-    <string name="quick_settings_gaming_inactive">Inactive</string>
-    <string name="quick_settings_gaming_space_label">Gaming Space</string>
-    <string name="quick_settings_gaming_space_active">Active</string>
-    <string name="quick_settings_gaming_space_inactive">Inactive</string>
-    <string name="gaming_overlay_sidebar_title">Gaming Space</string>
-    <string name="gaming_action_screenshot">Screenshot</string>
-    <string name="gaming_action_record">Record</string>
-    <string name="gaming_action_recording">Recording</string>
-    <string name="gaming_action_clean_ram">Boost RAM</string>
-    <string name="gaming_action_cleaning_ram">Cleaning...</string>
-    <string name="gaming_action_wifi">Wi-Fi</string>
-    <string name="gaming_action_dnd">DND Mode</string>
-    <string name="gaming_action_touch_shield">Touch Shield</string>
-    <string name="gaming_action_afk">AFK Stream</string>
-    <string name="gaming_action_hud">Floating HUD</string>
-    <string name="gaming_action_crosshair">Crosshair</string>
-    <string name="gaming_action_timer">Timer</string>
-    <string name="gaming_mode_powersave">Power Save</string>
-    <string name="gaming_mode_balanced">Balanced</string>
-    <string name="gaming_mode_performance">Turbo</string>
-    <string name="gaming_audio_game">Game Audio</string>
-    <string name="gaming_audio_voice">Voice Audio</string>
-    <string name="gaming_brightness">Brightness</string>
 
     <!-- Flashlight Strength Dialog -->
     <string name="flashlight_strength_title">Flashlight strength</string>
