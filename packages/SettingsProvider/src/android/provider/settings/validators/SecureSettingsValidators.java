@@ -190,7 +190,7 @@ public class SecureSettingsValidators {
                 new InclusiveIntegerRangeValidator(0, 1));
         VALIDATORS.put(Secure.CAMERA_DOUBLE_TAP_POWER_GESTURE_DISABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.SYSTEM_NAVIGATION_KEYS_ENABLED, BOOLEAN_VALIDATOR);
-        VALIDATORS.put(Secure.NAV_BAR_BUTTONS_STYLE, new InclusiveIntegerRangeValidator(0, 1));
+        VALIDATORS.put(Secure.NAV_BAR_BUTTONS_STYLE, new InclusiveIntegerRangeValidator(0, 2));
         VALIDATORS.put(Secure.QS_TILES, TILE_LIST_VALIDATOR);
         VALIDATORS.put(Secure.CONTROLS_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(Secure.POWER_MENU_LOCKED_SHOW_CONTENT, BOOLEAN_VALIDATOR);
@@ -309,7 +309,7 @@ public class SecureSettingsValidators {
         VALIDATORS.put(Secure.NAVIGATIONBAR_KEY_ORDER,
                 new DiscreteValueValidator(new String[] {"0", "1"}));
         VALIDATORS.put(Secure.NAV_BAR_BUTTONS_STYLE,
-                new DiscreteValueValidator(new String[] {"0", "1"}));
+                new DiscreteValueValidator(new String[] {"0", "1", "2"}));
         VALIDATORS.put(
                 Secure.NAVIGATION_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2"}));
         VALIDATORS.put(Secure.NAVIGATION_MODE_RESTORE,
