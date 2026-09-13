@@ -198,6 +198,9 @@ constructor(
             android.os.UserHandle.USER_CURRENT
         ) == 1
 
+        val soundAssistantContainer = root.findViewById<View>(R.id.volume_dialog_sound_assistant_container)
+        val soundAssistantButton = root.findViewById<View>(R.id.volume_dialog_sound_assistant_button)
+
         if (isHyperOS && isVolumeDialogVertical) {
             dialog.window?.let { window ->
                 window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
@@ -211,9 +214,37 @@ constructor(
             mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
                 width = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 height = ConstraintLayout.LayoutParams.WRAP_CONTENT
+                matchConstraintMaxHeight = ConstraintLayout.LayoutParams.UNSET
                 verticalBias = 0.18f
                 marginEnd = (8 * root.resources.displayMetrics.density).toInt()
             }
+
+            val showAppVolume = Settings.System.getIntForUser(
+                root.context.contentResolver,
+                Settings.System.SHOW_APP_VOLUME,
+                0,
+                android.os.UserHandle.USER_CURRENT
+            ) == 1
+
+            if (showAppVolume) {
+                soundAssistantContainer?.visibility = View.VISIBLE
+                soundAssistantContainer?.let {
+                    launchTraced("VDVB#soundAssistantTouchableBounds") {
+                        viewModel.addTouchableBounds(it)
+                    }
+                }
+                soundAssistantButton?.setOnClickListener {
+                    val intent = android.content.Intent(android.provider.Settings.Panel.ACTION_APP_VOLUME).apply {
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    root.context.startActivity(intent)
+                    dialog.dismiss()
+                }
+            } else {
+                soundAssistantContainer?.visibility = View.GONE
+            }
+        } else {
+            soundAssistantContainer?.visibility = View.GONE
         }
 
         for (viewBinder in viewBinders) {
