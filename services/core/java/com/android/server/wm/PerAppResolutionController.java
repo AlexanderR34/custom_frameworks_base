@@ -17,6 +17,8 @@
 package com.android.server.wm;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.res.CompatibilityInfo;
 import android.content.res.CompatibilityInfo.CompatScale;
 import android.database.ContentObserver;
 import android.net.Uri;
@@ -25,11 +27,17 @@ import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Slog;
+import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -91,7 +99,8 @@ public class PerAppResolutionController implements CompatScaleProvider {
                 data = Settings.System.getString(mContext.getContentResolver(), SETTING_KEY);
             }
 
-            mScaleMap.clear();
+            Map<String, Float> oldMap = new HashMap<>(mScaleMap);
+            Map<String, Float> newMap = new HashMap<>();
             if (!TextUtils.isEmpty(data)) {
                 String[] entries = data.split(",");
                 for (String entry : entries) {
@@ -101,16 +110,77 @@ public class PerAppResolutionController implements CompatScaleProvider {
                             String pkg = parts[0].trim();
                             float scale = Float.parseFloat(parts[1].trim());
                             if (scale >= 0.20f && scale <= 1.0f) {
-                                mScaleMap.put(pkg, scale);
+                                newMap.put(pkg, scale);
                             }
                         } catch (NumberFormatException ignored) {}
                     }
                 }
             }
+
+            mScaleMap.clear();
+            mScaleMap.putAll(newMap);
             Slog.d(TAG, "updateScaleMap: loaded " + mScaleMap.size() + " entries (" + data + ")");
+
+            // Refresh any package whose scale changed
+            Set<String> allPackages = new HashSet<>(oldMap.keySet());
+            allPackages.addAll(newMap.keySet());
+            for (String pkg : allPackages) {
+                Float oldVal = oldMap.get(pkg);
+                Float newVal = newMap.get(pkg);
+                if (!Objects.equals(oldVal, newVal)) {
+                    notifyPackageCompatChanged(pkg);
+                }
+            }
         } catch (Throwable t) {
             Slog.w(TAG, "Failed to update scale map: " + t.getMessage());
         }
+    }
+
+    private void notifyPackageCompatChanged(String packageName) {
+        if (packageName == null) return;
+        mHandler.post(() -> {
+            synchronized (mAtmService.mGlobalLock) {
+                try {
+                    ApplicationInfo ai = null;
+                    try {
+                        ai = mContext.getPackageManager().getApplicationInfo(packageName, 0);
+                    } catch (Throwable ignored) {}
+
+                    final CompatibilityInfo ci = ai != null
+                            ? mAtmService.compatibilityInfoForPackageLocked(ai)
+                            : CompatibilityInfo.DEFAULT_COMPATIBILITY_INFO;
+
+                    final ArrayList<WindowProcessController> restartedApps = new ArrayList<>();
+                    mAtmService.mRootWindowContainer.forAllWindows(w -> {
+                        final ActivityRecord ar = w.mActivityRecord;
+                        if (ar != null) {
+                            if (ar.packageName.equals(packageName) && !restartedApps.contains(ar.app)) {
+                                ar.restartProcessIfVisible();
+                                restartedApps.add(ar.app);
+                            }
+                        } else if (w.getProcess() != null && w.getProcess().mInfo != null
+                                && packageName.equals(w.getProcess().mInfo.packageName)) {
+                            w.updateGlobalScale();
+                        }
+                    }, true /* traverseTopToBottom */);
+
+                    SparseArray<WindowProcessController> pidMap = mAtmService.mProcessMap.getPidMap();
+                    for (int i = pidMap.size() - 1; i >= 0; i--) {
+                        final WindowProcessController app = pidMap.valueAt(i);
+                        if (app == null || !app.containsPackage(packageName) || restartedApps.contains(app)) {
+                            continue;
+                        }
+                        try {
+                            if (app.hasThread()) {
+                                app.getThread().updatePackageCompatibilityInfo(packageName, ci);
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                } catch (Throwable t) {
+                    Slog.w(TAG, "Failed to notify compat change for " + packageName + ": " + t.getMessage());
+                }
+            }
+        });
     }
 
     @Override

@@ -424,6 +424,10 @@ class WallpaperController {
     }
 
     void setWallpaperZoomOut(WindowState window, float zoom) {
+        int intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50);
+        if (intensity <= 0) {
+            zoom = 0f;
+        }
         if (Float.compare(window.mWallpaperZoomOut, zoom) != 0) {
             window.mWallpaperZoomOut = zoom;
             computeLastWallpaperZoomOut();

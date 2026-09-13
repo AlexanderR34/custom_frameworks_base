@@ -86,17 +86,8 @@ constructor(
 
     private fun getBlurIntensityMultiplier(): Float {
         return try {
-            val app = android.app.ActivityThread.currentApplication()
-            if (app != null) {
-                val intensity = android.provider.Settings.System.getInt(
-                    app.contentResolver,
-                    "custom_blur_intensity",
-                    100
-                )
-                (intensity / 100f).coerceIn(0f, 2.0f)
-            } else {
-                1.0f
-            }
+            val intensity = SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
+            (intensity / 50f).coerceIn(0f, 2.0f)
         } catch (e: Throwable) {
             1.0f
         }

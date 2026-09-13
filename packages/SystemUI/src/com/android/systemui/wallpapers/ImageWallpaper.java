@@ -214,7 +214,7 @@ public class ImageWallpaper extends WallpaperService {
 
         @Override
         public boolean shouldZoomOutWallpaper() {
-            return true;
+            return false;
         }
 
         @Override

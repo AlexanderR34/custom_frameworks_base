@@ -4211,6 +4211,14 @@ public final class SurfaceControl implements Parcelable {
                 SurfaceControlRegistry.getProcessInstance().checkCallStackDebugging(
                         "setBackgroundBlurRadius", this, sc, "radius=" + radius);
             }
+            if (radius > 0) {
+                int intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50);
+                if (intensity <= 0) {
+                    radius = 0;
+                } else if (intensity != 50) {
+                    radius = Math.max(1, Math.round(radius * (intensity / 50.0f)));
+                }
+            }
             nativeSetBackgroundBlurRadius(mNativeObject, sc.mNativeObject, radius);
             return this;
         }
