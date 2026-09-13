@@ -190,7 +190,7 @@ class AccessorizedBatteryDrawable(
 
     override fun getIntrinsicWidth(): Int {
         if (isHyperOSStyle) {
-            return hyperOSBatteryDrawable?.intrinsicWidth ?: (24 * density).toInt()
+            return hyperOSBatteryDrawable?.intrinsicWidth ?: (22 * density).toInt()
         }
         val width =
             if (displayShield) {

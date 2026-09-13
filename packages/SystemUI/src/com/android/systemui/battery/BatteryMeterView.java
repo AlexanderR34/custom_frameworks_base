@@ -247,7 +247,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         mDrawable.setBatteryLevel(level);
         updatePercentText();
 
-        if (NewStatusBarIcons.isEnabled() && (mDrawable == null || !mDrawable.isHyperOSStyle())) {
+        if (NewStatusBarIcons.isEnabled()) {
             Drawable attr = mUnifiedBatteryState.getAttribution();
             if (isCharging != wasCharging) {
                 attr = getBatteryAttribution(isCharging);
@@ -319,7 +319,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mDrawable != null) {
             mDrawable.setPowerSaveEnabled(isPowerSave);
         }
-        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
+        if (!NewStatusBarIcons.isEnabled()) {
             // Updated in mDrawable
         } else {
             setBatteryDrawableState(
@@ -417,7 +417,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     void updatePercentText() {
-        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
+        if (!NewStatusBarIcons.isEnabled()) {
             updatePercentTextLegacy();
             return;
         }
@@ -532,7 +532,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     void updateShowPercent() {
-        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
+        if (!NewStatusBarIcons.isEnabled()) {
             updateShowPercentLegacy();
             return;
         }
@@ -582,9 +582,9 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         shouldShow = shouldShow && !mBatteryStateUnknown;
 
         if (mDrawable != null && mDrawable.isHyperOSStyle()) {
-            if (mShowPercentMode != MODE_OFF && !mBatteryStateUnknown) {
-                shouldShow = true;
-            }
+            shouldShow = (systemSetting && mShowPercentMode != MODE_OFF && !mBatteryStateUnknown)
+                    || mShowPercentMode == MODE_ON
+                    || mShowPercentMode == MODE_ESTIMATE;
         }
 
         if (shouldShow) {
@@ -627,7 +627,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     void scaleBatteryMeterViews() {
-        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
+        if (!NewStatusBarIcons.isEnabled()) {
             scaleBatteryMeterViewsLegacy();
             return;
         }
@@ -657,31 +657,29 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     }
 
     public void updateBatteryStyle() {
-        boolean isHyperOS = Settings.System.getIntForUser(
+        int style = Settings.System.getIntForUser(
                 getContext().getContentResolver(),
-                "status_bar_battery_style_hyperos", 0,
-                UserHandle.USER_CURRENT) == 1
-                || Settings.System.getIntForUser(
-                getContext().getContentResolver(),
-                "status_bar_battery_style", 0,
-                UserHandle.USER_CURRENT) == 1;
-
-        if (mDrawable != null) {
-            mDrawable.setHyperOSStyle(isHyperOS);
+                "status_bar_battery_style", -1,
+                UserHandle.USER_CURRENT);
+        if (style == -1) {
+            boolean isHyperOS = Settings.System.getIntForUser(
+                    getContext().getContentResolver(),
+                    "status_bar_battery_style_hyperos", 0,
+                    UserHandle.USER_CURRENT) == 1;
+            style = isHyperOS ? 1 : 0;
         }
 
-        if (isHyperOS) {
+        if (NewStatusBarIcons.isEnabled()) {
+            mBatteryIconView.setImageDrawable(mUnifiedBattery);
+            scaleBatteryMeterViews();
+        } else {
+            boolean isHyperOS = (style == 1);
+            if (mDrawable != null) {
+                mDrawable.setHyperOSStyle(isHyperOS);
+            }
             mBatteryIconView.setImageDrawable(mDrawable);
             scaleBatteryMeterViewsLegacy();
             onDarkChangedLegacy(new ArrayList<>(), 0, DarkIconDispatcher.DEFAULT_ICON_TINT);
-        } else {
-            if (NewStatusBarIcons.isEnabled()) {
-                mBatteryIconView.setImageDrawable(mUnifiedBattery);
-                scaleBatteryMeterViews();
-            } else {
-                mBatteryIconView.setImageDrawable(mDrawable);
-                scaleBatteryMeterViewsLegacy();
-            }
         }
         updateShowPercent();
     }
@@ -703,8 +701,8 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
         if (mDrawable != null && mDrawable.isHyperOSStyle()) {
             float density = res.getDisplayMetrics().density;
-            mainBatteryWidth = 24f * density * iconScaleFactor;
-            mainBatteryHeight = 13f * density * iconScaleFactor;
+            mainBatteryWidth = 22f * density * iconScaleFactor;
+            mainBatteryHeight = 11.5f * density * iconScaleFactor;
         }
 
         boolean displayShield = mIsBatteryDefender && (mDrawable == null || !mDrawable.isHyperOSStyle());
@@ -746,7 +744,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     public void onDarkChanged(ArrayList<Rect> areas, float darkIntensity, int tint) {
         if (mIsStaticColor) return;
 
-        if (!NewStatusBarIcons.isEnabled() || (mDrawable != null && mDrawable.isHyperOSStyle())) {
+        if (!NewStatusBarIcons.isEnabled()) {
             onDarkChangedLegacy(areas, darkIntensity, tint);
             return;
         }

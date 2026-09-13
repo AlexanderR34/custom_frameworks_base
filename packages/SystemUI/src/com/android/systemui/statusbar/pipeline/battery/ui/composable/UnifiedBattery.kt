@@ -24,12 +24,19 @@ import android.os.UserHandle
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect as ComposeRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -171,14 +178,30 @@ private fun Int.scaledLevel(): Float {
 }
 
 /**
- * HyperOS-style Battery Composable.
+ * Samsung One UI style Battery Composable.
+ *
+ * Features:
+ * - Neutral frame border (white in dark mode, black in light mode - NEVER green or yellow).
+ * - Rounded rectangle body with positive terminal cap on right.
+ * - Translucent inner cavity background.
+ * - Dynamic fill level (green when charging, yellow in power save, red when <=15%, neutral otherwise).
+ * - Sharp, centered charging bolt inside the battery body when plugged in.
+ */
+/**
+ * HyperOS style Battery Composable (matches real HyperOS status bar design).
+ *
+ * Visual design:
+ * - Horizontal rounded battery frame with terminal cap on the right.
+ * - Dynamic inner fill (vibrant green 0xFF2ECC71 when charging).
+ * - Prominent white charging lightning bolt centered inside the battery body.
+ * - Percentage text (e.g. 100%) placed outside on the right.
  */
 @Composable
 fun HyperOSBattery(
     level: Int,
     isCharging: Boolean,
     isPowerSave: Boolean,
-    colorsProvider: () -> BatteryColors,
+    isDark: Boolean,
     modifier: Modifier = Modifier,
     contentDescription: String = "",
 ) {
@@ -188,43 +211,43 @@ fun HyperOSBattery(
     ) {
         val w = size.width
         val h = size.height
-        val colors = colorsProvider()
 
-        val strokeWidth = (1.5f * (h / 13f)).coerceAtLeast(1.5f)
+        val strokeWidth = (1.4f * (h / 12f)).coerceIn(1.2f, 1.8f)
         val halfStroke = strokeWidth / 2f
-        val capWidth = (1.5f * (h / 13f)).coerceAtLeast(1.5f)
-        val capHeight = h * 0.42f
-        val capCornerRadius = capWidth / 2f
-        val rightMargin = capWidth + strokeWidth
+        val capWidth = (1.8f * (h / 12f)).coerceIn(1.5f, 2.2f)
+        val capHeight = maxOf(5.6f * (h / 12f), h * 0.50f)
+        val capCornerRadius = CornerRadius(1.2f * (h / 12f))
+        val rightMargin = capWidth + strokeWidth + 0.8f
 
-        val frameRect = androidx.compose.ui.geometry.Rect(
-            left = halfStroke,
-            top = halfStroke,
+        val frameRect = ComposeRect(
+            left = halfStroke + 0.5f,
+            top = halfStroke + 0.5f,
             right = w - rightMargin,
-            bottom = h - halfStroke,
+            bottom = h - halfStroke - 0.5f,
         )
-        val frameCornerRadius = androidx.compose.ui.geometry.CornerRadius(frameRect.height / 2.8f)
+        val frameCornerRadius = CornerRadius(3.2f * (h / 12f))
+        val neutralColor = if (isDark) Color.White else Color.Black
 
-        // 1. Draw outer pill frame (ALWAYS colors.fill - white / adaptive theme)
+        // 1. Draw outer battery frame
         drawRoundRect(
-            color = colors.fill,
+            color = neutralColor,
             topLeft = frameRect.topLeft,
             size = frameRect.size,
             cornerRadius = frameCornerRadius,
             style = Stroke(width = strokeWidth),
         )
 
-        // 2. Draw terminal cap (ALWAYS colors.fill)
+        // 2. Draw terminal cap on the right
         val capTop = (h - capHeight) / 2f
         drawRoundRect(
-            color = colors.fill,
-            topLeft = Offset(frameRect.right + (strokeWidth * 0.8f), capTop),
+            color = neutralColor,
+            topLeft = Offset(frameRect.right + (strokeWidth * 0.6f), capTop),
             size = Size(capWidth, capHeight),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(capCornerRadius),
+            cornerRadius = capCornerRadius,
         )
 
-        // 3. Inner cavity dimensions
-        val inset = strokeWidth + (1.2f * (h / 13f))
+        // 3. Inner cavity dimensions with uniform gap
+        val inset = strokeWidth + 1.1f * (h / 12f)
         val innerLeft = frameRect.left + inset
         val innerTop = frameRect.top + inset
         val innerMaxRight = frameRect.right - inset
@@ -233,22 +256,22 @@ fun HyperOSBattery(
         val innerHeight = (innerBottom - innerTop).coerceAtLeast(0f)
 
         if (innerWidth > 0f && innerHeight > 0f) {
-            val innerCornerRadius = androidx.compose.ui.geometry.CornerRadius(innerHeight / 3.0f)
+            val innerCornerRadius = CornerRadius(2.4f * (h / 12f))
 
-            // 4. Draw cavity background so unfilled battery level is visible
+            // 4. Draw soft cavity background
             drawRoundRect(
-                color = colors.fill.copy(alpha = 0.18f),
+                color = neutralColor.copy(alpha = 0.18f),
                 topLeft = Offset(innerLeft, innerTop),
                 size = Size(innerWidth, innerHeight),
                 cornerRadius = innerCornerRadius,
             )
 
-            // 5. Determine active fill color for the inner level progress
+            // 5. Determine active fill color (HyperOS vibrant green for charging: 0xFF34C759)
             val activeFillColor = when {
                 isCharging -> Color(0xFF34C759)
                 isPowerSave -> Color(0xFFF59E0B)
                 level <= 15 -> Color(0xFFEF4444)
-                else -> colors.fill
+                else -> neutralColor
             }
 
             // 6. Draw dynamic level progress fill
@@ -262,23 +285,37 @@ fun HyperOSBattery(
                 )
             }
 
-            // 7. Draw large, bold charging bolt if plugged in
+            // 7. Draw sharp HyperOS charging bolt (solid black outline + white sharp fill)
             if (isCharging) {
-                val centerX = frameRect.left + (frameRect.width / 2f)
-                val centerY = frameRect.top + (frameRect.height / 2f)
-                val boltW = h * 0.85f
-                val boltH = h * 1.35f
+                val centerX = frameRect.left + (frameRect.width / 2f) - (0.5f * (h / 12f))
+                val centerY = h / 2f
+                val boltH = h * 1.05f
+                val boltW = h * 0.62f
 
-                val boltPath = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(centerX + boltW * 0.12f, centerY - boltH * 0.50f)
-                    lineTo(centerX - boltW * 0.50f, centerY + boltH * 0.05f)
-                    lineTo(centerX - boltW * 0.05f, centerY + boltH * 0.05f)
-                    lineTo(centerX - boltW * 0.12f, centerY + boltH * 0.50f)
-                    lineTo(centerX + boltW * 0.50f, centerY - boltH * 0.05f)
-                    lineTo(centerX + boltW * 0.05f, centerY - boltH * 0.05f)
+                val boltPath = Path().apply {
+                    val topX = centerX + boltW * 0.14f
+                    val topY = centerY - boltH * 0.50f
+                    val midLeftX = centerX - boltW * 0.50f
+                    val midLeftY = centerY + boltH * 0.04f
+                    val notchLeftX = centerX - boltW * 0.04f
+                    val notchLeftY = centerY + boltH * 0.04f
+                    val botX = centerX - boltW * 0.18f
+                    val botY = centerY + boltH * 0.50f
+                    val midRightX = centerX + boltW * 0.50f
+                    val midRightY = centerY - boltH * 0.04f
+                    val notchRightX = centerX + boltW * 0.04f
+                    val notchRightY = centerY - boltH * 0.04f
+
+                    moveTo(topX, topY)
+                    lineTo(midLeftX, midLeftY)
+                    lineTo(notchLeftX, notchLeftY)
+                    lineTo(botX, botY)
+                    lineTo(midRightX, midRightY)
+                    lineTo(notchRightX, notchRightY)
                     close()
                 }
-                drawPath(boltPath, Color.Black.copy(alpha = 0.5f), style = Stroke(width = strokeWidth * 0.8f))
+                // Solid black outline for crisp contrast + pure white sharp bolt
+                drawPath(boltPath, Color.Black, style = Stroke(width = 1.6f * (h / 12f)))
                 drawPath(boltPath, Color.White)
             }
         }
@@ -286,11 +323,127 @@ fun HyperOSBattery(
 }
 
 /**
- * A battery icon that will optionally display the percentage inside. Battery state attributions are
- * layered on top with a cutout path around them for visibility.
- *
- * This icon is designed to be parameterized on the height. The only valid way to use it is by
- * explicitly setting `Modifier.height()`, and using `Modifier.wrapContentWidth()` together.
+ * Samsung One UI style Battery Composable (compact capsule pill).
+ */
+@Composable
+fun SamsungBattery(
+    level: Int,
+    showPercent: Boolean = true,
+    isCharging: Boolean,
+    isPowerSave: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    val neutralColor = if (isDark) Color.White else Color.Black
+    val textColor = if (isDark) Color.White else Color.Black
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxHeight()
+            .sysuiResTag(BatteryViewModel.TEST_TAG),
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val pillRadius = CornerRadius(h / 2f, h / 2f)
+
+            // 1. Draw capsule background (translucent container)
+            drawRoundRect(
+                color = neutralColor.copy(alpha = 0.20f),
+                topLeft = Offset.Zero,
+                size = Size(w, h),
+                cornerRadius = pillRadius,
+            )
+
+            // 2. Dynamic progress fill
+            val fillWidth = (w * (level.coerceIn(0, 100) / 100f)).coerceIn(0f, w)
+            if (fillWidth > 0f) {
+                val fillColor = when {
+                    isCharging -> Color(0xFF34C759).copy(alpha = 0.40f)
+                    isPowerSave -> Color(0xFFF59E0B).copy(alpha = 0.40f)
+                    level <= 15 -> Color(0xFFEF4444).copy(alpha = 0.50f)
+                    else -> neutralColor.copy(alpha = 0.25f)
+                }
+                drawRoundRect(
+                    color = fillColor,
+                    topLeft = Offset.Zero,
+                    size = Size(fillWidth, h),
+                    cornerRadius = pillRadius,
+                )
+            }
+        }
+
+        // Inner content: charging bolt + percentage number inside compact capsule
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 2.dp),
+        ) {
+            if (isCharging) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxHeight(0.70f)
+                        .aspectRatio(0.60f)
+                        .padding(end = if (showPercent) 1.5.dp else 0.dp)
+                ) {
+                    val bw = size.width
+                    val bh = size.height
+                    val cx = bw / 2f
+                    val cy = bh / 2f
+                    val boltPath = Path().apply {
+                        moveTo(cx + bw * 0.20f, cy - bh * 0.50f)
+                        lineTo(cx - bw * 0.50f, cy + bh * 0.08f)
+                        lineTo(cx - bw * 0.05f, cy + bh * 0.08f)
+                        lineTo(cx - bw * 0.20f, cy + bh * 0.50f)
+                        lineTo(cx + bw * 0.50f, cy - bh * 0.08f)
+                        lineTo(cx + bw * 0.05f, cy - bh * 0.08f)
+                        close()
+                    }
+                    drawPath(boltPath, textColor)
+                }
+            }
+            if (showPercent) {
+                Text(
+                    text = "$level",
+                    color = textColor,
+                    fontSize = if (level >= 100) 8.sp else 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(
+                            includeFontPadding = false,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+private fun getBatteryStyle(context: android.content.Context): Int {
+    val style = Settings.System.getIntForUser(
+        context.contentResolver,
+        "status_bar_battery_style",
+        -1,
+        UserHandle.USER_CURRENT
+    )
+    if (style != -1) return style
+    val hyperOs = Settings.System.getIntForUser(
+        context.contentResolver,
+        "status_bar_battery_style_hyperos",
+        0,
+        UserHandle.USER_CURRENT
+    )
+    return if (hyperOs == 1) 1 else 0
+}
+
+/**
+ * A battery icon that supports Stock AOSP, HyperOS, and Samsung One UI styles.
  */
 @Composable
 fun UnifiedBattery(
@@ -300,16 +453,14 @@ fun UnifiedBattery(
 ) {
     val context = LocalContext.current
     var bounds by remember { mutableStateOf(Rect()) }
-    var isHyperOSStyle by remember {
+    var batteryStyle by remember {
+        mutableStateOf(getBatteryStyle(context))
+    }
+    var showPercentSetting by remember {
         mutableStateOf(
             Settings.System.getIntForUser(
                 context.contentResolver,
-                "status_bar_battery_style_hyperos",
-                0,
-                UserHandle.USER_CURRENT
-            ) == 1 || Settings.System.getIntForUser(
-                context.contentResolver,
-                "status_bar_battery_style",
+                Settings.System.SHOW_BATTERY_PERCENT,
                 0,
                 UserHandle.USER_CURRENT
             ) == 1
@@ -319,14 +470,10 @@ fun UnifiedBattery(
     DisposableEffect(context) {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                isHyperOSStyle = Settings.System.getIntForUser(
+                batteryStyle = getBatteryStyle(context)
+                showPercentSetting = Settings.System.getIntForUser(
                     context.contentResolver,
-                    "status_bar_battery_style_hyperos",
-                    0,
-                    UserHandle.USER_CURRENT
-                ) == 1 || Settings.System.getIntForUser(
-                    context.contentResolver,
-                    "status_bar_battery_style",
+                    Settings.System.SHOW_BATTERY_PERCENT,
                     0,
                     UserHandle.USER_CURRENT
                 ) == 1
@@ -334,90 +481,114 @@ fun UnifiedBattery(
         }
         val uri1 = Settings.System.getUriFor("status_bar_battery_style_hyperos")
         val uri2 = Settings.System.getUriFor("status_bar_battery_style")
+        val uri3 = Settings.System.getUriFor(Settings.System.SHOW_BATTERY_PERCENT)
         context.contentResolver.registerContentObserver(uri1, false, observer, UserHandle.USER_CURRENT)
         context.contentResolver.registerContentObserver(uri2, false, observer, UserHandle.USER_CURRENT)
+        context.contentResolver.registerContentObserver(uri3, false, observer, UserHandle.USER_CURRENT)
         onDispose {
             context.contentResolver.unregisterContentObserver(observer)
         }
     }
 
-    val colorProvider = {
-        if (isDarkProvider().isDarkTheme(bounds)) {
-            viewModel.colorProfile.dark
-        } else {
-            viewModel.colorProfile.light
-        }
-    }
-
+    val isDark = isDarkProvider().isDarkTheme(bounds)
+    val neutralColor = if (isDark) Color.White else Color.Black
     val contentDesc = viewModel.contentDescription.load() ?: ""
 
-    if (isHyperOSStyle) {
-        val showPercent = viewModel.glyphList.isNotEmpty() || Settings.System.getIntForUser(
-            context.contentResolver,
-            Settings.System.SHOW_BATTERY_PERCENT,
-            0,
-            UserHandle.USER_CURRENT
-        ) == 1
+    when (batteryStyle) {
+        1 -> {
+            // Style 1: HyperOS (Real HyperOS horizontal battery + outer percentage)
+            val showPercent = viewModel.glyphList.isNotEmpty() || showPercentSetting
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = modifier
-                .sysuiResTag(BatteryViewModel.TEST_TAG)
-                .onLayoutRectChanged { relativeLayoutBounds ->
-                    bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
-                },
-        ) {
-            HyperOSBattery(
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = modifier
+                    .wrapContentWidth()
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    },
+            ) {
+                HyperOSBattery(
+                    level = viewModel.level ?: 100,
+                    isCharging = viewModel.isCharging,
+                    isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
+                    isDark = isDark,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .aspectRatio(26.5f / 11.5f)
+                        .fillMaxHeight(),
+                    contentDescription = contentDesc,
+                )
+                if (showPercent && viewModel.level != null) {
+                    Text(
+                        text = "${viewModel.level}%",
+                        color = neutralColor,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        style = TextStyle(
+                            platformStyle = PlatformTextStyle(
+                                includeFontPadding = false,
+                            ),
+                        ),
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                }
+            }
+        }
+        2 -> {
+            // Style 2: Samsung (Compact Capsule Pill)
+            val showPercent = showPercentSetting || viewModel.glyphList.isNotEmpty()
+            val pillAspect = when {
+                !showPercent && viewModel.isCharging -> 20f / 11.5f
+                !showPercent -> 16f / 11.5f
+                viewModel.isCharging && (viewModel.level ?: 0) >= 100 -> 26f / 11.5f
+                viewModel.isCharging -> 24f / 11.5f
+                (viewModel.level ?: 0) >= 100 -> 23f / 11.5f
+                else -> 21f / 11.5f
+            }
+            SamsungBattery(
                 level = viewModel.level ?: 100,
+                showPercent = showPercent,
                 isCharging = viewModel.isCharging,
                 isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
-                colorsProvider = colorProvider,
-                modifier = Modifier
-                    .align(Alignment.CenterVertically)
-                    .aspectRatio(24f / 13f)
+                isDark = isDark,
+                modifier = modifier
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    }
+                    .aspectRatio(pillAspect)
                     .fillMaxHeight(),
                 contentDescription = contentDesc,
             )
-            if (showPercent && viewModel.level != null) {
-                val textColor = if (isDarkProvider().isDarkTheme(bounds)) Color.White else Color.Black
-                Text(
-                    text = "${viewModel.level}%",
-                    color = textColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    style = androidx.compose.ui.text.TextStyle(
-                        platformStyle = androidx.compose.ui.text.PlatformTextStyle(
-                            includeFontPadding = false,
-                        ),
-                        lineHeight = 11.sp,
-                        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
-                            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
-                        ),
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.CenterVertically)
-                        .androidx.compose.foundation.layout.offset(y = (-1.5).dp),
-                )
-            }
         }
-    } else {
-        BatteryLayout(
-            attribution = viewModel.attribution,
-            levelProvider = { viewModel.level },
-            isFullProvider = { viewModel.isFull },
-            glyphsProvider = { viewModel.glyphList },
-            colorsProvider = colorProvider,
-            modifier =
-                modifier.sysuiResTag(BatteryViewModel.TEST_TAG).onLayoutRectChanged {
-                    relativeLayoutBounds ->
-                    bounds =
-                        with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
-                },
-            contentDescription = contentDesc,
-        )
+        else -> {
+            // Style 0 (or default): Stock AOSP unified battery
+            val colorProvider = {
+                if (isDark) {
+                    viewModel.colorProfile.dark
+                } else {
+                    viewModel.colorProfile.light
+                }
+            }
+
+            BatteryLayout(
+                attribution = viewModel.attribution,
+                levelProvider = { viewModel.level },
+                isFullProvider = { viewModel.isFull },
+                glyphsProvider = { viewModel.glyphList },
+                colorsProvider = colorProvider,
+                modifier = modifier
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    },
+                contentDescription = contentDesc,
+            )
+        }
     }
 }
 
