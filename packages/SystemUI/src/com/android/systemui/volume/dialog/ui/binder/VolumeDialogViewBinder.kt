@@ -78,6 +78,7 @@ constructor(
     private val captionsButtonViewModel: VolumeDialogCaptionsButtonViewModel,
     private val jankListenerFactory: JankListenerFactory,
     private val tracer: VolumeTracer,
+    private val blurUtils: com.android.systemui.statusbar.BlurUtils,
     @VolumeDialog private val viewBinders: List<@JvmSuppressWildcards ViewBinder>,
 ) {
 
@@ -203,9 +204,14 @@ constructor(
 
         if (isHyperOS && isVolumeDialogVertical) {
             dialog.window?.let { window ->
-                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                window.attributes = window.attributes.apply {
-                    setBlurBehindRadius(80)
+                if (blurUtils.supportsBlursOnWindows()) {
+                    val blurRadius = blurUtils.blurRadiusOfRatio(1f).toInt().coerceAtLeast(1)
+                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    window.attributes = window.attributes.apply {
+                        setBlurBehindRadius(blurRadius)
+                    }
+                } else {
+                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
                 }
             }
             root.findViewById<View>(R.id.volume_dialog_background)?.visibility = View.GONE
@@ -267,7 +273,17 @@ constructor(
                         .setDampingRatio(SPRING_DAMPING_RATIO)
                 )
                 .setMinimumVisibleChange(ANIMATION_MINIMUM_VISIBLE_CHANGE)
-                .addUpdateListener { _, value, _ -> view.applyAnimationProgress(value) }
+                .addUpdateListener { _, value, _ ->
+                    view.applyAnimationProgress(value)
+                    if (blurUtils.supportsBlursOnWindows()) {
+                        val blurRadius = blurUtils.blurRadiusOfRatio(value).toInt()
+                        dialog.window?.let { win ->
+                            win.attributes = win.attributes.apply {
+                                setBlurBehindRadius(blurRadius)
+                            }
+                        }
+                    }
+                }
         var junkListener: DynamicAnimation.OnAnimationUpdateListener? = null
 
         visibilityModel
