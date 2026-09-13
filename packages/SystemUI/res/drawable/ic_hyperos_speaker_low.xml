@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Speaker Body -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,10 C4,9.45 4.45,9 5,9 L8,9 L12.3,4.7 C12.93,4.07 14,4.52 14,5.41 L14,18.59 C14,19.48 12.93,19.93 12.3,19.3 L8,15 L5,15 C4.45,15 4,14.55 4,14 Z"/>
+    <!-- 1 Arc Wave -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16.5,8.8 C17.44,9.66 18,10.77 18,12 C18,13.23 17.44,14.34 16.5,15.2 C16.11,15.59 15.48,15.59 15.09,15.2 C14.7,14.81 14.7,14.18 15.09,13.79 C15.65,13.28 16,12.67 16,12 C16,11.33 15.65,10.72 15.09,10.21 C14.7,9.82 14.7,9.19 15.09,8.8 C15.48,8.41 16.11,8.41 16.5,8.8 Z"/>
+</vector>

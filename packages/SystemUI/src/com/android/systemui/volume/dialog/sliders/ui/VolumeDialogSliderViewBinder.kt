@@ -23,6 +23,10 @@ import android.media.AudioManager
 import android.os.UserHandle
 import android.provider.Settings
 import android.view.View
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -277,10 +281,11 @@ private fun VolumeDialogSlider(
 /**
  * Authentic HyperOS Vertical Volume Panel layout matching official Xiaomi design.
  * Features:
+ * - Left App Volume / Sound Assistant Floating Button (46dp circle).
  * - Wide rounded volume capsule (62dp x 210dp) with frosted translucent dark background and subtle border.
- * - Top 3 dots ••• for more volume settings.
+ * - Top 3 dots ••• for expanding full volume panel.
  * - Solid white progress fill from bottom with smooth dragging.
- * - Speaker icon that dynamically switches to Vibrant Blue (#2A72E5) when covered by white fill.
+ * - Dynamic animated Speaker Icon with progressive wave arcs (1, 2, 3 waves / mute) and color switching.
  * - Bottom Ringer Mode stadium button (62dp x 48dp) for normal/vibrate/silent.
  * - Bottom DND Mode stadium button (62dp x 48dp) with crescent moon icon.
  */
@@ -297,121 +302,178 @@ private fun HyperOSVolumeVerticalLayout(
     val currentVal = sliderStateModel.value.coerceIn(min, max)
     val progressFraction = ((currentVal - min) / range).coerceIn(0f, 1f)
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .wrapContentSize()
             .padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
-        // 1. HyperOS Main Volume Slider Capsule
-        Box(
-            modifier = Modifier
-                .size(width = 62.dp, height = 210.dp)
-                .clip(RoundedCornerShape(31.dp))
-                .background(Color(0x8A1A1A1A))
-                .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))
-                .pointerInput(min, max, range) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            viewModel.onSliderDragStarted()
-                        },
-                        onDragEnd = {
-                            viewModel.onSliderDragFinished()
-                        },
-                        onDragCancel = {
-                            viewModel.onSliderDragFinished()
-                        },
-                        onVerticalDrag = { change, _ ->
-                            change.consume()
-                            val touchY = change.position.y
+        // 1. HyperOS Left App Volume / Sound Assistant Button
+        HyperOSSoundAssistantButton(context = context)
+
+        // 2. Right Vertical Volume Stack
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.wrapContentSize()
+        ) {
+            // Main Volume Slider Capsule
+            Box(
+                modifier = Modifier
+                    .size(width = 62.dp, height = 210.dp)
+                    .clip(RoundedCornerShape(31.dp))
+                    .background(Color(0x8A1A1A1A))
+                    .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))
+                    .pointerInput(min, max, range) {
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                viewModel.onSliderDragStarted()
+                            },
+                            onDragEnd = {
+                                viewModel.onSliderDragFinished()
+                            },
+                            onDragCancel = {
+                                viewModel.onSliderDragFinished()
+                            },
+                            onVerticalDrag = { change, _ ->
+                                change.consume()
+                                val touchY = change.position.y
+                                val heightPx = size.height.toFloat()
+                                val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                val targetVal = min + frac * range
+                                overscrollViewModel.setSlider(targetVal, min, max)
+                                viewModel.setStreamVolume(targetVal, true)
+                            }
+                        )
+                    }
+                    .pointerInput(min, max, range) {
+                        detectTapGestures { offset ->
+                            val touchY = offset.y
                             val heightPx = size.height.toFloat()
                             val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
                             val targetVal = min + frac * range
                             overscrollViewModel.setSlider(targetVal, min, max)
                             viewModel.setStreamVolume(targetVal, true)
+                            viewModel.onSliderChangeFinished(targetVal)
                         }
-                    )
-                }
-                .pointerInput(min, max, range) {
-                    detectTapGestures { offset ->
-                        val touchY = offset.y
-                        val heightPx = size.height.toFloat()
-                        val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                        val targetVal = min + frac * range
-                        overscrollViewModel.setSlider(targetVal, min, max)
-                        viewModel.setStreamVolume(targetVal, true)
-                        viewModel.onSliderChangeFinished(targetVal)
                     }
-                }
-        ) {
-            // White solid progress fill from bottom
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(progressFraction)
-                    .align(Alignment.BottomCenter)
-                    .clip(RoundedCornerShape(31.dp))
-                    .background(Color.White)
-            )
+            ) {
+                // White solid progress fill from bottom
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(progressFraction)
+                        .align(Alignment.BottomCenter)
+                        .clip(RoundedCornerShape(31.dp))
+                        .background(Color.White)
+                )
 
-            // Top 3 dots ••• (Expand / Sound Settings button)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 15.dp)
-                    .clickable {
-                        try {
-                            val intent = Intent("android.settings.panel.action.VOLUME").apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
+                // Top 3 dots ••• (Expand / Sound Settings button)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 15.dp)
+                        .clickable {
                             try {
-                                val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
+                                val intent = Intent("android.settings.panel.action.VOLUME").apply {
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
-                            } catch (e2: Exception) {}
+                            } catch (e: Exception) {
+                                try {
+                                    val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e2: Exception) {}
+                            }
                         }
+                        .padding(4.dp)
+                ) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .size(4.5.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFB0B0B0))
+                        )
                     }
-                    .padding(4.dp)
-            ) {
-                repeat(3) {
-                    Box(
-                        modifier = Modifier
-                            .size(4.5.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFB0B0B0))
+                }
+
+                // Dynamic Speaker Icon with Animated Waves
+                // Selects wave count based on volume level: Mute -> Low (1 wave) -> Mid (2 waves) -> High (3 waves)
+                val speakerIconRes = when {
+                    progressFraction <= 0.01f || sliderStateModel.isDisabled -> R.drawable.ic_hyperos_speaker_mute
+                    progressFraction < 0.34f -> R.drawable.ic_hyperos_speaker_low
+                    progressFraction < 0.67f -> R.drawable.ic_hyperos_speaker_mid
+                    else -> R.drawable.ic_hyperos_speaker_high
+                }
+
+                // When covered by white fill (progress >= 0.20): Blue #2A72E5. Otherwise: Light grey #EEEEEE.
+                val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 18.dp)
+                        .size(26.dp)
+                ) {
+                    androidx.compose.material3.Icon(
+                        painter = painterResource(id = speakerIconRes),
+                        contentDescription = sliderStateModel.label,
+                        tint = iconTint,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
 
-            // Bottom Speaker Icon
-            // When covered by white fill (progress >= 0.20): Blue #2A72E5. Otherwise: Light grey #EEEEEE.
-            val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 18.dp)
-                    .size(26.dp)
-            ) {
-                Icon(
-                    icon = sliderStateModel.icon,
-                    tint = iconTint,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
+            // HyperOS Ringer Mode Toggle Button (Stadium Pill: 62dp x 48dp)
+            HyperOSRingerPill(context = context)
+
+            // HyperOS DND Mode Toggle Button (Stadium Pill: 62dp x 48dp)
+            HyperOSDndPill(context = context)
         }
+    }
+}
 
-        // 2. HyperOS Ringer Mode Toggle Button (Stadium Pill: 62dp x 48dp)
-        HyperOSRingerPill(context = context)
-
-        // 3. HyperOS DND Mode Toggle Button (Stadium Pill: 62dp x 48dp)
-        HyperOSDndPill(context = context)
+/**
+ * HyperOS Left Sound Assistant / Per-App Volume Floating Button.
+ */
+@Composable
+private fun HyperOSSoundAssistantButton(context: Context) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0x8A1A1A1A))
+            .border(0.75.dp, Color(0x33FFFFFF), CircleShape)
+            .clickable {
+                try {
+                    val intent = Intent("android.settings.panel.action.VOLUME").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    try {
+                        val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } catch (e2: Exception) {}
+                }
+            }
+    ) {
+        androidx.compose.material3.Icon(
+            painter = painterResource(id = R.drawable.ic_app_volume),
+            contentDescription = "App Volume",
+            tint = Color.White,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
 
@@ -438,14 +500,19 @@ private fun HyperOSRingerPill(context: Context) {
             }
     ) {
         val iconRes = when (ringerMode) {
-            AudioManager.RINGER_MODE_NORMAL -> R.drawable.ic_ring_volume
+            AudioManager.RINGER_MODE_NORMAL -> R.drawable.ic_hyperos_bell_normal
             AudioManager.RINGER_MODE_VIBRATE -> R.drawable.ic_volume_ringer_vibrate
-            else -> R.drawable.ic_volume_ringer_mute
+            else -> R.drawable.ic_hyperos_bell_mute
+        }
+        val iconTint = if (ringerMode == AudioManager.RINGER_MODE_SILENT) {
+            Color(0xFFFF5252) // Red accent for silent / muted bell
+        } else {
+            Color.White
         }
         androidx.compose.material3.Icon(
             painter = painterResource(id = iconRes),
             contentDescription = "Ringer Mode",
-            tint = Color.White,
+            tint = iconTint,
             modifier = Modifier.size(24.dp)
         )
     }
