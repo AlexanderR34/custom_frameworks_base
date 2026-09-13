@@ -16,11 +16,31 @@
 
 package com.android.systemui.volume.dialog.sliders.ui
 
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.media.AudioManager
+import android.os.UserHandle
+import android.provider.Settings
 import android.view.View
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -28,10 +48,17 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -45,6 +72,7 @@ import com.android.systemui.volume.dialog.domain.interactor.ExpandedAudioTileDet
 import com.android.systemui.volume.dialog.sliders.dagger.VolumeDialogSliderScope
 import com.android.systemui.volume.dialog.sliders.ui.compose.SliderTrack
 import com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogOverscrollViewModel
+import com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogSliderStateModel
 import com.android.systemui.volume.dialog.sliders.ui.viewmodel.VolumeDialogSliderViewModel
 import com.android.systemui.volume.haptics.ui.VolumeHapticsConfigsProvider
 import com.android.systemui.volume.ui.compose.slider.AccessibilityParams
@@ -96,13 +124,35 @@ private fun VolumeDialogSlider(
     hapticsViewModelFactory: SliderHapticsViewModel.Factory,
     isVolumeDialogVertical: Boolean,
     modifier: Modifier = Modifier,
-    dimensions: VolumeSliderDimensions =
-        if (isVolumeDialogVertical) {
-            VolumeSliderDimensions.Vertical
-        } else {
-            VolumeSliderDimensions.Horizontal
-        },
 ) {
+    val context = LocalContext.current
+    val isHyperOS = remember {
+        Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+            0,
+            UserHandle.USER_CURRENT
+        ) == 1
+    }
+
+    val collectedSliderStateModel by viewModel.state.collectAsStateWithLifecycle(null)
+    val sliderStateModel = collectedSliderStateModel ?: return
+
+    if (isHyperOS && isVolumeDialogVertical) {
+        HyperOSVolumeVerticalLayout(
+            viewModel = viewModel,
+            sliderStateModel = sliderStateModel,
+            overscrollViewModel = overscrollViewModel,
+        )
+        return
+    }
+
+    val dimensions: VolumeSliderDimensions = if (isVolumeDialogVertical) {
+        VolumeSliderDimensions.Vertical
+    } else {
+        VolumeSliderDimensions.Horizontal
+    }
+
     val colors =
         if (isVolumeDialogVertical) {
             SliderDefaults.colors(
@@ -120,8 +170,7 @@ private fun VolumeDialogSlider(
                 disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
         }
-    val collectedSliderStateModel by viewModel.state.collectAsStateWithLifecycle(null)
-    val sliderStateModel = collectedSliderStateModel ?: return
+
     val interactionSource = remember { MutableInteractionSource() }
 
     LaunchedEffect(interactionSource) {
@@ -170,6 +219,9 @@ private fun VolumeDialogSlider(
                 colors = colors,
                 isEnabled = !sliderStateModel.isDisabled,
                 isVertical = isVolumeDialogVertical,
+                thumbTrackGapSize = 6.dp,
+                trackCornerSize = 12.dp,
+                trackInsideCornerSize = 2.dp,
                 activeTrackEndIcon = { iconsState ->
                     SliderIcon(
                         icon = {
@@ -219,6 +271,216 @@ private fun VolumeDialogSlider(
                 }
             },
     )
+}
+
+/**
+ * Authentic HyperOS Vertical Volume Panel layout matching official Xiaomi design.
+ * Features:
+ * - Wide rounded volume capsule (54dp x 185dp) with dark charcoal background.
+ * - Top 3 dots ••• for more volume settings.
+ * - Solid white progress fill from bottom with smooth dragging.
+ * - Speaker icon that dynamically switches to Vibrant Blue (#2A72E5) when covered by white fill.
+ * - Bottom Ringer Mode stadium button (54dp x 40dp) for normal/vibrate/silent.
+ * - Bottom DND Mode stadium button (54dp x 40dp) with crescent moon icon.
+ */
+@Composable
+private fun HyperOSVolumeVerticalLayout(
+    viewModel: VolumeDialogSliderViewModel,
+    sliderStateModel: VolumeDialogSliderStateModel,
+    overscrollViewModel: VolumeDialogOverscrollViewModel,
+) {
+    val context = LocalContext.current
+    val min = sliderStateModel.valueRange.start
+    val max = sliderStateModel.valueRange.endInclusive
+    val range = (max - min).coerceAtLeast(1f)
+    val currentVal = sliderStateModel.value.coerceIn(min, max)
+    val progressFraction = ((currentVal - min) / range).coerceIn(0f, 1f)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .wrapContentSize()
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+    ) {
+        // 1. HyperOS Main Volume Slider Capsule
+        Box(
+            modifier = Modifier
+                .size(width = 54.dp, height = 185.dp)
+                .clip(RoundedCornerShape(27.dp))
+                .background(Color(0xFF262626).copy(alpha = 0.94f))
+                .pointerInput(min, max, range) {
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            viewModel.onSliderDragStarted()
+                        },
+                        onDragEnd = {
+                            viewModel.onSliderDragFinished()
+                        },
+                        onDragCancel = {
+                            viewModel.onSliderDragFinished()
+                        },
+                        onVerticalDrag = { change, _ ->
+                            change.consume()
+                            val touchY = change.position.y
+                            val heightPx = size.height.toFloat()
+                            val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                            val targetVal = min + frac * range
+                            overscrollViewModel.setSlider(targetVal, min, max)
+                            viewModel.setStreamVolume(targetVal, true)
+                        }
+                    )
+                }
+                .pointerInput(min, max, range) {
+                    detectTapGestures { offset ->
+                        val touchY = offset.y
+                        val heightPx = size.height.toFloat()
+                        val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                        val targetVal = min + frac * range
+                        overscrollViewModel.setSlider(targetVal, min, max)
+                        viewModel.setStreamVolume(targetVal, true)
+                        viewModel.onSliderChangeFinished(targetVal)
+                    }
+                }
+        ) {
+            // White solid progress fill from bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(progressFraction)
+                    .align(Alignment.BottomCenter)
+                    .clip(RoundedCornerShape(27.dp))
+                    .background(Color.White)
+            )
+
+            // Top 3 dots ••• (Expand / Sound Settings button)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 13.dp)
+                    .clickable {
+                        try {
+                            val intent = Intent("android.settings.panel.action.VOLUME").apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            try {
+                                val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e2: Exception) {}
+                        }
+                    }
+                    .padding(4.dp)
+            ) {
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF9E9E9E))
+                    )
+                }
+            }
+
+            // Bottom Speaker Icon
+            // When covered by white fill (progress >= 0.22): Blue #2A72E5. Otherwise: Light grey #E0E0E0.
+            val iconTint = if (progressFraction >= 0.22f) Color(0xFF2A72E5) else Color(0xFFE0E0E0)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+                    .size(24.dp)
+            ) {
+                Icon(
+                    icon = sliderStateModel.icon,
+                    tint = iconTint,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        // 2. HyperOS Ringer Mode Toggle Button (Stadium Pill: 54dp x 40dp)
+        HyperOSRingerPill(context = context)
+
+        // 3. HyperOS DND Mode Toggle Button (Stadium Pill: 54dp x 40dp)
+        HyperOSDndPill(context = context)
+    }
+}
+
+@Composable
+private fun HyperOSRingerPill(context: Context) {
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    var ringerMode by remember { mutableStateOf(audioManager.ringerModeInternal) }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(width = 54.dp, height = 40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF262626).copy(alpha = 0.94f))
+            .clickable {
+                val nextMode = when (ringerMode) {
+                    AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
+                    AudioManager.RINGER_MODE_VIBRATE -> AudioManager.RINGER_MODE_SILENT
+                    else -> AudioManager.RINGER_MODE_NORMAL
+                }
+                audioManager.ringerModeInternal = nextMode
+                ringerMode = nextMode
+            }
+    ) {
+        val iconRes = when (ringerMode) {
+            AudioManager.RINGER_MODE_NORMAL -> R.drawable.ic_ring_volume
+            AudioManager.RINGER_MODE_VIBRATE -> R.drawable.ic_volume_ringer_vibrate
+            else -> R.drawable.ic_volume_ringer_mute
+        }
+        androidx.compose.material3.Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = "Ringer Mode",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
+@Composable
+private fun HyperOSDndPill(context: Context) {
+    val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
+    var isDndActive by remember {
+        mutableStateOf(
+            Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF) != Settings.Global.ZEN_MODE_OFF
+        )
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(width = 54.dp, height = 40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF262626).copy(alpha = 0.94f))
+            .clickable {
+                val currentZen = Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF)
+                val newZen = if (currentZen == Settings.Global.ZEN_MODE_OFF) {
+                    Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS
+                } else {
+                    Settings.Global.ZEN_MODE_OFF
+                }
+                notificationManager.setZenMode(newZen, null, "HyperOSVolumePanel")
+                isDndActive = (newZen != Settings.Global.ZEN_MODE_OFF)
+            }
+    ) {
+        androidx.compose.material3.Icon(
+            painter = painterResource(id = R.drawable.ic_hyperos_dnd_moon),
+            contentDescription = "Do Not Disturb",
+            tint = if (isDndActive) Color(0xFF2A72E5) else Color.White,
+            modifier = Modifier.size(22.dp)
+        )
+    }
 }
 
 data class VolumeSliderDimensions(

@@ -6845,6 +6845,13 @@ public final class Settings {
         public static final String CUSTOM_BLUR_INTENSITY = "custom_blur_intensity";
 
         /**
+         * Whether to enable HyperOS style volume panel
+         * @hide
+         */
+        @Readable
+        public static final String HYPEROS_VOLUME_PANEL_STYLE = "hyperos_volume_panel_style";
+
+        /**
          * Whether to show Wi-Fi standard icon (e.g. Wi-Fi 4/5/6/7)
          * @hide
          */
@@ -7378,6 +7385,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(GAMESPACE_GAME_LIST);
             PRIVATE_SETTINGS.add(GAMESPACE_SUPPRESS_FULLSCREEN_INTENT);
             PRIVATE_SETTINGS.add(CUSTOM_BLUR_INTENSITY);
+            PRIVATE_SETTINGS.add(HYPEROS_VOLUME_PANEL_STYLE);
             PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);
         }
 
@@ -13581,6 +13589,7 @@ public final class Settings {
          * Style of the 3-button navigation bar's buttons.
          * 0 = AOSP standard
          * 1 = HyperOS
+         * 2 = Samsung (One UI)
          * @hide
          */
         public static final String NAV_BAR_BUTTONS_STYLE = "nav_bar_buttons_style";

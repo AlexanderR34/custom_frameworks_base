@@ -18,6 +18,8 @@ package com.android.systemui.volume.dialog.ui.binder
 
 import android.app.Dialog
 import android.content.Context
+import android.os.UserHandle
+import android.provider.Settings
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -176,6 +178,23 @@ constructor(
                     WindowInsets.CONSUMED
                 }
                 .awaitCancellationThenDispose()
+        }
+
+        val isHyperOS = Settings.System.getIntForUser(
+            root.context.contentResolver,
+            Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+            0,
+            android.os.UserHandle.USER_CURRENT
+        ) == 1
+
+        if (isHyperOS && isVolumeDialogVertical) {
+            root.findViewById<View>(R.id.volume_dialog_background)?.visibility = View.GONE
+            root.findViewById<View>(R.id.volume_dialog_top_section_container)?.visibility = View.GONE
+            root.findViewById<View>(R.id.volume_dialog_bottom_section_container)?.visibility = View.GONE
+            mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                width = ConstraintLayout.LayoutParams.WRAP_CONTENT
+                height = ConstraintLayout.LayoutParams.WRAP_CONTENT
+            }
         }
 
         for (viewBinder in viewBinders) {
