@@ -19,6 +19,7 @@ package com.android.systemui.volume.dialog.sliders.ui
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.UserHandle
 import android.provider.Settings
@@ -408,8 +409,35 @@ private fun HyperOSVolumeVerticalLayout(
                     }
                 }
 
-                // Dynamic Speaker Icon with Animated Waves
-                val speakerIconRes = when {
+                val isHeadsetOrBt = remember(sliderStateModel, progressFraction) {
+                    try {
+                        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                        devices.any { d ->
+                            d.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                            d.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                            d.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                            d.type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+                            d.type == AudioDeviceInfo.TYPE_BLE_BROADCAST ||
+                            d.type == AudioDeviceInfo.TYPE_HEARING_AID ||
+                            d.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                            d.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                            d.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                            d.type == AudioDeviceInfo.TYPE_USB_DEVICE
+                        } || audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn || audioManager.isWiredHeadsetOn
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+
+                // Dynamic Speaker / Headphone Icon
+                val currentIconRes = when {
+                    isHeadsetOrBt -> {
+                        if (progressFraction <= 0.01f || sliderStateModel.isDisabled) {
+                            R.drawable.ic_hyperos_headphone_mute
+                        } else {
+                            R.drawable.ic_hyperos_headphone
+                        }
+                    }
                     progressFraction <= 0.01f || sliderStateModel.isDisabled -> R.drawable.ic_hyperos_speaker_mute
                     progressFraction < 0.34f -> R.drawable.ic_hyperos_speaker_low
                     progressFraction < 0.67f -> R.drawable.ic_hyperos_speaker_mid
@@ -426,7 +454,7 @@ private fun HyperOSVolumeVerticalLayout(
                         .size(26.dp)
                 ) {
                     androidx.compose.material3.Icon(
-                        painter = painterResource(id = speakerIconRes),
+                        painter = painterResource(id = currentIconRes),
                         contentDescription = sliderStateModel.label,
                         tint = iconTint,
                         modifier = Modifier.size(26.dp)
@@ -529,33 +557,43 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
 private fun HyperOSRingerPill(context: Context) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     var ringerMode by remember { mutableStateOf(audioManager.ringerModeInternal) }
+    val isSilentOrVibrate = ringerMode != AudioManager.RINGER_MODE_NORMAL
+
+    val pillBackground = if (isSilentOrVibrate) Color.White else Color(0x8A1A1A1A)
+    val pillModifier = Modifier
+        .size(width = 62.dp, height = 48.dp)
+        .clip(RoundedCornerShape(24.dp))
+        .background(pillBackground)
+        .then(
+            if (!isSilentOrVibrate) {
+                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
+            } else {
+                Modifier
+            }
+        )
+        .clickable {
+            val nextMode = when (ringerMode) {
+                AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
+                AudioManager.RINGER_MODE_VIBRATE -> AudioManager.RINGER_MODE_SILENT
+                else -> AudioManager.RINGER_MODE_NORMAL
+            }
+            audioManager.ringerModeInternal = nextMode
+            ringerMode = nextMode
+        }
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(width = 62.dp, height = 48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color(0x8A1A1A1A))
-            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
-            .clickable {
-                val nextMode = when (ringerMode) {
-                    AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
-                    AudioManager.RINGER_MODE_VIBRATE -> AudioManager.RINGER_MODE_SILENT
-                    else -> AudioManager.RINGER_MODE_NORMAL
-                }
-                audioManager.ringerModeInternal = nextMode
-                ringerMode = nextMode
-            }
+        modifier = pillModifier
     ) {
         val iconRes = when (ringerMode) {
             AudioManager.RINGER_MODE_NORMAL -> R.drawable.ic_hyperos_bell_normal
             AudioManager.RINGER_MODE_VIBRATE -> R.drawable.ic_volume_ringer_vibrate
             else -> R.drawable.ic_hyperos_bell_mute
         }
-        val iconTint = if (ringerMode == AudioManager.RINGER_MODE_SILENT) {
-            Color(0xFFFF5252) // Red accent for silent / muted bell
-        } else {
-            Color.White
+        val iconTint = when (ringerMode) {
+            AudioManager.RINGER_MODE_SILENT -> Color(0xFFFF453A) // Red for silent bell
+            AudioManager.RINGER_MODE_VIBRATE -> Color(0xFF2A72E5) // Blue for vibrate
+            else -> Color.White
         }
         androidx.compose.material3.Icon(
             painter = painterResource(id = iconRes),
@@ -575,28 +613,38 @@ private fun HyperOSDndPill(context: Context) {
         )
     }
 
+    val pillBackground = if (isDndActive) Color.White else Color(0x8A1A1A1A)
+    val pillModifier = Modifier
+        .size(width = 62.dp, height = 48.dp)
+        .clip(RoundedCornerShape(24.dp))
+        .background(pillBackground)
+        .then(
+            if (!isDndActive) {
+                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
+            } else {
+                Modifier
+            }
+        )
+        .clickable {
+            val currentZen = Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF)
+            val newZen = if (currentZen == Settings.Global.ZEN_MODE_OFF) {
+                Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS
+            } else {
+                Settings.Global.ZEN_MODE_OFF
+            }
+            notificationManager.setZenMode(newZen, null, "HyperOSVolumePanel")
+            isDndActive = (newZen != Settings.Global.ZEN_MODE_OFF)
+        }
+
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(width = 62.dp, height = 48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color(0x8A1A1A1A))
-            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
-            .clickable {
-                val currentZen = Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF)
-                val newZen = if (currentZen == Settings.Global.ZEN_MODE_OFF) {
-                    Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS
-                } else {
-                    Settings.Global.ZEN_MODE_OFF
-                }
-                notificationManager.setZenMode(newZen, null, "HyperOSVolumePanel")
-                isDndActive = (newZen != Settings.Global.ZEN_MODE_OFF)
-            }
+        modifier = pillModifier
     ) {
+        val iconTint = if (isDndActive) Color(0xFF5B60F6) else Color.White
         androidx.compose.material3.Icon(
             painter = painterResource(id = R.drawable.ic_hyperos_dnd_moon),
             contentDescription = "Do Not Disturb",
-            tint = if (isDndActive) Color(0xFF2A72E5) else Color.White,
+            tint = iconTint,
             modifier = Modifier.size(24.dp)
         )
     }
