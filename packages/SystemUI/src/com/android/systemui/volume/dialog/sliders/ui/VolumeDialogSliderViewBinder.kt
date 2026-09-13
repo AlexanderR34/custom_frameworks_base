@@ -310,7 +310,7 @@ private fun HyperOSVolumeVerticalLayout(
             .padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
         // 1. HyperOS Left App Volume / Sound Assistant Button
-        HyperOSSoundAssistantButton(context = context)
+        HyperOSSoundAssistantButton(viewModel = viewModel)
 
         // 2. Right Vertical Volume Stack
         Column(
@@ -377,19 +377,7 @@ private fun HyperOSVolumeVerticalLayout(
                         .align(Alignment.TopCenter)
                         .padding(top = 15.dp)
                         .clickable {
-                            try {
-                                val intent = Intent("android.settings.panel.action.VOLUME").apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                try {
-                                    val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e2: Exception) {}
-                            }
+                            viewModel.openVolumePanel()
                         }
                         .padding(4.dp)
                 ) {
@@ -444,7 +432,9 @@ private fun HyperOSVolumeVerticalLayout(
  * HyperOS Left Sound Assistant / Per-App Volume Floating Button.
  */
 @Composable
-private fun HyperOSSoundAssistantButton(context: Context) {
+private fun HyperOSSoundAssistantButton(
+    viewModel: VolumeDialogSliderViewModel,
+) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -453,19 +443,7 @@ private fun HyperOSSoundAssistantButton(context: Context) {
             .background(Color(0x8A1A1A1A))
             .border(0.75.dp, Color(0x33FFFFFF), CircleShape)
             .clickable {
-                try {
-                    val intent = Intent("android.settings.panel.action.VOLUME").apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    try {
-                        val intent = Intent(Settings.ACTION_SOUND_SETTINGS).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    } catch (e2: Exception) {}
-                }
+                viewModel.openVolumePanel()
             }
     ) {
         androidx.compose.material3.Icon(

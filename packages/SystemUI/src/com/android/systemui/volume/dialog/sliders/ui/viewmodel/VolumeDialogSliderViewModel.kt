@@ -76,7 +76,13 @@ constructor(
     private val systemClock: SystemClock,
     private val logger: VolumeDialogLogger,
     private val uiEventLogger: UiEventLogger,
+    private val volumePanelGlobalStateInteractor: com.android.systemui.volume.panel.domain.interactor.VolumePanelGlobalStateInteractor,
 ) {
+
+    fun openVolumePanel() {
+        volumePanelGlobalStateInteractor.setVisible(true)
+        visibilityInteractor.dismissDialog(Events.DISMISS_REASON_SETTINGS_CLICKED)
+    }
 
     private val userVolumeUpdates = MutableStateFlow<VolumeUpdate?>(null)
     private val model: Flow<VolumeDialogStreamModel> = interactor.slider
