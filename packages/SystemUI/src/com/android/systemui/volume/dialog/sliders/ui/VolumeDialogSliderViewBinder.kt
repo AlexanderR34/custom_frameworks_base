@@ -24,6 +24,7 @@ import android.os.UserHandle
 import android.provider.Settings
 import android.view.View
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -124,6 +125,12 @@ private fun VolumeDialogSlider(
     hapticsViewModelFactory: SliderHapticsViewModel.Factory,
     isVolumeDialogVertical: Boolean,
     modifier: Modifier = Modifier,
+    dimensions: VolumeSliderDimensions =
+        if (isVolumeDialogVertical) {
+            VolumeSliderDimensions.Vertical
+        } else {
+            VolumeSliderDimensions.Horizontal
+        },
 ) {
     val context = LocalContext.current
     val isHyperOS = remember {
@@ -145,12 +152,6 @@ private fun VolumeDialogSlider(
             overscrollViewModel = overscrollViewModel,
         )
         return
-    }
-
-    val dimensions: VolumeSliderDimensions = if (isVolumeDialogVertical) {
-        VolumeSliderDimensions.Vertical
-    } else {
-        VolumeSliderDimensions.Horizontal
     }
 
     val colors =
@@ -276,12 +277,12 @@ private fun VolumeDialogSlider(
 /**
  * Authentic HyperOS Vertical Volume Panel layout matching official Xiaomi design.
  * Features:
- * - Wide rounded volume capsule (54dp x 185dp) with dark charcoal background.
+ * - Wide rounded volume capsule (62dp x 210dp) with frosted translucent dark background and subtle border.
  * - Top 3 dots ••• for more volume settings.
  * - Solid white progress fill from bottom with smooth dragging.
  * - Speaker icon that dynamically switches to Vibrant Blue (#2A72E5) when covered by white fill.
- * - Bottom Ringer Mode stadium button (54dp x 40dp) for normal/vibrate/silent.
- * - Bottom DND Mode stadium button (54dp x 40dp) with crescent moon icon.
+ * - Bottom Ringer Mode stadium button (62dp x 48dp) for normal/vibrate/silent.
+ * - Bottom DND Mode stadium button (62dp x 48dp) with crescent moon icon.
  */
 @Composable
 private fun HyperOSVolumeVerticalLayout(
@@ -301,14 +302,15 @@ private fun HyperOSVolumeVerticalLayout(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .wrapContentSize()
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
         // 1. HyperOS Main Volume Slider Capsule
         Box(
             modifier = Modifier
-                .size(width = 54.dp, height = 185.dp)
-                .clip(RoundedCornerShape(27.dp))
-                .background(Color(0xFF262626).copy(alpha = 0.94f))
+                .size(width = 62.dp, height = 210.dp)
+                .clip(RoundedCornerShape(31.dp))
+                .background(Color(0x8A1A1A1A))
+                .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))
                 .pointerInput(min, max, range) {
                     detectVerticalDragGestures(
                         onDragStart = {
@@ -349,7 +351,7 @@ private fun HyperOSVolumeVerticalLayout(
                     .fillMaxWidth()
                     .fillMaxHeight(progressFraction)
                     .align(Alignment.BottomCenter)
-                    .clip(RoundedCornerShape(27.dp))
+                    .clip(RoundedCornerShape(31.dp))
                     .background(Color.White)
             )
 
@@ -359,7 +361,7 @@ private fun HyperOSVolumeVerticalLayout(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 13.dp)
+                    .padding(top = 15.dp)
                     .clickable {
                         try {
                             val intent = Intent("android.settings.panel.action.VOLUME").apply {
@@ -380,35 +382,35 @@ private fun HyperOSVolumeVerticalLayout(
                 repeat(3) {
                     Box(
                         modifier = Modifier
-                            .size(4.dp)
+                            .size(4.5.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF9E9E9E))
+                            .background(Color(0xFFB0B0B0))
                     )
                 }
             }
 
             // Bottom Speaker Icon
-            // When covered by white fill (progress >= 0.22): Blue #2A72E5. Otherwise: Light grey #E0E0E0.
-            val iconTint = if (progressFraction >= 0.22f) Color(0xFF2A72E5) else Color(0xFFE0E0E0)
+            // When covered by white fill (progress >= 0.20): Blue #2A72E5. Otherwise: Light grey #EEEEEE.
+            val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp)
-                    .size(24.dp)
+                    .padding(bottom = 18.dp)
+                    .size(26.dp)
             ) {
                 Icon(
                     icon = sliderStateModel.icon,
                     tint = iconTint,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
 
-        // 2. HyperOS Ringer Mode Toggle Button (Stadium Pill: 54dp x 40dp)
+        // 2. HyperOS Ringer Mode Toggle Button (Stadium Pill: 62dp x 48dp)
         HyperOSRingerPill(context = context)
 
-        // 3. HyperOS DND Mode Toggle Button (Stadium Pill: 54dp x 40dp)
+        // 3. HyperOS DND Mode Toggle Button (Stadium Pill: 62dp x 48dp)
         HyperOSDndPill(context = context)
     }
 }
@@ -421,9 +423,10 @@ private fun HyperOSRingerPill(context: Context) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(width = 54.dp, height = 40.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF262626).copy(alpha = 0.94f))
+            .size(width = 62.dp, height = 48.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0x8A1A1A1A))
+            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
             .clickable {
                 val nextMode = when (ringerMode) {
                     AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
@@ -443,7 +446,7 @@ private fun HyperOSRingerPill(context: Context) {
             painter = painterResource(id = iconRes),
             contentDescription = "Ringer Mode",
             tint = Color.White,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(24.dp)
         )
     }
 }
@@ -460,9 +463,10 @@ private fun HyperOSDndPill(context: Context) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(width = 54.dp, height = 40.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF262626).copy(alpha = 0.94f))
+            .size(width = 62.dp, height = 48.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0x8A1A1A1A))
+            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
             .clickable {
                 val currentZen = Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF)
                 val newZen = if (currentZen == Settings.Global.ZEN_MODE_OFF) {
@@ -478,7 +482,7 @@ private fun HyperOSDndPill(context: Context) {
             painter = painterResource(id = R.drawable.ic_hyperos_dnd_moon),
             contentDescription = "Do Not Disturb",
             tint = if (isDndActive) Color(0xFF2A72E5) else Color.White,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(24.dp)
         )
     }
 }

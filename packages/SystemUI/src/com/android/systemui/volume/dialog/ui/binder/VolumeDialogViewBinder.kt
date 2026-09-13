@@ -188,12 +188,20 @@ constructor(
         ) == 1
 
         if (isHyperOS && isVolumeDialogVertical) {
+            dialog.window?.let { window ->
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                window.attributes = window.attributes.apply {
+                    setBlurBehindRadius(80)
+                }
+            }
             root.findViewById<View>(R.id.volume_dialog_background)?.visibility = View.GONE
             root.findViewById<View>(R.id.volume_dialog_top_section_container)?.visibility = View.GONE
             root.findViewById<View>(R.id.volume_dialog_bottom_section_container)?.visibility = View.GONE
             mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
                 width = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 height = ConstraintLayout.LayoutParams.WRAP_CONTENT
+                verticalBias = 0.20f
+                marginEnd = (8 * root.resources.displayMetrics.density).toInt()
             }
         }
 

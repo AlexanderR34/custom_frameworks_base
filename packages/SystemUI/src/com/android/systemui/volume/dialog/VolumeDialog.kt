@@ -56,7 +56,8 @@ constructor(
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                    WindowManager.LayoutParams.FLAG_BLUR_BEHIND
             )
             addPrivateFlags(WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
             setType(WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
@@ -65,6 +66,7 @@ constructor(
             attributes =
                 attributes.apply {
                     title = "VolumeDialog" // Not the same as Window#setTitle
+                    setBlurBehindRadius(80)
                 }
             if (isVolumeDialogVertical) {
                 setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
