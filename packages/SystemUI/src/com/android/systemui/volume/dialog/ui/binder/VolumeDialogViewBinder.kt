@@ -149,31 +149,42 @@ constructor(
         launchTraced("VDVB#insets") {
             root
                 .onApplyWindowInsets { view, newInsets ->
-                    val insetsValues =
-                        newInsets.getInsets(
-                            WindowInsets.Type.displayCutout() or
-                                WindowInsets.Type.navigationBars() or
-                                WindowInsets.Type.statusBars()
+                    val isHyperOS = Settings.System.getIntForUser(
+                        root.context.contentResolver,
+                        Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+                        0,
+                        android.os.UserHandle.USER_CURRENT
+                    ) == 1
+
+                    if (!(isHyperOS && isVolumeDialogVertical)) {
+                        val insetsValues =
+                            newInsets.getInsets(
+                                WindowInsets.Type.displayCutout() or
+                                    WindowInsets.Type.navigationBars() or
+                                    WindowInsets.Type.statusBars()
+                            )
+                        view.updatePadding(
+                            left = insetsValues.left,
+                            top = insetsValues.top,
+                            right = insetsValues.right,
+                            bottom = insetsValues.bottom,
                         )
-                    view.updatePadding(
-                        left = insetsValues.left,
-                        top = insetsValues.top,
-                        right = insetsValues.right,
-                        bottom = insetsValues.bottom,
-                    )
-                    if (isVolumeDialogVertical) {
-                        mainSliderContainer?.updateMargin(
-                            top = getSliderVerticalMargin() - view.paddingTop,
-                            bottom = getSliderVerticalMargin() - view.paddingBottom,
-                        )
-                    } else {
-                        mainSliderContainer?.updateMargin(
-                            left = getSliderHorizontalMargin() - view.paddingLeft,
-                            right = getSliderHorizontalMargin() - view.paddingRight,
-                        )
-                        mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
-                            matchConstraintMaxWidth = getSliderWidth()
+                        if (isVolumeDialogVertical) {
+                            mainSliderContainer?.updateMargin(
+                                top = getSliderVerticalMargin() - view.paddingTop,
+                                bottom = getSliderVerticalMargin() - view.paddingBottom,
+                            )
+                        } else {
+                            mainSliderContainer?.updateMargin(
+                                left = getSliderHorizontalMargin() - view.paddingLeft,
+                                right = getSliderHorizontalMargin() - view.paddingRight,
+                            )
+                            mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                                matchConstraintMaxWidth = getSliderWidth()
+                            }
                         }
+                    } else {
+                        view.setPadding(0, 0, 0, 0)
                     }
                     WindowInsets.CONSUMED
                 }
