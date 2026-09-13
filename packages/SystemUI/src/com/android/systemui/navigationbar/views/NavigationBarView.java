@@ -466,19 +466,34 @@ public class NavigationBarView extends FrameLayout {
         return mShowSwipeUpUi && isOverviewEnabled();
     }
 
-    private boolean isHyperOSButtonsStyle() {
+    private int getNavBarButtonsStyle() {
+        android.content.ContentResolver cr = getContext().getContentResolver();
         try {
-            android.content.ContentResolver cr = getContext().getContentResolver();
-            int currentUserId = ActivityManager.getCurrentUser();
-            return Settings.Secure.getIntForUser(cr, "nav_bar_buttons_style", 0, currentUserId) == 1
-                    || Settings.System.getIntForUser(cr, "nav_bar_buttons_style", 0, currentUserId) == 1
-                    || Settings.Secure.getInt(cr, "nav_bar_buttons_style", 0) == 1
-                    || Settings.System.getInt(cr, "nav_bar_buttons_style", 0) == 1
-                    || Settings.Secure.getIntForUser(cr, "nav_bar_buttons_style", 0, UserHandle.USER_CURRENT) == 1
-                    || Settings.System.getIntForUser(cr, "nav_bar_buttons_style", 0, UserHandle.USER_CURRENT) == 1;
-        } catch (Exception e) {
-            return false;
+            int style = Settings.Secure.getIntForUser(cr, "nav_bar_buttons_style", -1, UserHandle.USER_CURRENT);
+            if (style >= 0) return style;
+        } catch (Exception ignored) {
         }
+        try {
+            int style = Settings.Secure.getIntForUser(cr, "nav_bar_buttons_style", -1, ActivityManager.getCurrentUser());
+            if (style >= 0) return style;
+        } catch (Exception ignored) {
+        }
+        try {
+            int style = Settings.Secure.getInt(cr, "nav_bar_buttons_style", -1);
+            if (style >= 0) return style;
+        } catch (Exception ignored) {
+        }
+        try {
+            int style = Settings.System.getIntForUser(cr, "nav_bar_buttons_style", -1, UserHandle.USER_CURRENT);
+            if (style >= 0) return style;
+        } catch (Exception ignored) {
+        }
+        try {
+            int style = Settings.System.getInt(cr, "nav_bar_buttons_style", -1);
+            if (style >= 0) return style;
+        } catch (Exception ignored) {
+        }
+        return 0;
     }
 
     private final TunerService.Tunable mTunable = new TunerService.Tunable() {
@@ -507,12 +522,13 @@ public class NavigationBarView extends FrameLayout {
                 }
             };
 
-    private void reloadNavIcons() {
+    public void reloadNavIcons() {
         mDockedIcon = getDrawable(R.drawable.ic_sysbar_docked);
         mHomeDefaultIcon = getHomeDrawable();
-        int recentRes = isHyperOSButtonsStyle()
-                ? R.drawable.ic_sysbar_recent_hyperos
-                : R.drawable.ic_sysbar_recent;
+        int style = getNavBarButtonsStyle();
+        int recentRes = (style == 2)
+                ? R.drawable.ic_sysbar_recent_samsung
+                : (style == 1 ? R.drawable.ic_sysbar_recent_hyperos : R.drawable.ic_sysbar_recent);
         mRecentIcon = getDrawable(recentRes);
         mContextualButtonGroup.updateIcons(mLightIconColor, mDarkIconColor);
         mBackIcon = getBackDrawable();
@@ -528,9 +544,10 @@ public class NavigationBarView extends FrameLayout {
             mHomeDefaultIcon = getHomeDrawable();
         }
         if (densityChange || dirChange) {
-            int recentRes = isHyperOSButtonsStyle()
-                    ? R.drawable.ic_sysbar_recent_hyperos
-                    : R.drawable.ic_sysbar_recent;
+            int style = getNavBarButtonsStyle();
+            int recentRes = (style == 2)
+                    ? R.drawable.ic_sysbar_recent_samsung
+                    : (style == 1 ? R.drawable.ic_sysbar_recent_hyperos : R.drawable.ic_sysbar_recent);
             mRecentIcon = getDrawable(recentRes);
             mContextualButtonGroup.updateIcons(mLightIconColor, mDarkIconColor);
         }
@@ -550,17 +567,21 @@ public class NavigationBarView extends FrameLayout {
     }
 
     public KeyButtonDrawable getBackDrawable() {
-        int backRes = isHyperOSButtonsStyle()
-                ? R.drawable.ic_sysbar_back_hyperos
-                : R.drawable.ic_sysbar_back;
+        int style = getNavBarButtonsStyle();
+        int backRes = (style == 2)
+                ? R.drawable.ic_sysbar_back_samsung
+                : (style == 1 ? R.drawable.ic_sysbar_back_hyperos : R.drawable.ic_sysbar_back);
         KeyButtonDrawable drawable = getDrawable(backRes);
         orientBackButton(drawable);
         return drawable;
     }
 
     public KeyButtonDrawable getHomeDrawable() {
+        int style = getNavBarButtonsStyle();
         KeyButtonDrawable drawable;
-        if (isHyperOSButtonsStyle()) {
+        if (style == 2) {
+            drawable = getDrawable(R.drawable.ic_sysbar_home_samsung);
+        } else if (style == 1) {
             drawable = getDrawable(R.drawable.ic_sysbar_home_hyperos);
         } else {
             drawable = mShowSwipeUpUi

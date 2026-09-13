@@ -1913,6 +1913,10 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                 public void onUserChanged(int newUser, @NonNull Context userContext) {
                     // The accessibility settings may be different for the new user
                     updateAccessibilityStateFlags();
+                    if (mView != null) {
+                        mView.reloadNavIcons();
+                        mView.updateNavButtonIcons();
+                    }
                 }
             };
 
