@@ -143,6 +143,7 @@ filegroup {
         ":vold_aidl",
         ":deviceproductinfoconstants_aidl",
 
+        ":lmofreeform_aidl",
         ":adbrootservice_aidl",
 
         // For the generated R.java and Manifest.java
