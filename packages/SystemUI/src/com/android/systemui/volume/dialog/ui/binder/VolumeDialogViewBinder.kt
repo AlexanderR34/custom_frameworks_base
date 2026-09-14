@@ -234,6 +234,18 @@ constructor(
                 marginEnd = marginEndPx
             }
 
+            val soundAssistantMarginStartPx = if (isLandscape) {
+                (76 * root.resources.displayMetrics.density).toInt()
+            } else {
+                (16 * root.resources.displayMetrics.density).toInt()
+            }
+            soundAssistantContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+                endToStart = ConstraintLayout.LayoutParams.UNSET
+                marginStart = soundAssistantMarginStartPx
+                marginEnd = 0
+            }
+
             val showAppVolume = Settings.System.getIntForUser(
                 root.context.contentResolver,
                 Settings.System.SHOW_APP_VOLUME,
@@ -333,7 +345,7 @@ constructor(
             for (i in 0 until childCount) {
                 val child = getChildAt(i)
                 if (child === soundAssistant) {
-                    val leftOffset = -((child.width.takeIf { it > 0 } ?: 150) + (child.left.takeIf { it > 0 } ?: 50)).toFloat()
+                    val leftOffset = -((child.width.takeIf { it > 0 } ?: 150) + (child.left.takeIf { it > 0 } ?: 150)).toFloat()
                     child.translationX = lerp(leftOffset, 0f, clampedFraction)
                     child.alpha = clampedFraction
                 } else {
