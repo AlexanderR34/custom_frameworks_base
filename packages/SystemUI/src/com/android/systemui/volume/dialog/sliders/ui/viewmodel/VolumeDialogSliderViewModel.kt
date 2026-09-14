@@ -164,10 +164,12 @@ constructor(
     }
 
     fun onSliderDragStarted() {
+        visibilityInteractor.resetDismissTimeout()
         uiEventLogger.log(VolumeDialogUiEvent.VOLUME_DIALOG_SLIDER_STARTED_TRACKING_TOUCH)
     }
 
     fun onSliderDragFinished() {
+        visibilityInteractor.resetDismissTimeout()
         uiEventLogger.log(VolumeDialogUiEvent.VOLUME_DIALOG_SLIDER_STOPPED_TRACKING_TOUCH)
     }
 

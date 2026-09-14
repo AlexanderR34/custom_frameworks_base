@@ -102,6 +102,13 @@ constructor(
         }
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (isShowing && event.action != MotionEvent.ACTION_OUTSIDE) {
+            visibilityInteractor.resetDismissTimeout()
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     /**
      * NOTE: This will be called with ACTION_OUTSIDE MotionEvents for touches that occur outside of
      * the touchable region of the volume dialog (as returned by [.onComputeInternalInsets]) even if
