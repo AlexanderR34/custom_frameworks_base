@@ -29,6 +29,7 @@ import com.libremobileos.freeform.server.LMOFreeformUIService;
 public class FreeformService extends SystemService {
 
     private static final String TAG = "FreeformService";
+    private boolean mInitialized = false;
 
     public FreeformService(Context context) {
         super(context);
@@ -36,24 +37,29 @@ public class FreeformService extends SystemService {
 
     @Override
     public void onStart() {
-        // noop
+        initIfNeeded();
     }
 
     @Override
     public void onBootPhase(@BootPhase int phase) {
-        if (phase != PHASE_ACTIVITY_MANAGER_READY || isSafeMode()) return;
+        if (isSafeMode()) return;
+        initIfNeeded();
+    }
 
-        Slog.d(TAG, "PHASE_ACTIVITY_MANAGER_READY, going to init!");
+    private synchronized void initIfNeeded() {
+        if (mInitialized) return;
 
         DisplayManagerInternal displayManager = getLocalService(DisplayManagerInternal.class);
         if (displayManager == null) {
-            Slog.e(TAG, "Cannot init: DisplayManagerInternal is null!");
+            Slog.w(TAG, "Cannot init yet: DisplayManagerInternal is null");
             return;
         }
 
+        Slog.i(TAG, "Initializing FreeformService and LMOFreeformUIService");
         LMOFreeformService service = new LMOFreeformService(displayManager);
         LMOFreeformUIService uiService =
                 new LMOFreeformUIService(getContext(), displayManager, service);
         LMOFreeformServiceHolder.init(uiService, service);
+        mInitialized = true;
     }
 }
