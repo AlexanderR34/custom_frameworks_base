@@ -203,6 +203,7 @@ constructor(
                 }
                 .awaitCancellationThenDispose()
         }
+        root.requestApplyInsets()
 
         val isHyperOS = Settings.System.getIntForUser(
             root.context.contentResolver,
