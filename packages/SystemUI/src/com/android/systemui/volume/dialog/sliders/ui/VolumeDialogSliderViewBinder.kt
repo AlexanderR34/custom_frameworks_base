@@ -339,7 +339,7 @@ private fun HyperOSVolumeVerticalLayout(
 
     val sliderWidth = if (isLandscape) 56.dp else 62.dp
     val sliderHeight = if (isLandscape) 165.dp else 232.dp
-    val sliderCornerRadius = if (isLandscape) 28.dp else 31.dp
+    val sliderCornerRadius = if (isLandscape) 18.dp else 22.dp
     val iconSize = if (isLandscape) 22.dp else 26.dp
     val iconBottomPadding = if (isLandscape) 12.dp else 18.dp
     val topPadding = if (isLandscape) 10.dp else 15.dp
@@ -420,13 +420,12 @@ private fun HyperOSVolumeVerticalLayout(
                         }
                     }
             ) {
-                // White solid progress fill from bottom
+                // White solid progress fill from bottom (flat top edge, clipped naturally by parent container)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(progressFraction)
                         .align(Alignment.BottomCenter)
-                        .clip(RoundedCornerShape(sliderCornerRadius))
                         .background(Color.White)
                 )
 
@@ -532,6 +531,31 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
     var currentVol by remember(targetStream) {
         mutableStateOf(audioManager.getStreamVolume(targetStream).toFloat())
     }
+
+    LaunchedEffect(targetStream) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val streamType = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                    if (streamType == targetStream || streamType == -1) {
+                        currentVol = audioManager.getStreamVolume(targetStream).toFloat()
+                    }
+                }
+            }
+        }
+        val filter = android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        try {
+            context.registerReceiver(receiver, filter)
+        } catch (_: Exception) {}
+        try {
+            kotlinx.coroutines.awaitCancellation()
+        } finally {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (_: Exception) {}
+        }
+    }
+
     val rawProgress = ((currentVol - minVol) / range).coerceIn(0f, 1f)
     val progressFraction by animateFloatAsState(
         targetValue = rawProgress,
@@ -545,7 +569,7 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
 
     val capsuleWidth = if (isLandscape) 28.dp else 31.dp
     val capsuleHeight = if (isLandscape) 165.dp else 232.dp
-    val capsuleCorner = if (isLandscape) 14.dp else 15.5.dp
+    val capsuleCorner = if (isLandscape) 10.dp else 14.dp
     val iconSize = if (isLandscape) 16.dp else 18.dp
 
     val iconRes = if (targetStream == AudioManager.STREAM_VOICE_CALL) {
@@ -589,13 +613,12 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
                 }
             }
     ) {
-        // White solid progress fill from bottom
+        // White solid progress fill from bottom (flat top edge, clipped naturally by parent container)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(progressFraction)
                 .align(Alignment.BottomCenter)
-                .clip(RoundedCornerShape(capsuleCorner))
                 .background(Color.White)
         )
 
@@ -629,21 +652,36 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
 
     val pillWidth = if (isLandscape) 56.dp else 62.dp
     val pillHeight = if (isLandscape) 36.dp else 48.dp
-    val pillCorner = if (isLandscape) 18.dp else 24.dp
+    val pillCorner = if (isLandscape) 14.dp else 18.dp
     val iconSize = if (isLandscape) 20.dp else 24.dp
 
-    val pillBackground = if (isSilentOrVibrate) Color.White else Color(0x8A1A1A1A)
+    val animatedBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isSilentOrVibrate) Color.White else Color(0x8A1A1A1A),
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "ringerPillBg"
+    )
+    val animatedBorderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (!isSilentOrVibrate) Color(0x33FFFFFF) else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "ringerPillBorder"
+    )
+
+    val targetIconTint = when (ringerMode) {
+        AudioManager.RINGER_MODE_SILENT -> Color(0xFFFF453A) // Red for silent bell
+        AudioManager.RINGER_MODE_VIBRATE -> Color(0xFF2A72E5) // Blue for vibrate
+        else -> Color.White
+    }
+    val animatedIconTint by androidx.compose.animation.animateColorAsState(
+        targetValue = targetIconTint,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "ringerIconTint"
+    )
+
     val pillModifier = Modifier
         .size(width = pillWidth, height = pillHeight)
         .clip(RoundedCornerShape(pillCorner))
-        .background(pillBackground)
-        .then(
-            if (!isSilentOrVibrate) {
-                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(pillCorner))
-            } else {
-                Modifier
-            }
-        )
+        .background(animatedBg)
+        .border(0.75.dp, animatedBorderColor, RoundedCornerShape(pillCorner))
         .clickable {
             val nextMode = when (ringerMode) {
                 AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
@@ -663,15 +701,10 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
             AudioManager.RINGER_MODE_VIBRATE -> R.drawable.ic_volume_ringer_vibrate
             else -> R.drawable.ic_hyperos_bell_mute
         }
-        val iconTint = when (ringerMode) {
-            AudioManager.RINGER_MODE_SILENT -> Color(0xFFFF453A) // Red for silent bell
-            AudioManager.RINGER_MODE_VIBRATE -> Color(0xFF2A72E5) // Blue for vibrate
-            else -> Color.White
-        }
         androidx.compose.material3.Icon(
             painter = painterResource(id = iconRes),
             contentDescription = "Ringer Mode",
-            tint = iconTint,
+            tint = animatedIconTint,
             modifier = Modifier.size(iconSize)
         )
     }
@@ -688,21 +721,30 @@ private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
 
     val pillWidth = if (isLandscape) 56.dp else 62.dp
     val pillHeight = if (isLandscape) 36.dp else 48.dp
-    val pillCorner = if (isLandscape) 18.dp else 24.dp
+    val pillCorner = if (isLandscape) 14.dp else 18.dp
     val iconSize = if (isLandscape) 20.dp else 24.dp
 
-    val pillBackground = if (isDndActive) Color.White else Color(0x8A1A1A1A)
+    val animatedBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isDndActive) Color.White else Color(0x8A1A1A1A),
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "dndPillBg"
+    )
+    val animatedBorderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (!isDndActive) Color(0x33FFFFFF) else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "dndPillBorder"
+    )
+    val animatedIconTint by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isDndActive) Color(0xFF5B60F6) else Color.White,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 280, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "dndIconTint"
+    )
+
     val pillModifier = Modifier
         .size(width = pillWidth, height = pillHeight)
         .clip(RoundedCornerShape(pillCorner))
-        .background(pillBackground)
-        .then(
-            if (!isDndActive) {
-                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(pillCorner))
-            } else {
-                Modifier
-            }
-        )
+        .background(animatedBg)
+        .border(0.75.dp, animatedBorderColor, RoundedCornerShape(pillCorner))
         .clickable {
             val currentZen = Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF)
             val newZen = if (currentZen == Settings.Global.ZEN_MODE_OFF) {
@@ -718,11 +760,10 @@ private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
         contentAlignment = Alignment.Center,
         modifier = pillModifier
     ) {
-        val iconTint = if (isDndActive) Color(0xFF5B60F6) else Color.White
         androidx.compose.material3.Icon(
             painter = painterResource(id = R.drawable.ic_hyperos_dnd_moon),
             contentDescription = "Do Not Disturb",
-            tint = iconTint,
+            tint = animatedIconTint,
             modifier = Modifier.size(iconSize)
         )
     }
