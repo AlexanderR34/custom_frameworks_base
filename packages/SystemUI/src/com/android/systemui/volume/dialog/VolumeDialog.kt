@@ -31,7 +31,6 @@ import com.android.systemui.res.R
 import com.android.systemui.volume.Events
 import com.android.systemui.volume.dialog.dagger.factory.VolumeDialogComponentFactory
 import com.android.systemui.volume.dialog.domain.interactor.VolumeDialogVisibilityInteractor
-import com.android.systemui.statusbar.BlurUtils
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -43,7 +42,6 @@ constructor(
     @Application context: Context,
     private val componentFactory: VolumeDialogComponentFactory,
     private val visibilityInteractor: VolumeDialogVisibilityInteractor,
-    private val blurUtils: BlurUtils,
     @Assisted private val isVolumeDialogVertical: Boolean,
 ) : ComponentDialog(context, R.style.Theme_SystemUI_Dialog_Volume) {
 
@@ -62,11 +60,6 @@ constructor(
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
             )
-            val isBlurDisabled = android.os.SystemProperties.getBoolean("persist.sysui.disableBlur", false) ||
-                android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50) <= 0
-            if (!isBlurDisabled) {
-                addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-            }
             addPrivateFlags(WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
             setType(WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
             setWindowAnimations(-1)
@@ -74,11 +67,6 @@ constructor(
             attributes =
                 attributes.apply {
                     title = "VolumeDialog" // Not the same as Window#setTitle
-                    if (!isBlurDisabled) {
-                        val intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
-                        val blurRadius = (80 * (intensity / 50f)).toInt().coerceIn(20, 150)
-                        setBlurBehindRadius(blurRadius)
-                    }
                     layoutInDisplayCutoutMode =
                         WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
                     fitInsetsTypes = 0

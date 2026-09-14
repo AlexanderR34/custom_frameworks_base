@@ -78,7 +78,6 @@ constructor(
     private val captionsButtonViewModel: VolumeDialogCaptionsButtonViewModel,
     private val jankListenerFactory: JankListenerFactory,
     private val tracer: VolumeTracer,
-    private val blurUtils: com.android.systemui.statusbar.BlurUtils,
     @VolumeDialog private val viewBinders: List<@JvmSuppressWildcards ViewBinder>,
 ) {
 
@@ -202,31 +201,17 @@ constructor(
         val soundAssistantContainer = root.findViewById<View>(R.id.volume_dialog_sound_assistant_container)
         val soundAssistantButton = root.findViewById<View>(R.id.volume_dialog_sound_assistant_button)
 
-        val isBlurDisabled = android.os.SystemProperties.getBoolean("persist.sysui.disableBlur", false) ||
-            android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50) <= 0
-
         if (isHyperOS && isVolumeDialogVertical) {
-            dialog.window?.let { window ->
-                if (!isBlurDisabled) {
-                    val intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
-                    val blurRadius = (80 * (intensity / 50f)).toInt().coerceIn(20, 150)
-                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                    window.attributes = window.attributes.apply {
-                        setBlurBehindRadius(blurRadius)
-                    }
-                } else {
-                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                }
-            }
             root.findViewById<View>(R.id.volume_dialog_background)?.visibility = View.GONE
             root.findViewById<View>(R.id.volume_dialog_top_section_container)?.visibility = View.GONE
             root.findViewById<View>(R.id.volume_dialog_bottom_section_container)?.visibility = View.GONE
             root.findViewById<View>(R.id.volume_dialog_floating_sliders_container)?.visibility = View.GONE
+            val isLandscape = root.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
             mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
                 width = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 height = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 matchConstraintMaxHeight = ConstraintLayout.LayoutParams.UNSET
-                verticalBias = 0.18f
+                verticalBias = if (isLandscape) 0.5f else 0.18f
                 marginEnd = (8 * root.resources.displayMetrics.density).toInt()
             }
 
@@ -237,7 +222,10 @@ constructor(
                 android.os.UserHandle.USER_CURRENT
             ) == 1
 
-            if (showAppVolume) {
+            val audioManager = root.context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            val hasActiveApp = audioManager?.listAppVolumes()?.any { it.isActive && it.packageName != "android" } ?: false
+
+            if (showAppVolume && hasActiveApp) {
                 soundAssistantContainer?.visibility = View.VISIBLE
                 soundAssistantContainer?.let {
                     launchTraced("VDVB#soundAssistantTouchableBounds") {
@@ -280,17 +268,6 @@ constructor(
                 .setMinimumVisibleChange(ANIMATION_MINIMUM_VISIBLE_CHANGE)
                 .addUpdateListener { _, value, _ ->
                     view.applyAnimationProgress(value)
-                    val isBlurOff = android.os.SystemProperties.getBoolean("persist.sysui.disableBlur", false) ||
-                        android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50) <= 0
-                    if (!isBlurOff) {
-                        val intensity = android.os.SystemProperties.getInt("persist.sys.custom_blur_intensity", 50)
-                        val blurRadius = (80 * (intensity / 50f) * value).toInt().coerceAtLeast(0)
-                        dialog.window?.let { win ->
-                            win.attributes = win.attributes.apply {
-                                setBlurBehindRadius(blurRadius)
-                            }
-                        }
-                    }
                 }
         var junkListener: DynamicAnimation.OnAnimationUpdateListener? = null
 
@@ -328,7 +305,24 @@ constructor(
      */
     private fun View.applyAnimationProgress(fraction: Float) {
         alpha = ceil(fraction)
-        translationX = lerp(width, 0, fraction).toFloat()
+        if (this is ViewGroup) {
+            translationX = 0f
+            val soundAssistant = findViewById<View?>(R.id.volume_dialog_sound_assistant_container)
+            val rightOffset = width.toFloat().takeIf { it > 0 } ?: 600f
+
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                if (child === soundAssistant) {
+                    val leftOffset = -((child.width.takeIf { it > 0 } ?: 150) + (child.left.takeIf { it > 0 } ?: 50)).toFloat()
+                    child.translationX = lerp(leftOffset, 0f, fraction)
+                    child.alpha = fraction
+                } else {
+                    child.translationX = lerp(rightOffset, 0f, fraction)
+                }
+            }
+        } else {
+            translationX = lerp(width, 0, fraction).toFloat()
+        }
     }
 
     private suspend fun View.applyVerticalOffset(offsetPx: Float, shouldAnimate: Boolean) {

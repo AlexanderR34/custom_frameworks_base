@@ -254,7 +254,7 @@ class HyperOSBatteryDrawable(
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
-    override fun getIntrinsicWidth(): Int = (22 * density).toInt()
+    override fun getIntrinsicWidth(): Int = (19 * density).toInt()
 
     override fun getIntrinsicHeight(): Int = (11.5f * density).toInt()
 

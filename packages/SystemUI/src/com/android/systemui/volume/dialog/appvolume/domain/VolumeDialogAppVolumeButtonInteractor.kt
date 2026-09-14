@@ -41,7 +41,7 @@ constructor(
         if (showAppVolume == 1) {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             for (appVolume in audioManager.listAppVolumes()) {
-                if (appVolume.isActive) {
+                if (appVolume.isActive && appVolume.packageName != "android") {
                     return true
                 }
             }

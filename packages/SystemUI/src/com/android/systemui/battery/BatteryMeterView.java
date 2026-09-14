@@ -701,7 +701,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
         if (mDrawable != null && mDrawable.isHyperOSStyle()) {
             float density = res.getDisplayMetrics().density;
-            mainBatteryWidth = 22f * density * iconScaleFactor;
+            mainBatteryWidth = 19f * density * iconScaleFactor;
             mainBatteryHeight = 11.5f * density * iconScaleFactor;
         }
 

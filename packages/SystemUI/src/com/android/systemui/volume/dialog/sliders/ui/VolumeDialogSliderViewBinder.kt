@@ -19,11 +19,14 @@ package com.android.systemui.volume.dialog.sliders.ui
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.UserHandle
 import android.provider.Settings
 import android.view.View
+import androidx.compose.ui.platform.LocalConfiguration
+import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -298,6 +301,9 @@ private fun HyperOSVolumeVerticalLayout(
     overscrollViewModel: VolumeDialogOverscrollViewModel,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     val min = sliderStateModel.valueRange.start
     val max = sliderStateModel.valueRange.endInclusive
     val range = (max - min).coerceAtLeast(1f)
@@ -319,30 +325,37 @@ private fun HyperOSVolumeVerticalLayout(
         audioManager.mode == AudioManager.MODE_RINGTONE ||
         (telecomManager?.isInCall == true)
 
+    val sliderWidth = if (isLandscape) 56.dp else 62.dp
+    val sliderHeight = if (isLandscape) 165.dp else 232.dp
+    val sliderCornerRadius = if (isLandscape) 28.dp else 31.dp
+    val iconSize = if (isLandscape) 22.dp else 26.dp
+    val iconBottomPadding = if (isLandscape) 12.dp else 18.dp
+    val topPadding = if (isLandscape) 10.dp else 15.dp
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .wrapContentSize()
-            .padding(vertical = 4.dp, horizontal = 2.dp)
+            .padding(vertical = if (isLandscape) 2.dp else 4.dp, horizontal = 2.dp)
     ) {
-        // Dual Call Volume Slider (31dp width, shown ONLY when in active call)
+        // Dual Call Volume Slider (shown ONLY when in active call)
         if (showCallSlider && isInCall) {
-            HyperOSCallVolumeVerticalCapsule(context = context)
+            HyperOSCallVolumeVerticalCapsule(context = context, isLandscape = isLandscape)
         }
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 10.dp),
             modifier = Modifier.wrapContentSize()
         ) {
             // Main Volume Slider Capsule
             Box(
                 modifier = Modifier
-                    .size(width = 62.dp, height = 232.dp)
-                    .clip(RoundedCornerShape(31.dp))
+                    .size(width = sliderWidth, height = sliderHeight)
+                    .clip(RoundedCornerShape(sliderCornerRadius))
                     .background(Color(0x8A1A1A1A))
-                    .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(31.dp))
+                    .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(sliderCornerRadius))
                     .pointerInput(min, max, range) {
                         detectVerticalDragGestures(
                             onDragStart = {
@@ -383,7 +396,7 @@ private fun HyperOSVolumeVerticalLayout(
                         .fillMaxWidth()
                         .fillMaxHeight(progressFraction)
                         .align(Alignment.BottomCenter)
-                        .clip(RoundedCornerShape(31.dp))
+                        .clip(RoundedCornerShape(sliderCornerRadius))
                         .background(Color.White)
                 )
 
@@ -393,7 +406,7 @@ private fun HyperOSVolumeVerticalLayout(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 15.dp)
+                        .padding(top = topPadding)
                         .clickable {
                             viewModel.openVolumePanel()
                         }
@@ -402,7 +415,7 @@ private fun HyperOSVolumeVerticalLayout(
                     repeat(3) {
                         Box(
                             modifier = Modifier
-                                .size(4.5.dp)
+                                .size(if (isLandscape) 3.5.dp else 4.5.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFB0B0B0))
                         )
@@ -421,8 +434,7 @@ private fun HyperOSVolumeVerticalLayout(
                             d.type == AudioDeviceInfo.TYPE_HEARING_AID ||
                             d.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
                             d.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-                            d.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
-                            d.type == AudioDeviceInfo.TYPE_USB_DEVICE
+                            d.type == AudioDeviceInfo.TYPE_USB_HEADSET
                         } || audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn || audioManager.isWiredHeadsetOn
                     } catch (_: Exception) {
                         false
@@ -450,32 +462,32 @@ private fun HyperOSVolumeVerticalLayout(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 18.dp)
-                        .size(26.dp)
+                        .padding(bottom = iconBottomPadding)
+                        .size(iconSize)
                 ) {
                     androidx.compose.material3.Icon(
                         painter = painterResource(id = currentIconRes),
                         contentDescription = sliderStateModel.label,
                         tint = iconTint,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(iconSize)
                     )
                 }
             }
 
-            // HyperOS Ringer Mode Toggle Button (Stadium Pill: 62dp x 48dp)
-            HyperOSRingerPill(context = context)
+            // HyperOS Ringer Mode Toggle Button
+            HyperOSRingerPill(context = context, isLandscape = isLandscape)
 
-            // HyperOS DND Mode Toggle Button (Stadium Pill: 62dp x 48dp)
-            HyperOSDndPill(context = context)
+            // HyperOS DND Mode Toggle Button
+            HyperOSDndPill(context = context, isLandscape = isLandscape)
         }
     }
 }
 
 /**
- * Dedicated Dual In-Call Volume Slider Capsule (31dp x 232dp) for voice/VoIP calls.
+ * Dedicated Dual In-Call Volume Slider Capsule for voice/VoIP calls.
  */
 @Composable
-private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
+private fun HyperOSCallVolumeVerticalCapsule(context: Context, isLandscape: Boolean = false) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val minCallVol = remember { audioManager.getStreamMinVolume(AudioManager.STREAM_VOICE_CALL).toFloat() }
     val maxCallVol = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL).toFloat() }
@@ -487,12 +499,17 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
     val progressFraction = ((currentCallVol - minCallVol) / range).coerceIn(0f, 1f)
     val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
 
+    val capsuleWidth = if (isLandscape) 28.dp else 31.dp
+    val capsuleHeight = if (isLandscape) 165.dp else 232.dp
+    val capsuleCorner = if (isLandscape) 14.dp else 15.5.dp
+    val iconSize = if (isLandscape) 16.dp else 18.dp
+
     Box(
         modifier = Modifier
-            .size(width = 31.dp, height = 232.dp)
-            .clip(RoundedCornerShape(15.5.dp))
+            .size(width = capsuleWidth, height = capsuleHeight)
+            .clip(RoundedCornerShape(capsuleCorner))
             .background(Color(0x8A1A1A1A))
-            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(15.5.dp))
+            .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(capsuleCorner))
             .pointerInput(minCallVol, maxCallVol, range) {
                 detectVerticalDragGestures(
                     onVerticalDrag = { change, _ ->
@@ -527,7 +544,7 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
                 .fillMaxWidth()
                 .fillMaxHeight(progressFraction)
                 .align(Alignment.BottomCenter)
-                .clip(RoundedCornerShape(15.5.dp))
+                .clip(RoundedCornerShape(capsuleCorner))
                 .background(Color.White)
         )
 
@@ -536,14 +553,14 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-                .size(18.dp)
+                .padding(bottom = if (isLandscape) 10.dp else 16.dp)
+                .size(iconSize)
         ) {
             androidx.compose.material3.Icon(
                 painter = painterResource(id = R.drawable.ic_hyperos_call_volume),
                 contentDescription = "Call Volume",
                 tint = iconTint,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
     }
@@ -554,19 +571,24 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context) {
  */
 
 @Composable
-private fun HyperOSRingerPill(context: Context) {
+private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     var ringerMode by remember { mutableStateOf(audioManager.ringerModeInternal) }
     val isSilentOrVibrate = ringerMode != AudioManager.RINGER_MODE_NORMAL
 
+    val pillWidth = if (isLandscape) 56.dp else 62.dp
+    val pillHeight = if (isLandscape) 36.dp else 48.dp
+    val pillCorner = if (isLandscape) 18.dp else 24.dp
+    val iconSize = if (isLandscape) 20.dp else 24.dp
+
     val pillBackground = if (isSilentOrVibrate) Color.White else Color(0x8A1A1A1A)
     val pillModifier = Modifier
-        .size(width = 62.dp, height = 48.dp)
-        .clip(RoundedCornerShape(24.dp))
+        .size(width = pillWidth, height = pillHeight)
+        .clip(RoundedCornerShape(pillCorner))
         .background(pillBackground)
         .then(
             if (!isSilentOrVibrate) {
-                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
+                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(pillCorner))
             } else {
                 Modifier
             }
@@ -599,13 +621,13 @@ private fun HyperOSRingerPill(context: Context) {
             painter = painterResource(id = iconRes),
             contentDescription = "Ringer Mode",
             tint = iconTint,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(iconSize)
         )
     }
 }
 
 @Composable
-private fun HyperOSDndPill(context: Context) {
+private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
     val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
     var isDndActive by remember {
         mutableStateOf(
@@ -613,14 +635,19 @@ private fun HyperOSDndPill(context: Context) {
         )
     }
 
+    val pillWidth = if (isLandscape) 56.dp else 62.dp
+    val pillHeight = if (isLandscape) 36.dp else 48.dp
+    val pillCorner = if (isLandscape) 18.dp else 24.dp
+    val iconSize = if (isLandscape) 20.dp else 24.dp
+
     val pillBackground = if (isDndActive) Color.White else Color(0x8A1A1A1A)
     val pillModifier = Modifier
-        .size(width = 62.dp, height = 48.dp)
-        .clip(RoundedCornerShape(24.dp))
+        .size(width = pillWidth, height = pillHeight)
+        .clip(RoundedCornerShape(pillCorner))
         .background(pillBackground)
         .then(
             if (!isDndActive) {
-                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
+                Modifier.border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(pillCorner))
             } else {
                 Modifier
             }
@@ -645,7 +672,7 @@ private fun HyperOSDndPill(context: Context) {
             painter = painterResource(id = R.drawable.ic_hyperos_dnd_moon),
             contentDescription = "Do Not Disturb",
             tint = iconTint,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(iconSize)
         )
     }
 }
