@@ -28,6 +28,9 @@ import android.view.View
 import androidx.compose.ui.platform.LocalConfiguration
 import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -308,7 +311,16 @@ private fun HyperOSVolumeVerticalLayout(
     val max = sliderStateModel.valueRange.endInclusive
     val range = (max - min).coerceAtLeast(1f)
     val currentVal = sliderStateModel.value.coerceIn(min, max)
-    val progressFraction = ((currentVal - min) / range).coerceIn(0f, 1f)
+    val rawProgressFraction = ((currentVal - min) / range).coerceIn(0f, 1f)
+
+    val progressFraction by animateFloatAsState(
+        targetValue = rawProgressFraction,
+        animationSpec = spring(
+            dampingRatio = 0.85f,
+            stiffness = 400f
+        ),
+        label = "VolumeSliderProgress"
+    )
 
     val showCallSlider = remember {
         Settings.System.getIntForUser(
@@ -334,7 +346,7 @@ private fun HyperOSVolumeVerticalLayout(
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         modifier = Modifier
             .wrapContentSize()
             .padding(vertical = if (isLandscape) 2.dp else 4.dp, horizontal = 2.dp)
@@ -496,7 +508,15 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context, isLandscape: Bool
     var currentCallVol by remember {
         mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toFloat())
     }
-    val progressFraction = ((currentCallVol - minCallVol) / range).coerceIn(0f, 1f)
+    val rawCallProgress = ((currentCallVol - minCallVol) / range).coerceIn(0f, 1f)
+    val progressFraction by animateFloatAsState(
+        targetValue = rawCallProgress,
+        animationSpec = spring(
+            dampingRatio = 0.85f,
+            stiffness = 400f
+        ),
+        label = "CallVolumeSliderProgress"
+    )
     val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
 
     val capsuleWidth = if (isLandscape) 28.dp else 31.dp

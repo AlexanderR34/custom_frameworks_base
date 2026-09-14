@@ -287,10 +287,10 @@ fun HyperOSBattery(
 
             // 7. Draw sharp HyperOS charging bolt (solid black outline + white sharp fill)
             if (isCharging) {
-                val centerX = frameRect.left + (frameRect.width / 2f) - (0.5f * (h / 12f))
+                val centerX = frameRect.left + (frameRect.width / 2f) - (0.4f * (h / 12f))
                 val centerY = h / 2f
-                val boltH = h * 1.05f
-                val boltW = h * 0.62f
+                val boltH = h * 1.0f
+                val boltW = h * 0.54f
 
                 val boltPath = Path().apply {
                     val topX = centerX + boltW * 0.14f
@@ -315,7 +315,7 @@ fun HyperOSBattery(
                     close()
                 }
                 // Solid black outline for crisp contrast + pure white sharp bolt
-                drawPath(boltPath, Color.Black, style = Stroke(width = 1.6f * (h / 12f)))
+                drawPath(boltPath, Color.Black, style = Stroke(width = 1.4f * (h / 12f)))
                 drawPath(boltPath, Color.White)
             }
         }
@@ -516,7 +516,7 @@ fun UnifiedBattery(
                     isDark = isDark,
                     modifier = Modifier
                         .align(Alignment.CenterVertically)
-                        .aspectRatio(26.5f / 11.5f)
+                        .aspectRatio(20.5f / 11.5f)
                         .fillMaxHeight(),
                     contentDescription = contentDesc,
                 )

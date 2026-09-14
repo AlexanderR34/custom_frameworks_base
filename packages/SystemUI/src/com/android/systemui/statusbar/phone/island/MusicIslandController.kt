@@ -14,6 +14,7 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.UserHandle
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
@@ -169,11 +170,16 @@ class MusicIslandController(
         }
 
         // Register settings observer
-        context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor(SETTING_MUSIC_ISLAND),
-            false,
-            mSettingsObserver
-        )
+        try {
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(SETTING_MUSIC_ISLAND),
+                false,
+                mSettingsObserver,
+                UserHandle.USER_ALL
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register settings observer", e)
+        }
 
         try {
             mKeyguardStateController = Dependency.get(KeyguardStateController::class.java)
@@ -197,7 +203,6 @@ class MusicIslandController(
 
         updateKeyguardState()
         updateFeatureEnabledState()
-        findActiveMediaSession()
     }
 
     fun detach() {
@@ -214,8 +219,8 @@ class MusicIslandController(
     }
 
     private fun updateFeatureEnabledState() {
-        mIsFeatureEnabled = Settings.System.getInt(
-            context.contentResolver, SETTING_MUSIC_ISLAND, 1
+        mIsFeatureEnabled = Settings.System.getIntForUser(
+            context.contentResolver, SETTING_MUSIC_ISLAND, 0, UserHandle.USER_CURRENT
         ) == 1
 
         Log.d(TAG, "Music Island feature enabled: $mIsFeatureEnabled")
@@ -224,6 +229,8 @@ class MusicIslandController(
             mainHandler.removeCallbacks(mProgressTickRunnable)
             mIslandView?.hideIsland()
             mPopup?.dismissWithAnimation()
+            mActiveController?.unregisterCallback(mMediaCallback)
+            mActiveController = null
         } else {
             findActiveMediaSession()
         }
