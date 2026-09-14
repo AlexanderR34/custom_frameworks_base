@@ -156,19 +156,20 @@ constructor(
                         android.os.UserHandle.USER_CURRENT
                     ) == 1
 
-                    if (!(isHyperOS && isVolumeDialogVertical)) {
-                        val insetsValues =
-                            newInsets.getInsets(
-                                WindowInsets.Type.displayCutout() or
-                                    WindowInsets.Type.navigationBars() or
-                                    WindowInsets.Type.statusBars()
-                            )
-                        view.updatePadding(
-                            left = insetsValues.left,
-                            top = insetsValues.top,
-                            right = insetsValues.right,
-                            bottom = insetsValues.bottom,
+                    val insetsValues =
+                        newInsets.getInsets(
+                            WindowInsets.Type.displayCutout() or
+                                WindowInsets.Type.navigationBars() or
+                                WindowInsets.Type.statusBars()
                         )
+                    view.updatePadding(
+                        left = insetsValues.left,
+                        top = insetsValues.top,
+                        right = insetsValues.right,
+                        bottom = insetsValues.bottom,
+                    )
+
+                    if (!(isHyperOS && isVolumeDialogVertical)) {
                         if (isVolumeDialogVertical) {
                             mainSliderContainer?.updateMargin(
                                 top = getSliderVerticalMargin() - view.paddingTop,
@@ -184,7 +185,19 @@ constructor(
                             }
                         }
                     } else {
-                        view.setPadding(0, 0, 0, 0)
+                        val isLandscape = view.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                        val marginEndPx = if (isLandscape) {
+                            (16 * view.resources.displayMetrics.density).toInt()
+                        } else {
+                            (8 * view.resources.displayMetrics.density).toInt()
+                        }
+                        mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                            width = ConstraintLayout.LayoutParams.WRAP_CONTENT
+                            height = ConstraintLayout.LayoutParams.WRAP_CONTENT
+                            matchConstraintMaxHeight = ConstraintLayout.LayoutParams.UNSET
+                            verticalBias = if (isLandscape) 0.5f else 0.18f
+                            marginEnd = marginEndPx
+                        }
                     }
                     WindowInsets.CONSUMED
                 }
@@ -207,12 +220,17 @@ constructor(
             root.findViewById<View>(R.id.volume_dialog_bottom_section_container)?.visibility = View.GONE
             root.findViewById<View>(R.id.volume_dialog_floating_sliders_container)?.visibility = View.GONE
             val isLandscape = root.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            val marginEndPx = if (isLandscape) {
+                (16 * root.resources.displayMetrics.density).toInt()
+            } else {
+                (8 * root.resources.displayMetrics.density).toInt()
+            }
             mainSliderContainer?.updateLayoutParams<ConstraintLayout.LayoutParams> {
                 width = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 height = ConstraintLayout.LayoutParams.WRAP_CONTENT
                 matchConstraintMaxHeight = ConstraintLayout.LayoutParams.UNSET
                 verticalBias = if (isLandscape) 0.5f else 0.18f
-                marginEnd = (8 * root.resources.displayMetrics.density).toInt()
+                marginEnd = marginEndPx
             }
 
             val showAppVolume = Settings.System.getIntForUser(
