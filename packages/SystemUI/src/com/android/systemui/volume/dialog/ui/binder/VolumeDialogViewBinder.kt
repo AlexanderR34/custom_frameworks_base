@@ -187,7 +187,7 @@ constructor(
                     } else {
                         val isLandscape = view.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                         val marginEndPx = if (isLandscape) {
-                            (16 * view.resources.displayMetrics.density).toInt()
+                            (48 * view.resources.displayMetrics.density).toInt()
                         } else {
                             (8 * view.resources.displayMetrics.density).toInt()
                         }
@@ -222,7 +222,7 @@ constructor(
             root.findViewById<View>(R.id.volume_dialog_floating_sliders_container)?.visibility = View.GONE
             val isLandscape = root.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
             val marginEndPx = if (isLandscape) {
-                (16 * root.resources.displayMetrics.density).toInt()
+                (48 * root.resources.displayMetrics.density).toInt()
             } else {
                 (8 * root.resources.displayMetrics.density).toInt()
             }
@@ -323,24 +323,27 @@ constructor(
      * @param fraction in range [0, 1]. 0 corresponds to the dialog being hidden and 1 - visible.
      */
     private fun View.applyAnimationProgress(fraction: Float) {
-        alpha = ceil(fraction)
+        val clampedFraction = fraction.coerceIn(0f, 1f)
+        alpha = clampedFraction
         if (this is ViewGroup) {
             translationX = 0f
             val soundAssistant = findViewById<View?>(R.id.volume_dialog_sound_assistant_container)
-            val rightOffset = width.toFloat().takeIf { it > 0 } ?: 600f
+            val slideDist = (48 * resources.displayMetrics.density)
 
             for (i in 0 until childCount) {
                 val child = getChildAt(i)
                 if (child === soundAssistant) {
                     val leftOffset = -((child.width.takeIf { it > 0 } ?: 150) + (child.left.takeIf { it > 0 } ?: 50)).toFloat()
-                    child.translationX = lerp(leftOffset, 0f, fraction)
-                    child.alpha = fraction
+                    child.translationX = lerp(leftOffset, 0f, clampedFraction)
+                    child.alpha = clampedFraction
                 } else {
-                    child.translationX = lerp(rightOffset, 0f, fraction)
+                    child.translationX = lerp(slideDist, 0f, clampedFraction)
+                    child.alpha = clampedFraction
                 }
             }
         } else {
-            translationX = lerp(width, 0, fraction).toFloat()
+            val slideDist = (48 * resources.displayMetrics.density)
+            translationX = lerp(slideDist, 0f, clampedFraction)
         }
     }
 

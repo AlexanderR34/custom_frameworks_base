@@ -351,9 +351,27 @@ private fun HyperOSVolumeVerticalLayout(
             .wrapContentSize()
             .padding(vertical = if (isLandscape) 2.dp else 4.dp, horizontal = 2.dp)
     ) {
-        // Dual Call Volume Slider (shown ONLY when in active call)
+        // Dual / Secondary Volume Slider (shown ONLY when in active call)
         if (showCallSlider && isInCall) {
-            HyperOSCallVolumeVerticalCapsule(context = context, isLandscape = isLandscape)
+            val isMainVoiceCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
+                audioManager.mode == AudioManager.MODE_IN_COMMUNICATION ||
+                sliderStateModel.label.contains("call", ignoreCase = true) ||
+                sliderStateModel.label.contains("llamada", ignoreCase = true) ||
+                sliderStateModel.label.contains("voz", ignoreCase = true) ||
+                sliderStateModel.label.contains("voice", ignoreCase = true) ||
+                sliderStateModel.label.contains("comunic", ignoreCase = true)
+
+            val targetSecondaryStream = if (isMainVoiceCall) {
+                AudioManager.STREAM_MUSIC
+            } else {
+                AudioManager.STREAM_VOICE_CALL
+            }
+
+            HyperOSSecondaryVolumeVerticalCapsule(
+                context = context,
+                targetStream = targetSecondaryStream,
+                isLandscape = isLandscape
+            )
         }
 
         Column(
@@ -496,26 +514,32 @@ private fun HyperOSVolumeVerticalLayout(
 }
 
 /**
- * Dedicated Dual In-Call Volume Slider Capsule for voice/VoIP calls.
+ * HyperOS Secondary Volume Vertical Capsule for Dual Sliders in Call Mode.
+ * If main slider controls Call, this secondary slider controls Media (STREAM_MUSIC).
+ * If main slider controls Media, this secondary slider controls Call (STREAM_VOICE_CALL).
  */
 @Composable
-private fun HyperOSCallVolumeVerticalCapsule(context: Context, isLandscape: Boolean = false) {
+private fun HyperOSSecondaryVolumeVerticalCapsule(
+    context: Context,
+    targetStream: Int,
+    isLandscape: Boolean = false
+) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    val minCallVol = remember { audioManager.getStreamMinVolume(AudioManager.STREAM_VOICE_CALL).toFloat() }
-    val maxCallVol = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL).toFloat() }
-    val range = (maxCallVol - minCallVol).coerceAtLeast(1f)
+    val minVol = remember(targetStream) { audioManager.getStreamMinVolume(targetStream).toFloat() }
+    val maxVol = remember(targetStream) { audioManager.getStreamMaxVolume(targetStream).toFloat() }
+    val range = (maxVol - minVol).coerceAtLeast(1f)
 
-    var currentCallVol by remember {
-        mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toFloat())
+    var currentVol by remember(targetStream) {
+        mutableStateOf(audioManager.getStreamVolume(targetStream).toFloat())
     }
-    val rawCallProgress = ((currentCallVol - minCallVol) / range).coerceIn(0f, 1f)
+    val rawProgress = ((currentVol - minVol) / range).coerceIn(0f, 1f)
     val progressFraction by animateFloatAsState(
-        targetValue = rawCallProgress,
+        targetValue = rawProgress,
         animationSpec = spring(
             dampingRatio = 0.85f,
             stiffness = 400f
         ),
-        label = "CallVolumeSliderProgress"
+        label = "SecondaryVolumeSliderProgress"
     )
     val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
 
@@ -524,36 +548,43 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context, isLandscape: Bool
     val capsuleCorner = if (isLandscape) 14.dp else 15.5.dp
     val iconSize = if (isLandscape) 16.dp else 18.dp
 
+    val iconRes = if (targetStream == AudioManager.STREAM_VOICE_CALL) {
+        R.drawable.ic_hyperos_call_volume
+    } else {
+        if (progressFraction <= 0.05f) R.drawable.ic_hyperos_speaker_mute else R.drawable.ic_hyperos_speaker_mid
+    }
+    val iconDesc = if (targetStream == AudioManager.STREAM_VOICE_CALL) "Call Volume" else "Media Volume"
+
     Box(
         modifier = Modifier
             .size(width = capsuleWidth, height = capsuleHeight)
             .clip(RoundedCornerShape(capsuleCorner))
             .background(Color(0x8A1A1A1A))
             .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(capsuleCorner))
-            .pointerInput(minCallVol, maxCallVol, range) {
+            .pointerInput(minVol, maxVol, range, targetStream) {
                 detectVerticalDragGestures(
                     onVerticalDrag = { change, _ ->
                         change.consume()
                         val touchY = change.position.y
                         val heightPx = size.height.toFloat()
                         val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                        val targetVal = (minCallVol + frac * range).roundToInt()
-                        currentCallVol = targetVal.toFloat()
+                        val targetVal = (minVol + frac * range).roundToInt()
+                        currentVol = targetVal.toFloat()
                         try {
-                            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, targetVal, 0)
+                            audioManager.setStreamVolume(targetStream, targetVal, 0)
                         } catch (_: Exception) {}
                     }
                 )
             }
-            .pointerInput(minCallVol, maxCallVol, range) {
+            .pointerInput(minVol, maxVol, range, targetStream) {
                 detectTapGestures { offset ->
                     val touchY = offset.y
                     val heightPx = size.height.toFloat()
                     val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                    val targetVal = (minCallVol + frac * range).roundToInt()
-                    currentCallVol = targetVal.toFloat()
+                    val targetVal = (minVol + frac * range).roundToInt()
+                    currentVol = targetVal.toFloat()
                     try {
-                        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, targetVal, 0)
+                        audioManager.setStreamVolume(targetStream, targetVal, 0)
                     } catch (_: Exception) {}
                 }
             }
@@ -568,7 +599,7 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context, isLandscape: Bool
                 .background(Color.White)
         )
 
-        // Bottom Call Phone Icon with Audio Waves
+        // Bottom Icon
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -577,8 +608,8 @@ private fun HyperOSCallVolumeVerticalCapsule(context: Context, isLandscape: Bool
                 .size(iconSize)
         ) {
             androidx.compose.material3.Icon(
-                painter = painterResource(id = R.drawable.ic_hyperos_call_volume),
-                contentDescription = "Call Volume",
+                painter = painterResource(id = iconRes),
+                contentDescription = iconDesc,
                 tint = iconTint,
                 modifier = Modifier.size(iconSize)
             )
