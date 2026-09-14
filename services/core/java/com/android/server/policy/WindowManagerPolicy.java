@@ -589,7 +589,7 @@ public interface WindowManagerPolicy extends WindowManagerPolicyConstants {
             case TYPE_VOLUME_OVERLAY:
                 // the on-screen volume indicator and controller shown when the user
                 // changes the device volume
-                return  22;
+                return  canAddInternalSystemWindow ? 27 : 22;
             case TYPE_SYSTEM_OVERLAY:
                 // the on-screen volume indicator and controller shown when the user
                 // changes the device volume
