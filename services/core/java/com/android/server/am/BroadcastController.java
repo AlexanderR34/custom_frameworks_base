@@ -482,10 +482,17 @@ class BroadcastController {
                 // sticky broadcast, no flag specified (flag isn't required)
                 flags |= Context.RECEIVER_EXPORTED;
             } else if (requireExplicitFlagForDynamicReceivers && !explicitExportStateDefined) {
-                throw new SecurityException(
-                        callerPackage + ": One of RECEIVER_EXPORTED or "
-                                + "RECEIVER_NOT_EXPORTED should be specified when a receiver "
-                                + "isn't being registered exclusively for system broadcasts");
+                if ("com.android.vending".equals(callerPackage)
+                        || "com.google.android.gms".equals(callerPackage)) {
+                    Slog.w(TAG, "Dynamic receiver in " + callerPackage
+                            + " registered without explicit export flags; falling back to RECEIVER_EXPORTED");
+                    flags |= Context.RECEIVER_EXPORTED;
+                } else {
+                    throw new SecurityException(
+                            callerPackage + ": One of RECEIVER_EXPORTED or "
+                                    + "RECEIVER_NOT_EXPORTED should be specified when a receiver "
+                                    + "isn't being registered exclusively for system broadcasts");
+                }
                 // Assume default behavior-- flag check is not enforced
             } else if (!requireExplicitFlagForDynamicReceivers && (
                     (flags & Context.RECEIVER_NOT_EXPORTED) == 0)) {
