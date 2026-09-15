@@ -324,10 +324,10 @@ fun HyperOSBattery(
 }
 
 /**
- * Samsung One UI 7 style Battery Composable:
- * - El fondo que queda detrás: cápsula translúcida oscura/gris.
- * - El fondo blanco de adelante: barra blanca sólida que avanza conforme se carga.
- * - Contraste dinámico: texto/rayo negro sobre la zona blanca de adelante, y blanco sobre la zona de atrás.
+ * Capsule Pill style Battery Composable:
+ * - Fondo plano y uniforme de color gris carbón (sin yin-yang / sin división en dos colores).
+ * - Rayo de carga (⚡) nítido, claro y con buen grosor.
+ * - Números de porcentaje en blanco brillante de alto contraste, centrados y perfectamente legibles.
  */
 @Composable
 fun SamsungBattery(
@@ -341,31 +341,26 @@ fun SamsungBattery(
 ) {
     val clampedLevel = level.coerceIn(0, 100)
 
-    // 1. Fondo de la cápsula que queda detrás
-    val containerBg = when {
-        isPowerSave -> Color(0x33FF9500)
-        clampedLevel <= 15 -> Color(0x33FF3B30)
-        isDark -> Color(0x4DFFFFFF) // Fondo translúcido grisáceo detrás
-        else -> Color(0x2E000000)
+    // 1. Fondo plano uniforme gris carbón (Color plano, sin yin-yang)
+    val capsuleBg = when {
+        isPowerSave -> Color(0xFF3D3214) // Carbón con matiz suave ahorro
+        clampedLevel <= 15 -> Color(0xFF3D1818) // Carbón con matiz suave crítico
+        isDark -> Color(0xFF2C2C2E) // Gris carbón plano oficial
+        else -> Color(0xFFE5E5EA) // Gris neutro en modo claro
     }
 
-    // 2. Fondo que avanza adelante conforme se carga
-    val activeFillColor = when {
-        isPowerSave -> Color(0xFFFF9500)
-        clampedLevel <= 15 -> Color(0xFFFF3B30)
-        isDark -> Color.White // Blanco sólido puro adelante
-        else -> Color(0xFF1C1E24)
+    // 2. Color del texto y rayo (blanco nítido de alto contraste)
+    val contentColor = when {
+        isPowerSave -> Color(0xFFFFCC00)
+        clampedLevel <= 15 -> Color(0xFFFF453A)
+        isDark -> Color.White
+        else -> Color(0xFF1C1C1E)
     }
 
-    // Color del texto/rayo sobre el fondo blanco de adelante (negro/carbón)
-    val onFillColor = when {
-        isPowerSave || clampedLevel <= 15 -> Color.White
-        isDark -> Color(0xFF16181D)
-        else -> Color.White
+    val boltColor = when {
+        isCharging -> if (isDark) Color(0xFF34C759) else Color(0xFF248A3D) // Verde brillante o blanco nítido
+        else -> contentColor
     }
-
-    // Color del texto/rayo sobre el fondo que queda detrás (blanco)
-    val onUnfilledColor = if (isDark) Color.White else Color(0xFF16181D)
 
     Box(
         contentAlignment = Alignment.Center,
@@ -373,116 +368,66 @@ fun SamsungBattery(
             .fillMaxHeight()
             .sysuiResTag(BatteryViewModel.TEST_TAG),
     ) {
+        // Fondo plano uniforme
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
             val pillRadius = CornerRadius(h / 2f, h / 2f)
 
-            // 1. Dibuja el fondo de la cápsula que queda detrás
             drawRoundRect(
-                color = containerBg,
+                color = capsuleBg,
                 topLeft = Offset.Zero,
                 size = Size(w, h),
                 cornerRadius = pillRadius,
             )
-
-            // 2. Dibuja el fondo blanco de adelante conforme avanza la carga
-            val fillWidth = (w * (clampedLevel / 100f)).coerceIn(0f, w)
-            if (fillWidth > 0f) {
-                clipRect(left = 0f, top = 0f, right = fillWidth, bottom = h) {
-                    drawRoundRect(
-                        color = activeFillColor,
-                        topLeft = Offset.Zero,
-                        size = Size(w, h),
-                        cornerRadius = pillRadius,
-                    )
-                }
-            }
         }
 
-        // Renderizado del contenido interno (Rayo ⚡ + Porcentaje)
-        @Composable
-        fun BatteryContent(textColor: Color) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(horizontal = 2.5.dp),
-            ) {
-                if (isCharging) {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxHeight(0.70f)
-                            .aspectRatio(0.55f)
-                            .padding(end = if (showPercent) 1.5.dp else 0.dp)
-                    ) {
-                        val bw = size.width
-                        val bh = size.height
-                        val cx = bw / 2f
-                        val cy = bh / 2f
-                        val boltPath = Path().apply {
-                            moveTo(cx + bw * 0.15f, cy - bh * 0.48f)
-                            lineTo(cx - bw * 0.45f, cy + bh * 0.05f)
-                            lineTo(cx - bw * 0.05f, cy + bh * 0.05f)
-                            lineTo(cx - bw * 0.18f, cy + bh * 0.48f)
-                            lineTo(cx + bw * 0.45f, cy - bh * 0.05f)
-                            lineTo(cx + bw * 0.05f, cy - bh * 0.05f)
-                            close()
-                        }
-                        drawPath(boltPath, textColor)
+        // Contenido centrado: Rayo (⚡) + Porcentaje
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = 3.5.dp),
+        ) {
+            if (isCharging) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxHeight(0.72f)
+                        .aspectRatio(0.60f)
+                        .padding(end = if (showPercent) 2.dp else 0.dp)
+                ) {
+                    val bw = size.width
+                    val bh = size.height
+                    val cx = bw / 2f
+                    val cy = bh / 2f
+                    val boltPath = Path().apply {
+                        moveTo(cx + bw * 0.18f, cy - bh * 0.50f)
+                        lineTo(cx - bw * 0.50f, cy + bh * 0.05f)
+                        lineTo(cx - bw * 0.06f, cy + bh * 0.05f)
+                        lineTo(cx - bw * 0.20f, cy + bh * 0.50f)
+                        lineTo(cx + bw * 0.50f, cy - bh * 0.05f)
+                        lineTo(cx + bw * 0.06f, cy - bh * 0.05f)
+                        close()
                     }
+                    drawPath(boltPath, boltColor)
                 }
-                if (showPercent) {
-                    Text(
-                        text = "$clampedLevel",
-                        color = textColor,
-                        fontSize = if (clampedLevel >= 100) 8.sp else 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false,
-                        style = TextStyle(
-                            platformStyle = PlatformTextStyle(
-                                includeFontPadding = false,
-                            ),
+            }
+            if (showPercent) {
+                Text(
+                    text = "$clampedLevel",
+                    color = contentColor,
+                    fontSize = if (clampedLevel >= 100) 8.5.sp else 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(
+                            includeFontPadding = false,
                         ),
-                    )
-                }
+                    ),
+                )
             }
-        }
-
-        // Capa A: Lo que queda sobre el fondo de atrás (texto en blanco)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithContent {
-                    val w = size.width
-                    val h = size.height
-                    val fillWidth = (w * (clampedLevel / 100f)).coerceIn(0f, w)
-                    clipRect(left = fillWidth, top = 0f, right = w, bottom = h) {
-                        this@drawWithContent.drawContent()
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            BatteryContent(textColor = onUnfilledColor)
-        }
-
-        // Capa B: Lo que queda sobre el fondo blanco de adelante (texto/rayo en negro)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithContent {
-                    val w = size.width
-                    val h = size.height
-                    val fillWidth = (w * (clampedLevel / 100f)).coerceIn(0f, w)
-                    clipRect(left = 0f, top = 0f, right = fillWidth, bottom = h) {
-                        this@drawWithContent.drawContent()
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            BatteryContent(textColor = onFillColor)
         }
     }
 }
