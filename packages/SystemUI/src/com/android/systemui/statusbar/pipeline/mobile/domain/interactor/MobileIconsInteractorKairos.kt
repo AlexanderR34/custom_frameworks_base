@@ -298,7 +298,7 @@ constructor(
             .applyLatestSpecForKey(name = nameTag("MobileIconsInteractorKairosImpl.icons"))
     }
 
-    private val showSeparateDualSimIconsState: State<Boolean> = buildState {
+    private val showSeparateDualSimIconsState: State<Boolean> =
         conflatedCallbackFlow {
             val observer =
                 object : android.database.ContentObserver(null) {
@@ -332,7 +332,6 @@ constructor(
             }
         }
         .toState(nameTag("MobileIconsInteractorKairosImpl.showSeparateDualSimIconsState"))
-    }
 
     override val isStackable: State<Boolean> =
         if (NewStatusBarIcons.isEnabled) {
