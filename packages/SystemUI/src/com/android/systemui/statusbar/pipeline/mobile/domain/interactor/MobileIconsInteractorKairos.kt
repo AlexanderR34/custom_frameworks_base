@@ -54,12 +54,14 @@ import com.android.systemui.statusbar.policy.data.repository.UserSetupRepository
 import com.android.systemui.util.CarrierConfigTracker
 import com.android.systemui.util.lifecycle.kairos.KairosBuilder
 import com.android.systemui.util.lifecycle.kairos.kairosBuilder
+import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import dagger.Binds
 import dagger.Provides
 import dagger.multibindings.ElementsIntoSet
 import javax.inject.Inject
 import javax.inject.Provider
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 
 /**
@@ -296,20 +298,61 @@ constructor(
             .applyLatestSpecForKey(name = nameTag("MobileIconsInteractorKairosImpl.icons"))
     }
 
+    private val showSeparateDualSimIconsState: State<Boolean> = buildState {
+        conflatedCallbackFlow {
+            val observer =
+                object : android.database.ContentObserver(null) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(
+                            android.provider.Settings.System.getInt(
+                                context.contentResolver,
+                                android.provider.Settings.System.SHOW_SEPARATE_DUAL_SIM_ICONS,
+                                0
+                            ) == 1
+                        )
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                    android.provider.Settings.System.SHOW_SEPARATE_DUAL_SIM_ICONS
+                ),
+                false,
+                observer,
+                android.os.UserHandle.USER_ALL
+            )
+            trySend(
+                android.provider.Settings.System.getInt(
+                    context.contentResolver,
+                    android.provider.Settings.System.SHOW_SEPARATE_DUAL_SIM_ICONS,
+                    0
+                ) == 1
+            )
+            awaitClose {
+                context.contentResolver.unregisterContentObserver(observer)
+            }
+        }
+        .toState(nameTag("MobileIconsInteractorKairosImpl.showSeparateDualSimIconsState"))
+    }
+
     override val isStackable: State<Boolean> =
         if (NewStatusBarIcons.isEnabled) {
-            icons.flatMap { iconsBySubId: Map<Int, MobileIconInteractorKairos> ->
-                iconsBySubId.values
-                    .map { it.signalLevelIcon }
-                    .combine { signalLevelIcons ->
-                        // These are only stackable if:
-                        // - They are cellular
-                        // - There's exactly two
-                        // - They have the same number of levels
-                        signalLevelIcons
-                            .filterIsInstance<SignalIconModel.CellularTypeIconModel.Cellular>()
-                            .let { it.size == 2 && it[0].numberOfLevels == it[1].numberOfLevels }
-                    }
+            combine(
+                icons.flatMap { iconsBySubId: Map<Int, MobileIconInteractorKairos> ->
+                    iconsBySubId.values
+                        .map { it.signalLevelIcon }
+                        .combine { signalLevelIcons ->
+                            // These are only stackable if:
+                            // - They are cellular
+                            // - There's exactly two
+                            // - They have the same number of levels
+                            signalLevelIcons
+                                .filterIsInstance<SignalIconModel.CellularTypeIconModel.Cellular>()
+                                .let { it.size == 2 && it[0].numberOfLevels == it[1].numberOfLevels }
+                        }
+                },
+                showSeparateDualSimIconsState,
+            ) { stackable, showSeparate ->
+                stackable && !showSeparate
             }
         } else {
             stateOf(false)

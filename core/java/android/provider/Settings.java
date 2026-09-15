@@ -6880,6 +6880,13 @@ public final class Settings {
         public static final String SHOW_DATA_RAT_ICON_WITH_WIFI = "show_data_rat_icon_with_wifi";
 
         /**
+         * Whether to show separate signal icons for each SIM in dual SIM configurations.
+         * @hide
+         */
+        @Readable
+        public static final String SHOW_SEPARATE_DUAL_SIM_ICONS = "show_separate_dual_sim_icons";
+
+        /**
          * Whether user can swap the order of the Alert Slider.
          * * Whether user can invert the order of the Alert Slider.
          * 0: Default
@@ -7411,6 +7418,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);
             PRIVATE_SETTINGS.add(SHOW_FOURG_ICON);
             PRIVATE_SETTINGS.add(SHOW_DATA_RAT_ICON_WITH_WIFI);
+            PRIVATE_SETTINGS.add(SHOW_SEPARATE_DUAL_SIM_ICONS);
         }
 
         /**

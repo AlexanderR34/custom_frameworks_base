@@ -39,10 +39,12 @@ import com.android.systemui.statusbar.pipeline.shared.data.repository.Connectivi
 import com.android.systemui.statusbar.policy.data.repository.UserSetupRepository
 import com.android.systemui.util.CarrierConfigTracker
 import com.android.systemui.util.kotlin.mapDirect
+import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import java.lang.ref.WeakReference
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -323,22 +325,63 @@ constructor(
             }
             .stateIn(scope, SharingStarted.WhileSubscribed(), emptyList())
 
-    override val isStackable =
-        if (NewStatusBarIcons.isEnabled) {
-            icons.flatMapLatest { icons ->
-                if (icons.isEmpty()) {
-                    flowOf(false)
-                } else {
-                    combine(icons.map { it.signalLevelIcon }) { signalLevelIcons ->
-                        // These are only stackable if:
-                        // - They are cellular
-                        // - There's exactly two
-                        // - They have the same number of levels
-                        signalLevelIcons
-                            .filterIsInstance<SignalIconModel.CellularTypeIconModel.Cellular>()
-                            .let { it.size == 2 && it[0].numberOfLevels == it[1].numberOfLevels }
+    private val showSeparateDualSimIconsFlow: Flow<Boolean> =
+        conflatedCallbackFlow {
+            val observer =
+                object : android.database.ContentObserver(null) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(
+                            android.provider.Settings.System.getInt(
+                                context.contentResolver,
+                                android.provider.Settings.System.SHOW_SEPARATE_DUAL_SIM_ICONS,
+                                0
+                            ) == 1
+                        )
                     }
                 }
+            context.contentResolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                    android.provider.Settings.System.SHOW_SEPARATE_DUAL_SIM_ICONS
+                ),
+                false,
+                observer,
+                android.os.UserHandle.USER_ALL
+            )
+            trySend(
+                android.provider.Settings.System.getInt(
+                    context.contentResolver,
+                    android.provider.Settings.System.SHOW_SEPARATE_DUAL_SIM_ICONS,
+                    0
+                ) == 1
+            )
+            awaitClose {
+                context.contentResolver.unregisterContentObserver(observer)
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(), false)
+
+    override val isStackable =
+        if (NewStatusBarIcons.isEnabled) {
+            combine(
+                icons.flatMapLatest { icons ->
+                    if (icons.isEmpty()) {
+                        flowOf(false)
+                    } else {
+                        combine(icons.map { it.signalLevelIcon }) { signalLevelIcons ->
+                            // These are only stackable if:
+                            // - They are cellular
+                            // - There's exactly two
+                            // - They have the same number of levels
+                            signalLevelIcons
+                                .filterIsInstance<SignalIconModel.CellularTypeIconModel.Cellular>()
+                                .let { it.size == 2 && it[0].numberOfLevels == it[1].numberOfLevels }
+                        }
+                    }
+                },
+                showSeparateDualSimIconsFlow,
+            ) { stackable, showSeparate ->
+                stackable && !showSeparate
             }
         } else {
             flowOf(false)
