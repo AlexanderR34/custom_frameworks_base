@@ -131,9 +131,9 @@ class BatteryLayersDrawable(
     ) {
         frame.setTint(colorInfo.fg)
         frameBg.setTint(colorInfo.bg)
-        textOnly.setTint(colorInfo.fg)
-        spaceSharingText.setTint(colorInfo.fg)
-        attribution.setTint(colorInfo.fg)
+        textOnly.setTint(colorInfo.glyphFg)
+        spaceSharingText.setTint(colorInfo.glyphFg)
+        attribution.setTint(colorInfo.glyphFg)
 
         when (color) {
             ColorProfile.None -> {

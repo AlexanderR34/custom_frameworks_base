@@ -51,12 +51,12 @@ sealed interface BatteryColors {
      */
     sealed class LightTheme : BatteryColors {
         override val attribution = Color.Black
-        override val glyph = Color.Black.copy(alpha = 0.75f)
+        override val glyph = Color(0xFF666666)
         override val backgroundOnly = lowAlphaBg
         override val backgroundWithGlyph = lowAlphaBg
 
         data object Default : LightTheme() {
-            override val glyph = Color.White.copy(alpha = 0.9f)
+            override val glyph = Color(0xFF9E9E9E)
             override val fill = Color.Black
 
             /** Use a higher opacity here because the foreground is white */
@@ -84,16 +84,15 @@ sealed interface BatteryColors {
     /**
      * Dark theme: dark background, light icons
      *
-     * Similar to the light theme, the non-default ([Charging], [Error], [PowerSave]) colors use a
-     * darker [glyph] color. But since these icons will be drawn onto darker backgrounds, we use the
-     * opposite approach for the background, choosing the higher alpha variants to maximize
-     * contrast.
+     * Similar to the light theme, the non-default ([Charging], [Error], [PowerSave]) colors use an
+     * intermediate gray [glyph] color. This ensures the numbers and glyphs remain clearly legible
+     * against both the bright fill level and the dark unfilled cavity background behind the battery.
      */
     sealed class DarkTheme : BatteryColors {
         override val attribution = Color.White
         override val backgroundOnly = lowAlphaBg
         override val backgroundWithGlyph = highAlphaBg
-        override val glyph = Color.Black.copy(alpha = 0.75f)
+        override val glyph = Color(0xFF8E8E8E)
 
         data object Default : DarkTheme() {
             override val fill = Color.White

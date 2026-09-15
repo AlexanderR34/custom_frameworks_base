@@ -79,6 +79,8 @@ data class BatteryDrawableState(
 sealed interface BatteryColors {
     /** The color for the frame and any foreground attributions for the battery */
     val fg: Int
+    /** The color for glyphs/numbers in the battery to ensure readability on both fill and background */
+    val glyphFg: Int get() = fg
     /**
      * Default color for the frame background. Configured to be a transparent white or black that
      * matches the current mode (white for light theme, black for dark theme) and provides extra
@@ -105,6 +107,7 @@ sealed interface BatteryColors {
     /** Color scheme appropriate for light mode (dark icons) */
     data object LightThemeColors : BatteryColors {
         override val fg = Color.BLACK
+        override val glyphFg = Color.parseColor("#666666")
         // 55% alpha black
         override val bg: Int = Color.valueOf(0f, 0f, 0f, 0.55f).toArgb()
 
@@ -124,6 +127,7 @@ sealed interface BatteryColors {
     /** Color scheme appropriate for dark mode (light icons) */
     data object DarkThemeColors : BatteryColors {
         override val fg = Color.WHITE
+        override val glyphFg = Color.parseColor("#8E8E8E")
         // 70% alpha white
         override val bg: Int = Color.valueOf(1f, 1f, 1f, 0.70f).toArgb()
 
