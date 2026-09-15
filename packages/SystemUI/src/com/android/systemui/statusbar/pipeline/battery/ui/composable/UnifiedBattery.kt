@@ -335,35 +335,16 @@ fun SamsungBattery(
     level: Int,
     showPercent: Boolean = true,
     isCharging: Boolean,
-    isPowerSave: Boolean,
-    isDark: Boolean,
+    colors: BatteryColors,
     modifier: Modifier = Modifier,
     contentDescription: String = "",
 ) {
     val clampedLevel = level.coerceIn(0, 100)
 
-    // 1. Fondo translúcido del contenedor Samsung
-    val containerBg = when {
-        isPowerSave -> Color(0x33FF9500)
-        clampedLevel <= 15 -> Color(0x33FF3B30)
-        isDark -> Color(0x33FFFFFF) // Fondo translúcido grisáceo
-        else -> Color(0x2E000000)
-    }
-
-    // 2. Barra de carga que avanza de izquierda a derecha
-    val activeFillColor = when {
-        isPowerSave -> Color(0xFFFF9500)
-        clampedLevel <= 15 -> Color(0xFFFF3B30)
-        isDark -> Color.White // Blanco sólido en modo oscuro
-        else -> Color(0xFF1C1E24)
-    }
-
-    // 3. Color plano uniforme de los números e indicador (Gris intermedio / gris blanco para legibilidad)
-    val indicatorColor = when {
-        isPowerSave || clampedLevel <= 15 -> Color.White
-        isDark -> Color(0xFF8E8E8E) // Gris intermedio / gris blanco
-        else -> Color(0xFF666666)
-    }
+    // Usa exactamente la paleta de colores de AOSP (BatteryColors)
+    val containerBg = colors.backgroundWithGlyph
+    val activeFillColor = colors.fill
+    val indicatorColor = colors.glyph
 
     Box(
         contentAlignment = Alignment.Center,
@@ -573,12 +554,12 @@ fun UnifiedBattery(
                 (viewModel.level ?: 0) >= 100 -> 25f / 11.5f
                 else -> 23f / 11.5f
             }
+            val colors = if (isDark) viewModel.colorProfile.dark else viewModel.colorProfile.light
             SamsungBattery(
                 level = viewModel.level ?: 100,
                 showPercent = showPercent,
                 isCharging = viewModel.isCharging,
-                isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
-                isDark = isDark,
+                colors = colors,
                 modifier = modifier
                     .sysuiResTag(BatteryViewModel.TEST_TAG)
                     .onLayoutRectChanged { relativeLayoutBounds ->
