@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
      Copyright (C) 2018 The Android Open Source Project
-
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
      You may obtain a copy of the License at
@@ -20,7 +19,14 @@
     android:viewportWidth="20"
     android:viewportHeight="20">
 
+    <!-- Outer Ring -->
     <path
         android:fillColor="?attr/singleToneColor"
-        android:pathData="M10.0001 18.3334C5.40008 18.3334 1.66675 14.6 1.66675 10C1.66675 5.40002 5.40008 1.66669 10.0001 1.66669C14.6001 1.66669 18.3334 5.40002 18.3334 10C18.3334 14.6 14.6001 18.3334 10.0001 18.3334Z" />
+        android:fillType="evenOdd"
+        android:pathData="M10,1.5 C14.69,1.5 18.5,5.31 18.5,10 C18.5,14.69 14.69,18.5 10,18.5 C5.31,18.5 1.5,14.69 1.5,10 C1.5,5.31 5.31,1.5 10,1.5 Z M10,3.3 C6.3,3.3 3.3,6.3 3.3,10 C3.3,13.7 6.3,16.7 10,16.7 C13.7,16.7 16.7,13.7 16.7,10 C16.7,6.3 13.7,3.3 10,3.3 Z" />
+
+    <!-- Inner Solid Circle -->
+    <path
+        android:fillColor="?attr/singleToneColor"
+        android:pathData="M10,5.6 C12.43,5.6 14.4,7.57 14.4,10 C14.4,12.43 12.43,14.4 10,14.4 C7.57,14.4 5.6,12.43 5.6,10 C5.6,7.57 7.57,5.6 10,5.6 Z" />
 </vector>
