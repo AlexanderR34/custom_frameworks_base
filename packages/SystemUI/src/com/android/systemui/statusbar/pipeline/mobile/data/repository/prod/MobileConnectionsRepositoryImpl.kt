@@ -320,6 +320,14 @@ constructor(
                 observer,
                 android.os.UserHandle.USER_ALL
             )
+            context.contentResolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                    android.provider.Settings.System.SHOW_DATA_RAT_ICON_WITH_WIFI
+                ),
+                false,
+                observer,
+                android.os.UserHandle.USER_ALL
+            )
             trySend(Unit)
             awaitClose {
                 context.contentResolver.unregisterContentObserver(observer)

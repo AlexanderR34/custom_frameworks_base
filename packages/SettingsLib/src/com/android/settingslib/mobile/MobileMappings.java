@@ -262,6 +262,13 @@ public class MobileMappings {
                     defaultShow4g ? 1 : 0);
             config.show4gForLte = (showFourGForLte == 1);
 
+            boolean defaultAlwaysShowData = config.alwaysShowDataRatIcon;
+            int showDataRatWithWifi = android.provider.Settings.System.getInt(
+                    context.getContentResolver(),
+                    android.provider.Settings.System.SHOW_DATA_RAT_ICON_WITH_WIFI,
+                    defaultAlwaysShowData ? 1 : 0);
+            config.alwaysShowDataRatIcon = (showDataRatWithWifi == 1);
+
             SubscriptionManager subscriptionManager =
                     context.getSystemService(SubscriptionManager.class);
             if (subscriptionManager != null) {
