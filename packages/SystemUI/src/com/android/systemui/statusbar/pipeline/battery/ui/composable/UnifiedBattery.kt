@@ -324,10 +324,11 @@ fun HyperOSBattery(
 }
 
 /**
- * Capsule Pill style Battery Composable:
- * - Fondo plano y uniforme de color gris carbón (sin yin-yang / sin división en dos colores).
- * - Rayo de carga (⚡) nítido, claro y con buen grosor.
- * - Números de porcentaje en blanco brillante de alto contraste, centrados y perfectamente legibles.
+ * Samsung One UI 7 style Battery Composable:
+ * - Fondo de la cápsula con barra de progreso que avanza conforme al porcentaje.
+ * - Números y rayo en color plano gris carbón uniforme de alto contraste (sin división yin-yang).
+ * - Rayo de carga (⚡) prominente, nítido y grueso.
+ * - Números en negrita bien legibles y centrados.
  */
 @Composable
 fun SamsungBattery(
@@ -341,25 +342,27 @@ fun SamsungBattery(
 ) {
     val clampedLevel = level.coerceIn(0, 100)
 
-    // 1. Fondo plano uniforme gris carbón (Color plano, sin yin-yang)
-    val capsuleBg = when {
-        isPowerSave -> Color(0xFF3D3214) // Carbón con matiz suave ahorro
-        clampedLevel <= 15 -> Color(0xFF3D1818) // Carbón con matiz suave crítico
-        isDark -> Color(0xFF2C2C2E) // Gris carbón plano oficial
-        else -> Color(0xFFE5E5EA) // Gris neutro en modo claro
+    // 1. Fondo translúcido del contenedor Samsung
+    val containerBg = when {
+        isPowerSave -> Color(0x33FF9500)
+        clampedLevel <= 15 -> Color(0x33FF3B30)
+        isDark -> Color(0x33FFFFFF) // Fondo translúcido grisáceo
+        else -> Color(0x2E000000)
     }
 
-    // 2. Color del texto y rayo (blanco nítido de alto contraste)
-    val contentColor = when {
-        isPowerSave -> Color(0xFFFFCC00)
-        clampedLevel <= 15 -> Color(0xFFFF453A)
-        isDark -> Color.White
-        else -> Color(0xFF1C1C1E)
+    // 2. Barra de carga que avanza de izquierda a derecha
+    val activeFillColor = when {
+        isPowerSave -> Color(0xFFFF9500)
+        clampedLevel <= 15 -> Color(0xFFFF3B30)
+        isDark -> Color.White // Blanco sólido en modo oscuro
+        else -> Color(0xFF1C1E24)
     }
 
-    val boltColor = when {
-        isCharging -> if (isDark) Color(0xFF34C759) else Color(0xFF248A3D) // Verde brillante o blanco nítido
-        else -> contentColor
+    // 3. Color plano uniforme de los números e indicador (Gris carbón plano, sin división yin-yang)
+    val indicatorColor = when {
+        isPowerSave || clampedLevel <= 15 -> Color.White
+        isDark -> Color(0xFF16181D) // Gris carbón plano uniforme
+        else -> Color.White
     }
 
     Box(
@@ -368,34 +371,48 @@ fun SamsungBattery(
             .fillMaxHeight()
             .sysuiResTag(BatteryViewModel.TEST_TAG),
     ) {
-        // Fondo plano uniforme
+        // Canvas: Fondo con la barra de carga que avanza
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
             val pillRadius = CornerRadius(h / 2f, h / 2f)
 
+            // Dibuja el fondo de la cápsula
             drawRoundRect(
-                color = capsuleBg,
+                color = containerBg,
                 topLeft = Offset.Zero,
                 size = Size(w, h),
                 cornerRadius = pillRadius,
             )
+
+            // Dibuja la barra de progreso que avanza con el nivel
+            val fillWidth = (w * (clampedLevel / 100f)).coerceIn(0f, w)
+            if (fillWidth > 0f) {
+                clipRect(left = 0f, top = 0f, right = fillWidth, bottom = h) {
+                    drawRoundRect(
+                        color = activeFillColor,
+                        topLeft = Offset.Zero,
+                        size = Size(w, h),
+                        cornerRadius = pillRadius,
+                    )
+                }
+            }
         }
 
-        // Contenido centrado: Rayo (⚡) + Porcentaje
+        // Contenido: Rayo (⚡) prominente + Números en color plano gris carbón
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(horizontal = 3.5.dp),
+                .padding(horizontal = 3.dp),
         ) {
             if (isCharging) {
                 Canvas(
                     modifier = Modifier
-                        .fillMaxHeight(0.72f)
-                        .aspectRatio(0.60f)
-                        .padding(end = if (showPercent) 2.dp else 0.dp)
+                        .fillMaxHeight(0.75f)
+                        .aspectRatio(0.62f)
+                        .padding(end = if (showPercent) 1.5.dp else 0.dp)
                 ) {
                     val bw = size.width
                     val bh = size.height
@@ -410,15 +427,15 @@ fun SamsungBattery(
                         lineTo(cx + bw * 0.06f, cy - bh * 0.05f)
                         close()
                     }
-                    drawPath(boltPath, boltColor)
+                    drawPath(boltPath, indicatorColor)
                 }
             }
             if (showPercent) {
                 Text(
                     text = "$clampedLevel",
-                    color = contentColor,
+                    color = indicatorColor,
                     fontSize = if (clampedLevel >= 100) 8.5.sp else 9.5.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     maxLines = 1,
                     softWrap = false,
                     style = TextStyle(
