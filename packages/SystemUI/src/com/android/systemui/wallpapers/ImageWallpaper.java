@@ -53,6 +53,19 @@ import java.util.List;
 
 import javax.inject.Inject;
 
+import android.database.ContentObserver;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.provider.Settings;
+import android.view.Choreographer;
+import android.view.MotionEvent;
+import javax.microedition.khronos.egl.EGL10;
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.egl.EGLContext;
+import javax.microedition.khronos.egl.EGLDisplay;
+import javax.microedition.khronos.egl.EGLSurface;
+
 /**
  * Default built-in wallpaper that simply shows a static image.
  */
@@ -61,6 +74,7 @@ public class ImageWallpaper extends WallpaperService {
 
     private static final String TAG = ImageWallpaper.class.getSimpleName();
     private static final boolean DEBUG = false;
+    public static final String KEY_JELLY_WALLPAPER = "jelly_wallpaper_lockscreen_enabled";
 
     // keep track of the number of pages of the launcher for local color extraction purposes
     private volatile int mPages = 1;
@@ -110,7 +124,7 @@ public class ImageWallpaper extends WallpaperService {
         return new CanvasEngine();
     }
 
-    class CanvasEngine extends WallpaperService.Engine implements DisplayListener {
+    class CanvasEngine extends WallpaperService.Engine implements DisplayListener, Choreographer.FrameCallback {
         private WallpaperManager mWallpaperManager;
         private final ImageWallpaperColorExtractor mColorExtractor;
         private SurfaceHolder mSurfaceHolder;
@@ -121,6 +135,25 @@ public class ImageWallpaper extends WallpaperService {
         static final int MIN_SURFACE_HEIGHT = 128;
         private Bitmap mBitmap;
         private boolean mWideColorGamut = false;
+
+        // Jelly Wallpaper Elastic Physics & OpenGL ES Fields
+        private JellyWallpaperRenderer mJellyRenderer;
+        private boolean mJellyEnabled = false;
+        private boolean mIsLoopRunning = false;
+        private long mLastFrameTimeNanos = 0;
+
+        private EGL10 mEgl;
+        private EGLDisplay mEglDisplay;
+        private EGLConfig mEglConfig;
+        private EGLContext mEglContext;
+        private EGLSurface mEglSurface;
+
+        private final ContentObserver mSettingsObserver = new ContentObserver(new Handler()) {
+            @Override
+            public void onChange(boolean selfChange, Uri uri) {
+                updateJellySetting();
+            }
+        };
 
         /*
          * Counter to unload the bitmap as soon as possible.
@@ -188,6 +221,7 @@ public class ImageWallpaper extends WallpaperService {
             if (DEBUG) {
                 Log.d(TAG, "onCreate");
             }
+            setTouchEventsEnabled(true);
             mWallpaperManager = getDisplayContext().getSystemService(WallpaperManager.class);
             mSurfaceHolder = surfaceHolder;
             Rect dimensions = mWallpaperManager.peekBitmapDimensionsAsUser(getSourceFlag(), true,
@@ -196,18 +230,105 @@ public class ImageWallpaper extends WallpaperService {
             int height = Math.max(MIN_SURFACE_HEIGHT, dimensions.height());
             mSurfaceHolder.setFixedSize(width, height);
 
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WALLPAPER),
+                    false,
+                    mSettingsObserver
+            );
+            updateJellySetting();
+
             getDisplayContext().getSystemService(DisplayManager.class)
                     .registerDisplayListener(this, null);
             getDisplaySizeAndUpdateColorExtractor();
             Trace.endSection();
         }
 
+        private void updateJellySetting() {
+            int settingValue = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WALLPAPER, 0);
+            boolean newEnabled = (settingValue == 1);
+            Log.i(TAG, "updateJellySetting: enabled=" + newEnabled + " (prev=" + mJellyEnabled + ")");
+            if (newEnabled != mJellyEnabled) {
+                mJellyEnabled = newEnabled;
+                synchronized (mLock) {
+                    mDrawn = false;
+                }
+                drawFrame();
+            }
+        }
+
+        @Override
+        public Bundle onCommand(String action, int x, int y, int z, Bundle extras,
+                boolean resultRequested) {
+            if ("jelly_touch".equals(action) || "android.wallpaper.touch".equals(action)) {
+                if (mJellyEnabled && mJellyRenderer != null) {
+                    Log.i(TAG, "onCommand jelly_touch: action=" + z + ", x=" + x + ", y=" + y);
+                    synchronized (mSurfaceLock) {
+                        mJellyRenderer.onTouchEvent(z, x, y);
+                    }
+                    if (!mIsLoopRunning) {
+                        mIsLoopRunning = true;
+                        mLastFrameTimeNanos = System.nanoTime();
+                        Choreographer.getInstance().postFrameCallback(this);
+                    }
+                }
+            }
+            return super.onCommand(action, x, y, z, extras, resultRequested);
+        }
+
+        @Override
+        public void onTouchEvent(MotionEvent event) {
+            if (!mJellyEnabled || mJellyRenderer == null) return;
+
+            Log.i(TAG, "onTouchEvent: action=" + event.getActionMasked() + ", x=" + event.getX() + ", y=" + event.getY());
+            synchronized (mSurfaceLock) {
+                mJellyRenderer.onTouchEvent(event.getActionMasked(), event.getX(), event.getY());
+            }
+
+            if (!mIsLoopRunning) {
+                mIsLoopRunning = true;
+                mLastFrameTimeNanos = System.nanoTime();
+                Choreographer.getInstance().postFrameCallback(this);
+            }
+        }
+
+        @Override
+        public void doFrame(long frameTimeNanos) {
+            if (!mIsLoopRunning) return;
+
+            float dt = (mLastFrameTimeNanos > 0)
+                    ? (frameTimeNanos - mLastFrameTimeNanos) / 1_000_000_000.0f
+                    : 0.016f;
+            mLastFrameTimeNanos = frameTimeNanos;
+
+            boolean stillActive = false;
+            synchronized (mSurfaceLock) {
+                if (mJellyRenderer != null && mEglSurface != null && mEgl != null && mEglDisplay != null) {
+                    mEgl.eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext);
+                    stillActive = mJellyRenderer.renderFrame(dt);
+                    mEgl.eglSwapBuffers(mEglDisplay, mEglSurface);
+                }
+            }
+
+            if (stillActive) {
+                Choreographer.getInstance().postFrameCallback(this);
+            } else {
+                mIsLoopRunning = false;
+                mLastFrameTimeNanos = 0;
+            }
+        }
+
         @Override
         public void onDestroy() {
             Context context = getDisplayContext();
             if (context != null) {
+                context.getContentResolver().unregisterContentObserver(mSettingsObserver);
                 DisplayManager displayManager = context.getSystemService(DisplayManager.class);
                 if (displayManager != null) displayManager.unregisterDisplayListener(this);
+            }
+            synchronized (mSurfaceLock) {
+                destroyEgl();
             }
             mColorExtractor.cleanUp();
         }
@@ -227,6 +348,11 @@ public class ImageWallpaper extends WallpaperService {
             if (DEBUG) {
                 Log.d(TAG, "onSurfaceChanged: width=" + width + ", height=" + height);
             }
+            synchronized (mSurfaceLock) {
+                if (mJellyRenderer != null) {
+                    mJellyRenderer.onSurfaceChanged(width, height);
+                }
+            }
         }
 
         @Override
@@ -235,6 +361,7 @@ public class ImageWallpaper extends WallpaperService {
                 Log.i(TAG, "onSurfaceDestroyed");
             }
             synchronized (mSurfaceLock) {
+                destroyEgl();
                 mSurfaceHolder = null;
             }
         }
@@ -252,6 +379,58 @@ public class ImageWallpaper extends WallpaperService {
                 Log.d(TAG, "onSurfaceRedrawNeeded");
             }
             drawFrame();
+        }
+
+        private void initEgl(SurfaceHolder holder) {
+            if (mEglContext != null) return;
+            try {
+                mEgl = (EGL10) EGLContext.getEGL();
+                mEglDisplay = mEgl.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY);
+                int[] version = new int[2];
+                mEgl.eglInitialize(mEglDisplay, version);
+
+                int[] attribList = {
+                        EGL10.EGL_RED_SIZE, 8,
+                        EGL10.EGL_GREEN_SIZE, 8,
+                        EGL10.EGL_BLUE_SIZE, 8,
+                        EGL10.EGL_RENDERABLE_TYPE, 4 /* EGL_OPENGL_ES2_BIT */,
+                        EGL10.EGL_NONE
+                };
+                EGLConfig[] configs = new EGLConfig[1];
+                int[] numConfig = new int[1];
+                mEgl.eglChooseConfig(mEglDisplay, attribList, configs, 1, numConfig);
+                mEglConfig = configs[0];
+
+                int[] ctxAttrib = { 0x3098 /* EGL_CONTEXT_CLIENT_VERSION */, 2, EGL10.EGL_NONE };
+                mEglContext = mEgl.eglCreateContext(mEglDisplay, mEglConfig, EGL10.EGL_NO_CONTEXT, ctxAttrib);
+                mEglSurface = mEgl.eglCreateWindowSurface(mEglDisplay, mEglConfig, holder, null);
+                mEgl.eglMakeCurrent(mEglDisplay, mEglSurface, mEglSurface, mEglContext);
+
+                mJellyRenderer = new JellyWallpaperRenderer();
+                mJellyRenderer.onSurfaceCreated();
+            } catch (Exception e) {
+                Log.e(TAG, "Error initializing EGL for Jelly wallpaper", e);
+            }
+        }
+
+        private void destroyEgl() {
+            if (mEgl != null && mEglDisplay != null) {
+                mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT);
+                if (mEglSurface != null) {
+                    mEgl.eglDestroySurface(mEglDisplay, mEglSurface);
+                    mEglSurface = null;
+                }
+                if (mEglContext != null) {
+                    mEgl.eglDestroyContext(mEglDisplay, mEglContext);
+                    mEglContext = null;
+                }
+                mEgl.eglTerminate(mEglDisplay);
+                mEglDisplay = null;
+            }
+            if (mJellyRenderer != null) {
+                mJellyRenderer.release();
+                mJellyRenderer = null;
+            }
         }
 
         private void drawFrame() {
@@ -276,7 +455,21 @@ public class ImageWallpaper extends WallpaperService {
                         return;
                     }
                     mBitmapUsages++;
-                    drawFrameOnCanvas(mBitmap);
+                    if (mJellyEnabled) {
+                        initEgl(mSurfaceHolder);
+                        if (mJellyRenderer != null && mBitmap != null) {
+                            mJellyRenderer.updateBitmap(mBitmap);
+                            Rect dest = mSurfaceHolder.getSurfaceFrame();
+                            mJellyRenderer.onSurfaceChanged(dest.width(), dest.height());
+                            mJellyRenderer.renderFrame(0f);
+                            if (mEgl != null && mEglDisplay != null && mEglSurface != null) {
+                                mEgl.eglSwapBuffers(mEglDisplay, mEglSurface);
+                            }
+                        }
+                        mDrawn = true;
+                    } else {
+                        drawFrameOnCanvas(mBitmap);
+                    }
                     reportEngineShown(false);
                     unloadBitmapIfNotUsedInternal();
                 }

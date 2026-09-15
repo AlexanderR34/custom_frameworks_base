@@ -23,6 +23,7 @@ import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.combineFlows;
 
 import android.app.StatusBarManager;
+import android.app.WallpaperManager;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -425,6 +426,14 @@ public class NotificationShadeWindowViewController implements Dumpable {
                     mTouchActive = false;
                     mDownEvent = null;
                 }
+
+                if (mStatusBarStateController.getState() == KEYGUARD) {
+                    WallpaperManager wm = mView.getContext().getSystemService(WallpaperManager.class);
+                    if (wm != null && mView.getWindowToken() != null) {
+                        wm.sendWallpaperCommand(mView.getWindowToken(), "jelly_touch", (int) ev.getX(), (int) ev.getY(), ev.getActionMasked(), null);
+                    }
+                }
+
                 if (mTouchCancelled) {
                     return logDownOrFalseResultDispatch(ev, "touch cancelled", false);
                 }
