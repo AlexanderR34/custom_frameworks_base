@@ -72,8 +72,6 @@ public class Clock extends TextView implements
         DarkReceiver {
 
     public static final String CLOCK_SECONDS = "clock_seconds";
-    public static final String STATUS_BAR_CLOCK_SECONDS = "status_bar_clock_seconds";
-    public static final String STATUS_BAR_AM_PM = "status_bar_am_pm";
     private static final String CLOCK_SUPER_PARCELABLE = "clock_super_parcelable";
     private static final String CURRENT_USER_ID = "current_user_id";
     private static final String SHOW_SECONDS = "show_seconds";
@@ -95,7 +93,7 @@ public class Clock extends TextView implements
     private static final int AM_PM_STYLE_SMALL   = 1;
     private static final int AM_PM_STYLE_GONE    = 2;
 
-    private int mAmPmStyle;
+    private final int mAmPmStyle = AM_PM_STYLE_GONE;
     private boolean mShowSeconds;
     private Handler mSecondsHandler;
 
@@ -126,42 +124,33 @@ public class Clock extends TextView implements
 
     public Clock(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
-        TypedArray a = context.getTheme().obtainStyledAttributes(
-                attrs,
-                R.styleable.Clock,
-                0, 0);
-        try {
-            mAmPmStyle = a.getInt(R.styleable.Clock_amPmStyle, AM_PM_STYLE_GONE);
-            mNonAdaptedColor = getCurrentTextColor();
-        } finally {
-            a.recycle();
-        }
-        mBroadcastDispatcher = Dependency.get(BroadcastDispatcher.class);
-        mUserTracker = Dependency.get(UserTracker.class);
         mInterestingConfigChanges = new InterestingConfigChanges(
                 ActivityInfo.CONFIG_FONT_SCALE | ActivityInfo.CONFIG_DENSITY);
-
-        setIncludeFontPadding(false);
+        mInterestingConfigChanges.applyNewConfig(context.getResources());
+        FontSizeUtils.updateFontSize(this, R.dimen.status_bar_clock_size);
+        mUserTracker = Dependency.get(UserTracker.class);
+        mBroadcastDispatcher = Dependency.get(BroadcastDispatcher.class);
     }
 
     @Override
     public Parcelable onSaveInstanceState() {
-        Bundle bundle = new Bundle();
-        bundle.putParcelable(CLOCK_SUPER_PARCELABLE, super.onSaveInstanceState());
-        bundle.putInt(CURRENT_USER_ID, mCurrentUserId);
-        bundle.putBoolean(SHOW_SECONDS, mShowSeconds);
-        bundle.putInt(VISIBILITY, getVisibility());
+        Bundle state = new Bundle();
+        state.putParcelable(CLOCK_SUPER_PARCELABLE, super.onSaveInstanceState());
+        state.putInt(CURRENT_USER_ID, mCurrentUserId);
+        state.putBoolean(SHOW_SECONDS, mShowSeconds);
+        state.putInt(VISIBILITY, getVisibility());
 
-        return bundle;
+        return state;
     }
 
     @Override
     public void onRestoreInstanceState(Parcelable state) {
-        if (!(state instanceof Bundle bundle)) {
+        if (state == null || !(state instanceof Bundle)) {
             super.onRestoreInstanceState(state);
             return;
         }
 
+        Bundle bundle = (Bundle) state;
         Parcelable superState = bundle.getParcelable(CLOCK_SUPER_PARCELABLE);
         super.onRestoreInstanceState(superState);
         if (bundle.containsKey(CURRENT_USER_ID)) {
@@ -192,8 +181,6 @@ public class Clock extends TextView implements
             mBroadcastDispatcher.registerReceiverWithHandler(mIntentReceiver, filter,
                     Dependency.get(Dependency.TIME_TICK_HANDLER), UserHandle.ALL);
             Dependency.get(TunerService.class).addTunable(this, CLOCK_SECONDS,
-                    STATUS_BAR_CLOCK_SECONDS,
-                    STATUS_BAR_AM_PM,
                     StatusBarIconController.ICON_HIDE_LIST);
             mUserTracker.addCallback(mUserChangedCallback, mContext.getMainExecutor());
             mCurrentUserId = mUserTracker.getUserId();
@@ -284,22 +271,9 @@ public class Clock extends TextView implements
 
     @Override
     public void onTuningChanged(String key, String newValue) {
-        if (CLOCK_SECONDS.equals(key) || STATUS_BAR_CLOCK_SECONDS.equals(key)) {
+        if (CLOCK_SECONDS.equals(key)) {
             mShowSeconds = TunerService.parseIntegerSwitch(newValue, false);
             updateShowSeconds();
-        } else if (STATUS_BAR_AM_PM.equals(key)) {
-            if (newValue != null) {
-                try {
-                    mAmPmStyle = Integer.parseInt(newValue);
-                } catch (NumberFormatException e) {
-                    mAmPmStyle = AM_PM_STYLE_GONE;
-                }
-            } else {
-                mAmPmStyle = AM_PM_STYLE_GONE;
-            }
-            mContentDescriptionFormatString = "";
-            mDateTimePatternGenerator = null;
-            updateClock();
         }
     }
 

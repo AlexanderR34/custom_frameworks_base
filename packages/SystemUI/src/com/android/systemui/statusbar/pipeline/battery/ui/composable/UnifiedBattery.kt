@@ -358,11 +358,11 @@ fun SamsungBattery(
         else -> Color(0xFF1C1E24)
     }
 
-    // 3. Color plano uniforme de los números e indicador (Gris carbón plano, sin división yin-yang)
+    // 3. Color plano uniforme de los números e indicador (Gris intermedio / gris blanco para legibilidad)
     val indicatorColor = when {
         isPowerSave || clampedLevel <= 15 -> Color.White
-        isDark -> Color(0xFF16181D) // Gris carbón plano uniforme
-        else -> Color.White
+        isDark -> Color(0xFF8E8E8E) // Gris intermedio / gris blanco
+        else -> Color(0xFF666666)
     }
 
     Box(
