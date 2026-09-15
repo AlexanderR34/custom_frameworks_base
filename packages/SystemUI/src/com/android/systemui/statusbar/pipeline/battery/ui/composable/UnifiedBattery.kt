@@ -410,7 +410,7 @@ fun SamsungBattery(
             if (isCharging) {
                 Canvas(
                     modifier = Modifier
-                        .fillMaxHeight(0.75f)
+                        .fillMaxHeight(0.78f)
                         .aspectRatio(0.62f)
                         .padding(end = if (showPercent) 1.5.dp else 0.dp)
                 ) {
@@ -434,8 +434,8 @@ fun SamsungBattery(
                 Text(
                     text = "$clampedLevel",
                     color = indicatorColor,
-                    fontSize = if (clampedLevel >= 100) 8.5.sp else 9.5.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = if (clampedLevel >= 100) 9.5.sp else 10.5.sp,
+                    fontWeight = FontWeight.Black,
                     maxLines = 1,
                     softWrap = false,
                     style = TextStyle(
@@ -568,10 +568,10 @@ fun UnifiedBattery(
             val pillAspect = when {
                 !showPercent && viewModel.isCharging -> 20f / 11.5f
                 !showPercent -> 16f / 11.5f
-                viewModel.isCharging && (viewModel.level ?: 0) >= 100 -> 26f / 11.5f
-                viewModel.isCharging -> 24f / 11.5f
-                (viewModel.level ?: 0) >= 100 -> 23f / 11.5f
-                else -> 21f / 11.5f
+                viewModel.isCharging && (viewModel.level ?: 0) >= 100 -> 29f / 11.5f
+                viewModel.isCharging -> 26f / 11.5f
+                (viewModel.level ?: 0) >= 100 -> 25f / 11.5f
+                else -> 23f / 11.5f
             }
             SamsungBattery(
                 level = viewModel.level ?: 100,
