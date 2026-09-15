@@ -342,6 +342,10 @@ public class PhoneStatusBarPolicy
                 android.provider.Settings.System.getUriFor(
                         android.provider.Settings.System.SHOW_VOWIFI_ICON),
                 false, volteObserver, android.os.UserHandle.USER_ALL);
+        mContext.getContentResolver().registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                        android.provider.Settings.System.STATUS_BAR_IMS_ICON_MODE),
+                false, volteObserver, android.os.UserHandle.USER_ALL);
         updateVolteVoWifiSettings();
         registerImsCallbacks();
 
@@ -819,16 +823,28 @@ public class PhoneStatusBarPolicy
             new ConcurrentHashMap<>();
 
     private void updateVolteVoWifiSettings() {
-        mShowVolteIcon = android.provider.Settings.System.getIntForUser(
+        int mode = android.provider.Settings.System.getIntForUser(
                 mContext.getContentResolver(),
-                android.provider.Settings.System.SHOW_VOLTE_ICON,
-                0,
-                android.os.UserHandle.USER_CURRENT) == 1;
-        mShowVoWifiIcon = android.provider.Settings.System.getIntForUser(
-                mContext.getContentResolver(),
-                android.provider.Settings.System.SHOW_VOWIFI_ICON,
-                0,
-                android.os.UserHandle.USER_CURRENT) == 1;
+                android.provider.Settings.System.STATUS_BAR_IMS_ICON_MODE,
+                -1,
+                android.os.UserHandle.USER_CURRENT);
+
+        if (mode != -1) {
+            // 0: Disabled, 1: VoLTE only, 2: VoWiFi only, 3: Both
+            mShowVolteIcon = (mode == 1 || mode == 3);
+            mShowVoWifiIcon = (mode == 2 || mode == 3);
+        } else {
+            mShowVolteIcon = android.provider.Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    android.provider.Settings.System.SHOW_VOLTE_ICON,
+                    0,
+                    android.os.UserHandle.USER_CURRENT) == 1;
+            mShowVoWifiIcon = android.provider.Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    android.provider.Settings.System.SHOW_VOWIFI_ICON,
+                    0,
+                    android.os.UserHandle.USER_CURRENT) == 1;
+        }
         updateVolteVoWifiVisibility();
     }
 

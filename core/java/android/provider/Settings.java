@@ -6918,6 +6918,17 @@ public final class Settings {
         public static final String SHOW_VOWIFI_ICON = "show_vowifi_icon";
 
         /**
+         * Mode for displaying VoLTE and VoWiFi status bar icons.
+         * 0: Disabled
+         * 1: VoLTE only
+         * 2: VoWiFi only
+         * 3: Both VoLTE and VoWiFi
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_IMS_ICON_MODE = "status_bar_ims_icon_mode";
+
+        /**
          * Whether user can swap the order of the Alert Slider.
          * * Whether user can invert the order of the Alert Slider.
          * 0: Default
@@ -7454,6 +7465,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(STATUS_BAR_AM_PM);
             PRIVATE_SETTINGS.add(SHOW_VOLTE_ICON);
             PRIVATE_SETTINGS.add(SHOW_VOWIFI_ICON);
+            PRIVATE_SETTINGS.add(STATUS_BAR_IMS_ICON_MODE);
         }
 
         /**
