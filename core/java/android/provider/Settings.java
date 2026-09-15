@@ -6887,6 +6887,37 @@ public final class Settings {
         public static final String SHOW_SEPARATE_DUAL_SIM_ICONS = "show_separate_dual_sim_icons";
 
         /**
+         * Whether to show seconds in status bar clock.
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CLOCK_SECONDS = "status_bar_clock_seconds";
+
+        /**
+         * Style of AM/PM in status bar clock.
+         * 0: Normal
+         * 1: Small
+         * 2: Gone
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_AM_PM = "status_bar_am_pm";
+
+        /**
+         * Whether to show VoLTE icon in status bar.
+         * @hide
+         */
+        @Readable
+        public static final String SHOW_VOLTE_ICON = "show_volte_icon";
+
+        /**
+         * Whether to show VoWiFi icon in status bar.
+         * @hide
+         */
+        @Readable
+        public static final String SHOW_VOWIFI_ICON = "show_vowifi_icon";
+
+        /**
          * Whether user can swap the order of the Alert Slider.
          * * Whether user can invert the order of the Alert Slider.
          * 0: Default
@@ -7419,6 +7450,10 @@ public final class Settings {
             PRIVATE_SETTINGS.add(SHOW_FOURG_ICON);
             PRIVATE_SETTINGS.add(SHOW_DATA_RAT_ICON_WITH_WIFI);
             PRIVATE_SETTINGS.add(SHOW_SEPARATE_DUAL_SIM_ICONS);
+            PRIVATE_SETTINGS.add(STATUS_BAR_CLOCK_SECONDS);
+            PRIVATE_SETTINGS.add(STATUS_BAR_AM_PM);
+            PRIVATE_SETTINGS.add(SHOW_VOLTE_ICON);
+            PRIVATE_SETTINGS.add(SHOW_VOWIFI_ICON);
         }
 
         /**

@@ -3418,6 +3418,8 @@
   <java-symbol type="string" name="status_bar_cast" />
   <java-symbol type="string" name="status_bar_connected_display" />
   <java-symbol type="string" name="status_bar_hotspot" />
+  <java-symbol type="string" name="status_bar_volte" />
+  <java-symbol type="string" name="status_bar_vowifi" />
   <java-symbol type="string" name="status_bar_location" />
   <java-symbol type="string" name="status_bar_bluetooth" />
   <java-symbol type="string" name="status_bar_nfc" />

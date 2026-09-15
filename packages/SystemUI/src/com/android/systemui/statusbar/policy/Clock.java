@@ -72,6 +72,8 @@ public class Clock extends TextView implements
         DarkReceiver {
 
     public static final String CLOCK_SECONDS = "clock_seconds";
+    public static final String STATUS_BAR_CLOCK_SECONDS = "status_bar_clock_seconds";
+    public static final String STATUS_BAR_AM_PM = "status_bar_am_pm";
     private static final String CLOCK_SUPER_PARCELABLE = "clock_super_parcelable";
     private static final String CURRENT_USER_ID = "current_user_id";
     private static final String SHOW_SECONDS = "show_seconds";
@@ -93,7 +95,7 @@ public class Clock extends TextView implements
     private static final int AM_PM_STYLE_SMALL   = 1;
     private static final int AM_PM_STYLE_GONE    = 2;
 
-    private final int mAmPmStyle;
+    private int mAmPmStyle;
     private boolean mShowSeconds;
     private Handler mSecondsHandler;
 
@@ -190,6 +192,8 @@ public class Clock extends TextView implements
             mBroadcastDispatcher.registerReceiverWithHandler(mIntentReceiver, filter,
                     Dependency.get(Dependency.TIME_TICK_HANDLER), UserHandle.ALL);
             Dependency.get(TunerService.class).addTunable(this, CLOCK_SECONDS,
+                    STATUS_BAR_CLOCK_SECONDS,
+                    STATUS_BAR_AM_PM,
                     StatusBarIconController.ICON_HIDE_LIST);
             mUserTracker.addCallback(mUserChangedCallback, mContext.getMainExecutor());
             mCurrentUserId = mUserTracker.getUserId();
@@ -280,9 +284,15 @@ public class Clock extends TextView implements
 
     @Override
     public void onTuningChanged(String key, String newValue) {
-        if (CLOCK_SECONDS.equals(key)) {
+        if (CLOCK_SECONDS.equals(key) || STATUS_BAR_CLOCK_SECONDS.equals(key)) {
             mShowSeconds = TunerService.parseIntegerSwitch(newValue, false);
             updateShowSeconds();
+        } else if (STATUS_BAR_AM_PM.equals(key)) {
+            mAmPmStyle = newValue == null ? AM_PM_STYLE_GONE :
+                    TunerService.parseInteger(newValue, AM_PM_STYLE_GONE);
+            mContentDescriptionFormatString = "";
+            mDateTimePatternGenerator = null;
+            updateClock();
         }
     }
 

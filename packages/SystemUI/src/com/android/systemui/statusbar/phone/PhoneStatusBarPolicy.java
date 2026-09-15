@@ -38,7 +38,16 @@ import android.os.UserManager;
 import android.provider.Settings.Global;
 import android.service.notification.ZenModeConfig;
 import android.telecom.TelecomManager;
-import android.text.format.DateFormat;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
+import android.telephony.ims.ImsMmTelManager;
+import android.telephony.ims.ImsReasonInfo;
+import android.telephony.ims.ImsRegistrationAttributes;
+import android.telephony.ims.RegistrationManager;
+import android.telephony.ims.stub.ImsRegistrationImplBase;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import android.util.Log;
 
 import androidx.lifecycle.Observer;
@@ -117,6 +126,7 @@ public class PhoneStatusBarPolicy
     private final String mSlotManagedProfile;
     private final String mSlotRotate;
     private final String mSlotHeadset;
+    private final Context mContext;
     private final String mSlotDataSaver;
     private final String mSlotLocation;
     private final String mSlotMicrophone;
@@ -124,6 +134,12 @@ public class PhoneStatusBarPolicy
     private final String mSlotSensorsOff;
     private final String mSlotScreenRecord;
     private final String mSlotConnectedDisplay;
+    private final String mSlotVolte;
+    private final String mSlotVoWifi;
+    private boolean mShowVolteIcon = false;
+    private boolean mShowVoWifiIcon = false;
+    private boolean mVolteRegistered = false;
+    private boolean mVoWifiRegistered = false;
     private final int mDisplayId;
     private final SharedPreferences mSharedPreferences;
     private final DateFormatUtil mDateFormatUtil;
@@ -168,7 +184,7 @@ public class PhoneStatusBarPolicy
     private AlarmManager.AlarmClockInfo mNextAlarm;
 
     @Inject
-    public PhoneStatusBarPolicy(StatusBarIconController iconController,
+    public PhoneStatusBarPolicy(Context context, StatusBarIconController iconController,
             CommandQueue commandQueue, BroadcastDispatcher broadcastDispatcher,
             @Main Executor mainExecutor, @UiBackground Executor uiBgExecutor, @Main Looper looper,
             @Main Resources resources,
@@ -191,6 +207,7 @@ public class PhoneStatusBarPolicy
             ZenModeInteractor zenModeInteractor,
             JavaAdapter javaAdapter
     ) {
+        mContext = context;
         mIconController = iconController;
         mCommandQueue = commandQueue;
         mConnectedDisplayInteractor = connectedDisplayInteractor;
@@ -224,6 +241,8 @@ public class PhoneStatusBarPolicy
         mSlotConnectedDisplay = resources.getString(
                 com.android.internal.R.string.status_bar_connected_display);
         mSlotHotspot = resources.getString(com.android.internal.R.string.status_bar_hotspot);
+        mSlotVolte = resources.getString(com.android.internal.R.string.status_bar_volte);
+        mSlotVoWifi = resources.getString(com.android.internal.R.string.status_bar_vowifi);
         mSlotBluetooth = resources.getString(com.android.internal.R.string.status_bar_bluetooth);
         mSlotTty = resources.getString(com.android.internal.R.string.status_bar_tty);
         mSlotZen = resources.getString(com.android.internal.R.string.status_bar_zen);
@@ -302,6 +321,29 @@ public class PhoneStatusBarPolicy
         mIconController.setIcon(mSlotHotspot, R.drawable.stat_sys_hotspot,
                 mResources.getString(R.string.accessibility_status_bar_hotspot));
         mIconController.setIconVisibility(mSlotHotspot, mHotspot.isHotspotEnabled());
+
+        // VoLTE & VoWiFi
+        mIconController.setIcon(mSlotVolte, R.drawable.ic_volte, "VoLTE");
+        mIconController.setIconVisibility(mSlotVolte, false);
+        mIconController.setIcon(mSlotVoWifi, R.drawable.ic_vowifi, "VoWiFi");
+        mIconController.setIconVisibility(mSlotVoWifi, false);
+
+        android.database.ContentObserver volteObserver = new android.database.ContentObserver(mHandler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                updateVolteVoWifiSettings();
+            }
+        };
+        mContext.getContentResolver().registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                        android.provider.Settings.System.SHOW_VOLTE_ICON),
+                false, volteObserver, android.os.UserHandle.USER_ALL);
+        mContext.getContentResolver().registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                        android.provider.Settings.System.SHOW_VOWIFI_ICON),
+                false, volteObserver, android.os.UserHandle.USER_ALL);
+        updateVolteVoWifiSettings();
+        registerImsCallbacks();
 
         // profile
         updateProfileIcon();
@@ -753,6 +795,7 @@ public class PhoneStatusBarPolicy
                     if (intent.getBooleanExtra(Intent.EXTRA_REBROADCAST_ON_UNLOCK, false)) {
                         break;
                     }
+                    registerImsCallbacks();
                     break;
                 case TelecomManager.ACTION_CURRENT_TTY_MODE_CHANGED:
                     updateTTY(intent.getIntExtra(TelecomManager.EXTRA_CURRENT_TTY_MODE,
@@ -771,6 +814,75 @@ public class PhoneStatusBarPolicy
             }
         }
     };
+
+    private final Map<Integer, RegistrationManager.RegistrationCallback> mImsCallbacks =
+            new ConcurrentHashMap<>();
+
+    private void updateVolteVoWifiSettings() {
+        mShowVolteIcon = android.provider.Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                android.provider.Settings.System.SHOW_VOLTE_ICON,
+                0,
+                android.os.UserHandle.USER_CURRENT) == 1;
+        mShowVoWifiIcon = android.provider.Settings.System.getIntForUser(
+                mContext.getContentResolver(),
+                android.provider.Settings.System.SHOW_VOWIFI_ICON,
+                0,
+                android.os.UserHandle.USER_CURRENT) == 1;
+        updateVolteVoWifiVisibility();
+    }
+
+    private void updateVolteVoWifiVisibility() {
+        mIconController.setIconVisibility(mSlotVolte, mShowVolteIcon && mVolteRegistered);
+        mIconController.setIconVisibility(mSlotVoWifi, mShowVoWifiIcon && mVoWifiRegistered);
+    }
+
+    private void registerImsCallbacks() {
+        SubscriptionManager sm = mContext.getSystemService(SubscriptionManager.class);
+        if (sm == null) return;
+        List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
+        if (subs == null || subs.isEmpty()) {
+            mVolteRegistered = false;
+            mVoWifiRegistered = false;
+            updateVolteVoWifiVisibility();
+            return;
+        }
+
+        for (SubscriptionInfo sub : subs) {
+            final int subId = sub.getSubscriptionId();
+            if (mImsCallbacks.containsKey(subId)) {
+                continue;
+            }
+            try {
+                ImsMmTelManager imsManager = ImsMmTelManager.createForSubscriptionId(subId);
+                RegistrationManager.RegistrationCallback callback =
+                        new RegistrationManager.RegistrationCallback() {
+                            @Override
+                            public void onRegistered(ImsRegistrationAttributes attributes) {
+                                int tech = attributes.getRegistrationTechnology();
+                                if (tech == ImsRegistrationImplBase.REGISTRATION_TECH_IWLAN) {
+                                    mVoWifiRegistered = true;
+                                } else if (tech == ImsRegistrationImplBase.REGISTRATION_TECH_LTE
+                                        || tech == ImsRegistrationImplBase.REGISTRATION_TECH_NR) {
+                                    mVolteRegistered = true;
+                                }
+                                mHandler.post(PhoneStatusBarPolicy.this::updateVolteVoWifiVisibility);
+                            }
+
+                            @Override
+                            public void onUnregistered(ImsReasonInfo info) {
+                                mVolteRegistered = false;
+                                mVoWifiRegistered = false;
+                                mHandler.post(PhoneStatusBarPolicy.this::updateVolteVoWifiVisibility);
+                            }
+                        };
+                imsManager.registerImsRegistrationCallback(mMainExecutor, callback);
+                mImsCallbacks.put(subId, callback);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to register IMS callback for subId: " + subId, e);
+            }
+        }
+    }
 
     private void onConnectedDisplayAvailabilityChanged(ConnectedDisplayInteractor.State state) {
         boolean visible = state != ConnectedDisplayInteractor.State.DISCONNECTED;
