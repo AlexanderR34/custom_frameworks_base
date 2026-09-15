@@ -288,8 +288,15 @@ public class Clock extends TextView implements
             mShowSeconds = TunerService.parseIntegerSwitch(newValue, false);
             updateShowSeconds();
         } else if (STATUS_BAR_AM_PM.equals(key)) {
-            mAmPmStyle = newValue == null ? AM_PM_STYLE_GONE :
-                    TunerService.parseInteger(newValue, AM_PM_STYLE_GONE);
+            if (newValue != null) {
+                try {
+                    mAmPmStyle = Integer.parseInt(newValue);
+                } catch (NumberFormatException e) {
+                    mAmPmStyle = AM_PM_STYLE_GONE;
+                }
+            } else {
+                mAmPmStyle = AM_PM_STYLE_GONE;
+            }
             mContentDescriptionFormatString = "";
             mDateTimePatternGenerator = null;
             updateClock();
