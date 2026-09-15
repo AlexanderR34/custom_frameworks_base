@@ -105,8 +105,8 @@ sealed interface BatteryColors {
     /** Color scheme appropriate for light mode (dark icons) */
     data object LightThemeColors : BatteryColors {
         override val fg = Color.BLACK
-        // 22% alpha white
-        override val bg: Int = Color.valueOf(1f, 1f, 1f, 0.22f).toArgb()
+        // 35% alpha black
+        override val bg: Int = Color.valueOf(0f, 0f, 0f, 0.35f).toArgb()
 
         // GM Gray 500
         override val fill = Color.parseColor("#9AA0A6")
@@ -124,8 +124,8 @@ sealed interface BatteryColors {
     /** Color scheme appropriate for dark mode (light icons) */
     data object DarkThemeColors : BatteryColors {
         override val fg = Color.WHITE
-        // 18% alpha black
-        override val bg: Int = Color.valueOf(0f, 0f, 0f, 0.18f).toArgb()
+        // 45% alpha white
+        override val bg: Int = Color.valueOf(1f, 1f, 1f, 0.45f).toArgb()
 
         // GM Gray 700
         override val fill = Color.parseColor("#5F6368")
