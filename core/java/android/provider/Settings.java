@@ -6866,6 +6866,13 @@ public final class Settings {
         public static final String SHOW_WIFI_STANDARD_ICON = "show_wifi_standard_icon";
 
         /**
+         * Whether to show 4G icon instead of LTE.
+         * @hide
+         */
+        @Readable
+        public static final String SHOW_FOURG_ICON = "show_fourg_icon";
+
+        /**
          * Whether user can swap the order of the Alert Slider.
          * * Whether user can invert the order of the Alert Slider.
          * 0: Default
@@ -7395,6 +7402,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(HYPEROS_VOLUME_PANEL_STYLE);
             PRIVATE_SETTINGS.add(SHOW_CALL_VOLUME_SLIDER);
             PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);
+            PRIVATE_SETTINGS.add(SHOW_FOURG_ICON);
         }
 
         /**

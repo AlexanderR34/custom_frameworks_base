@@ -255,6 +255,13 @@ public class MobileMappings {
                         CarrierConfigManager.KEY_HIDE_LTE_PLUS_DATA_ICON_BOOL);
             }
 
+            boolean defaultShow4g = config.show4gForLte;
+            int showFourGForLte = android.provider.Settings.System.getInt(
+                    context.getContentResolver(),
+                    android.provider.Settings.System.SHOW_FOURG_ICON,
+                    defaultShow4g ? 1 : 0);
+            config.show4gForLte = (showFourGForLte == 1);
+
             SubscriptionManager subscriptionManager =
                     context.getSystemService(SubscriptionManager.class);
             if (subscriptionManager != null) {

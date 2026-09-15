@@ -304,8 +304,30 @@ constructor(
             .broadcastFlow(IntentFilter(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED))
             .onEach { logger.logActionCarrierConfigChanged() }
 
+    private val show4gForLteSettingFlow: Flow<Unit> =
+        conflatedCallbackFlow {
+            val observer =
+                object : android.database.ContentObserver(null) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(Unit)
+                    }
+                }
+            context.contentResolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor(
+                    android.provider.Settings.System.SHOW_FOURG_ICON
+                ),
+                false,
+                observer,
+                android.os.UserHandle.USER_ALL
+            )
+            trySend(Unit)
+            awaitClose {
+                context.contentResolver.unregisterContentObserver(observer)
+            }
+        }
+
     override val defaultDataSubRatConfig: StateFlow<Config?> =
-        merge(defaultDataSubId, carrierConfigChangedEvent)
+        merge(defaultDataSubId, carrierConfigChangedEvent, show4gForLteSettingFlow)
             .onStart { emit(Unit) }
             .mapLatest { Config.readConfig(context) }
             .distinctUntilChanged()

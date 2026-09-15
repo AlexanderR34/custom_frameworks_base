@@ -417,9 +417,36 @@ constructor(
             }
             .onEach { logger.logActionCarrierConfigChanged() }
 
+    private val show4gForLteSettingEvent: Events<Unit> =
+        buildEvents {
+            conflatedCallbackFlow {
+                val observer =
+                    object : android.database.ContentObserver(null) {
+                        override fun onChange(selfChange: Boolean) {
+                            trySend(Unit)
+                        }
+                    }
+                context.contentResolver.registerContentObserver(
+                    android.provider.Settings.System.getUriFor(
+                        android.provider.Settings.System.SHOW_FOURG_ICON
+                    ),
+                    false,
+                    observer,
+                    android.os.UserHandle.USER_ALL
+                )
+                trySend(Unit)
+                awaitClose {
+                    context.contentResolver.unregisterContentObserver(observer)
+                }
+            }
+            .toEvents(
+                nameTag("MobileConnectionsRepositoryKairosImpl.show4gForLteSettingEvent")
+            )
+        }
+
     override val defaultDataSubRatConfig: State<Config> = buildState {
         rebuildOn(
-            rebuildSignal = mergeLeft(defaultDataSubId.changes, carrierConfigChangedEvent),
+            rebuildSignal = mergeLeft(defaultDataSubId.changes, carrierConfigChangedEvent, show4gForLteSettingEvent),
             nameTag("MobileConnectionsRepositoryKairosImpl.defaultDataSubRatConfig::rebuildOn"),
         ) {
             Config.readConfig(context).also {
