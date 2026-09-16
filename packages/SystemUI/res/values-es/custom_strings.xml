@@ -24,4 +24,26 @@
     <string name="screenrecord_skip_time_summary">Eliminar la espera de 3 segundos</string>
     <string name="screenrecord_hevc_switch_label">Codificación HEVC</string>
     <string name="screenrecord_hevc_switch_summary">Usar el codificador HEVC más eficiente</string>
+
+    <!-- Samsung One UI 7 Notification Shade & Control Center -->
+    <string name="samsung_realtime_notifications">Notificaciones en tiempo real</string>
+    <string name="samsung_panel_control_label">Panel de control</string>
+    <string name="samsung_panel_notifications_label">Notificaciones</string>
+    <string name="samsung_footer_notifications">Notificaciones</string>
+    <string name="samsung_footer_settings">Ajustes</string>
+    <string name="samsung_footer_clear_all">Borrar</string>
+    <string name="samsung_wifi_label">Wi-Fi</string>
+    <string name="samsung_bluetooth_label">Bluetooth</string>
+    <string name="samsung_sound_mode_label">Sonido</string>
+    <string name="samsung_auto_rotate_label">Giro auto.</string>
+    <string name="samsung_flashlight_label">Linterna</string>
+    <string name="samsung_dnd_label">No molestar</string>
+    <string name="samsung_airplane_label">Modo Avión</string>
+    <string name="samsung_screen_record_label">Grabar pantalla</string>
+    <string name="samsung_hotspot_label">Zona Wi-Fi</string>
+    <string name="samsung_dark_mode_label">Modo oscuro</string>
+    <string name="samsung_media_output_label">Salida multimedia</string>
+    <string name="samsung_device_control_label">Control de dispositivos</string>
+    <string name="samsung_state_on">Activado</string>
+    <string name="samsung_state_off">Desactivado</string>
 </resources>

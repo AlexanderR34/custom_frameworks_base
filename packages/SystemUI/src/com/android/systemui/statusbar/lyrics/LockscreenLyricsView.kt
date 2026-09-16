@@ -118,23 +118,28 @@ class LockscreenLyricsView @JvmOverloads constructor(
         }
     }
 
+    private var linesLockscreen: Int = 5
+    private var linesAod: Int = 1
+
+    fun setLineCounts(linesLockscreen: Int, linesAod: Int) {
+        this.linesLockscreen = linesLockscreen
+        this.linesAod = linesAod
+        if (currentLyrics != null && lastIndex >= 0) {
+            bindRows(lastIndex, animate = false)
+        }
+    }
+
     fun setDozing(dozing: Boolean) {
         if (isDozing == dozing) return
         isDozing = dozing
         if (dozing) {
-            // AOD Mode: Clean single vocal line, optimal for OLED and battery
-            row1.visibility = View.GONE
-            row2.visibility = View.GONE
-            row4.visibility = View.GONE
-            row5.visibility = View.GONE
             row3.setShadowLayer(8f, 0f, 0f, Color.argb(180, 255, 255, 255))
         } else {
-            // Lockscreen Mode: Restore full multi-row view and rich glow
             row3.setShadowLayer(14f, 0f, 0f, Color.argb(220, 255, 255, 255))
-            currentLyrics?.let {
-                if (lastIndex >= 0) {
-                    bindRows(lastIndex, animate = false)
-                }
+        }
+        currentLyrics?.let {
+            if (lastIndex >= 0) {
+                bindRows(lastIndex, animate = false)
             }
         }
     }
@@ -208,25 +213,34 @@ class LockscreenLyricsView @JvmOverloads constructor(
     }
 
     private fun applyStaticRowTexts(text1: String, text2: String, text4: String, text5: String) {
-        if (isDozing) {
-            row1.visibility = View.GONE
-            row2.visibility = View.GONE
-            row4.visibility = View.GONE
-            row5.visibility = View.GONE
-            return
+        val maxLines = if (isDozing) linesAod else linesLockscreen
+
+        when (maxLines) {
+            1 -> {
+                row1.visibility = View.GONE
+                row2.visibility = View.GONE
+                row4.visibility = View.GONE
+                row5.visibility = View.GONE
+            }
+            3 -> {
+                row1.visibility = View.GONE
+                row2.text = text2
+                row2.visibility = if (text2.isEmpty()) View.GONE else View.VISIBLE
+                row4.text = text4
+                row4.visibility = if (text4.isEmpty()) View.GONE else View.VISIBLE
+                row5.visibility = View.GONE
+            }
+            else -> { // 5 lines
+                row1.text = text1
+                row1.visibility = if (text1.isEmpty()) View.GONE else View.VISIBLE
+                row2.text = text2
+                row2.visibility = if (text2.isEmpty()) View.GONE else View.VISIBLE
+                row4.text = text4
+                row4.visibility = if (text4.isEmpty()) View.GONE else View.VISIBLE
+                row5.text = text5
+                row5.visibility = if (text5.isEmpty()) View.GONE else View.VISIBLE
+            }
         }
-
-        row1.text = text1
-        row1.visibility = if (text1.isEmpty()) View.GONE else View.VISIBLE
-
-        row2.text = text2
-        row2.visibility = if (text2.isEmpty()) View.GONE else View.VISIBLE
-
-        row4.text = text4
-        row4.visibility = if (text4.isEmpty()) View.GONE else View.VISIBLE
-
-        row5.text = text5
-        row5.visibility = if (text5.isEmpty()) View.GONE else View.VISIBLE
     }
 
     /**

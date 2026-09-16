@@ -2436,6 +2436,12 @@ public class NotificationStackScrollLayoutController implements Dumpable {
         return mView.isOnLockscreen();
     }
 
+    public void clearAllNotificationsFromFooter() {
+        if (mView != null) {
+            mView.clearAllNotifications(false /* hideSilentSection */);
+        }
+    }
+
     private void debugLog(@NonNull Supplier<String> msgSupplier) {
         if (DEBUG) {
             Log.d(TAG, msgSupplier.get());

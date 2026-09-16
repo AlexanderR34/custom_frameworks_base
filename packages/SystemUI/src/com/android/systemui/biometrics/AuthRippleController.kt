@@ -139,21 +139,32 @@ constructor(
 
         updateSensorLocation()
         if (biometricSourceType == BiometricSourceType.FINGERPRINT) {
-            fingerprintSensorLocation?.let {
-                mView.setFingerprintSensorLocation(it, udfpsRadius)
-                circleReveal =
-                    CircleReveal(
-                        it.x,
-                        it.y,
-                        0,
-                        Math.max(
-                            Math.max(it.x, displayMetrics.widthPixels - it.x),
-                            Math.max(it.y, displayMetrics.heightPixels - it.y),
-                        ),
-                    )
-                logger.showingUnlockRippleAt(it.x, it.y, "FP sensor radius: $udfpsRadius")
-                showUnlockedRipple()
+            val sensorPoint = authController.udfpsLocation ?: authController.fingerprintSensorLocation ?: fingerprintSensorLocation
+            val centerX = if (sensorPoint != null && sensorPoint.x > 0 && Math.abs(sensorPoint.x - displayMetrics.widthPixels / 2) < displayMetrics.widthPixels * 0.2f) {
+                sensorPoint.x
+            } else {
+                displayMetrics.widthPixels / 2
             }
+            val centerY = if (sensorPoint != null && sensorPoint.y > displayMetrics.heightPixels * 0.4f && sensorPoint.y < displayMetrics.heightPixels * 0.95f) {
+                sensorPoint.y
+            } else {
+                (displayMetrics.heightPixels * 0.77f).toInt()
+            }
+            val fpLoc = Point(centerX, centerY)
+            mView.setFingerprintSensorLocation(fpLoc, if (udfpsRadius > 0) udfpsRadius else 80f)
+            circleReveal =
+                CircleReveal(
+                    fpLoc.x,
+                    fpLoc.y,
+                    0,
+                    Math.max(
+                        Math.max(fpLoc.x, displayMetrics.widthPixels - fpLoc.x),
+                        Math.max(fpLoc.y, displayMetrics.heightPixels - fpLoc.y),
+                    ),
+                )
+            logger.showingUnlockRippleAt(fpLoc.x, fpLoc.y, "FP sensor radius: $udfpsRadius")
+            showUnlockedRipple()
+            sendJellyWallpaperRipple(fpLoc.x.toFloat(), fpLoc.y.toFloat())
         } else if (biometricSourceType == BiometricSourceType.FACE) {
             faceSensorLocation?.let {
                 mView.setSensorLocation(it)
@@ -169,7 +180,21 @@ constructor(
                     )
                 logger.showingUnlockRippleAt(it.x, it.y, "Face unlock ripple")
                 showUnlockedRipple()
+                sendJellyWallpaperRipple(it.x.toFloat(), it.y.toFloat())
             }
+        }
+    }
+
+    private fun sendJellyWallpaperRipple(x: Float, y: Float) {
+        try {
+            val wp = sysuiContext.getSystemService(android.app.WallpaperManager::class.java)
+            val extras = android.os.Bundle()
+            extras.putFloat("x", x)
+            extras.putFloat("y", y)
+            val windowToken = mView.windowToken ?: mView.rootView?.windowToken
+            wp?.sendWallpaperCommand(windowToken, "jelly_ripple", x.toInt(), y.toInt(), 0, extras)
+        } catch (e: Exception) {
+            // ignore
         }
     }
 
@@ -216,6 +241,7 @@ constructor(
                     } else {
                         mView.fadeDwellRipple()
                     }
+                    showUnlockRippleInternal(BiometricSourceType.FINGERPRINT)
                 }
             }
 

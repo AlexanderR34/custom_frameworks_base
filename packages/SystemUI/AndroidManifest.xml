@@ -629,6 +629,39 @@
             </meta-data>
         </service>
 
+        <service android:name=".wallpapers.VideoWallpaper"
+            android:label="@string/video_wallpaper_title"
+            android:singleUser="true"
+            android:permission="android.permission.BIND_WALLPAPER"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper"
+                android:resource="@xml/video_wallpaper" />
+        </service>
+
+        <activity android:name=".wallpapers.VideoWallpaperPickerActivity"
+            android:label="@string/video_wallpaper_title"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.ATTACH_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SET_WALLPAPER" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
         <activity android:name=".tuner.TunerActivity"
                   android:enabled="false"
                   android:icon="@drawable/tuner"

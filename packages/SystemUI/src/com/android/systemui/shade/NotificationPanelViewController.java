@@ -54,6 +54,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.ContentObserver;
@@ -584,6 +585,7 @@ public final class NotificationPanelViewController implements
     @Nullable
     private RenderEffect mBlurRenderEffect = null;
 
+
     @Inject
     public NotificationPanelViewController(NotificationPanelView view,
             @Main Handler handler,
@@ -933,6 +935,7 @@ public final class NotificationPanelViewController implements
         if (mSplitShadeEnabled) {
             updateResources();
         }
+
 
         mTapAgainViewController.init();
         mShadeHeaderController.init();

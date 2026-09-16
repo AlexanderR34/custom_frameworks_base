@@ -70,15 +70,79 @@ class LockscreenLyricsController @Inject constructor(
         }
     }
 
+    private var isEnabled = true
+    private var displayTarget = 2 // 0: Lockscreen, 1: AOD, 2: Both
+    private var linesLockscreen = 5
+    private var linesAod = 1
+
+    private val settingsObserver = object : android.database.ContentObserver(mainHandler) {
+        override fun onChange(selfChange: Boolean, uri: android.net.Uri?) {
+            updateSettings()
+        }
+    }
+
     init {
         mediaDataManager.addListener(this)
         statusBarStateController.addCallback(this)
         isKeyguardShowing = statusBarStateController.state == StatusBarState.KEYGUARD
         isDozing = statusBarStateController.isDozing
+
+        val resolver = context.contentResolver
+        resolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor("lockscreen_lyrics_enabled"),
+            false,
+            settingsObserver
+        )
+        resolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor("lockscreen_lyrics_display_target"),
+            false,
+            settingsObserver
+        )
+        resolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_lockscreen"),
+            false,
+            settingsObserver
+        )
+        resolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_aod"),
+            false,
+            settingsObserver
+        )
+        updateSettings()
+    }
+
+    private fun updateSettings() {
+        val resolver = context.contentResolver
+        isEnabled = android.provider.Settings.System.getInt(
+            resolver, "lockscreen_lyrics_enabled", 1
+        ) != 0
+        displayTarget = android.provider.Settings.System.getInt(
+            resolver, "lockscreen_lyrics_display_target", 2
+        )
+        linesLockscreen = android.provider.Settings.System.getInt(
+            resolver, "lockscreen_lyrics_lines_lockscreen", 5
+        )
+        linesAod = android.provider.Settings.System.getInt(
+            resolver, "lockscreen_lyrics_lines_aod", 1
+        )
+        lyricsView?.setLineCounts(linesLockscreen, linesAod)
+        updateLyricsDisplay()
+        evaluateTickerState()
+    }
+
+    private fun shouldShowForCurrentState(): Boolean {
+        if (!isEnabled) return false
+        if (isDozing) {
+            return displayTarget == 1 || displayTarget == 2
+        } else if (isKeyguardShowing) {
+            return displayTarget == 0 || displayTarget == 2
+        }
+        return false
     }
 
     fun attachView(view: LockscreenLyricsView) {
         lyricsView = view
+        lyricsView?.setLineCounts(linesLockscreen, linesAod)
         updateLyricsDisplay()
         evaluateTickerState()
     }
@@ -175,7 +239,7 @@ class LockscreenLyricsController @Inject constructor(
 
     private fun evaluateTickerState() {
         val isPlaying = activeController?.playbackState?.state == PlaybackState.STATE_PLAYING
-        val shouldTick = (isKeyguardShowing || isDozing) && isPlaying && (currentLyrics != null) && (lyricsView != null)
+        val shouldTick = shouldShowForCurrentState() && isPlaying && (currentLyrics != null) && (lyricsView != null)
 
         if (shouldTick && !isTicking) {
             isTicking = true
@@ -185,7 +249,7 @@ class LockscreenLyricsController @Inject constructor(
             mainHandler.removeCallbacks(tickerRunnable)
         }
 
-        if (!isPlaying || currentLyrics == null) {
+        if (!isPlaying || currentLyrics == null || !shouldShowForCurrentState()) {
             lyricsView?.visibility = View.GONE
         }
     }
@@ -209,7 +273,7 @@ class LockscreenLyricsController @Inject constructor(
 
     private fun updateLyricsDisplay() {
         val lyrics = currentLyrics
-        if (lyrics != null && (isKeyguardShowing || isDozing)) {
+        if (lyrics != null && shouldShowForCurrentState()) {
             lyricsView?.setDozing(isDozing)
             updateProgress()
         } else {

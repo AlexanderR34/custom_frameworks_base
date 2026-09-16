@@ -19,6 +19,7 @@ package com.android.systemui.shade;
 import static com.android.systemui.keyguard.shared.model.KeyguardState.DREAMING;
 import static com.android.systemui.keyguard.shared.model.KeyguardState.LOCKSCREEN;
 import static com.android.systemui.statusbar.StatusBarState.KEYGUARD;
+import static com.android.systemui.statusbar.StatusBarState.SHADE_LOCKED;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.collectFlow;
 import static com.android.systemui.util.kotlin.JavaAdapterKt.combineFlows;
 
@@ -427,10 +428,21 @@ public class NotificationShadeWindowViewController implements Dumpable {
                     mDownEvent = null;
                 }
 
-                if (mStatusBarStateController.getState() == KEYGUARD) {
+                int currentState = mStatusBarStateController.getState();
+                if (currentState == KEYGUARD || currentState == SHADE_LOCKED) {
                     WallpaperManager wm = mView.getContext().getSystemService(WallpaperManager.class);
                     if (wm != null && mView.getWindowToken() != null) {
-                        wm.sendWallpaperCommand(mView.getWindowToken(), "jelly_touch", (int) ev.getX(), (int) ev.getY(), ev.getActionMasked(), null);
+                        android.os.Bundle extras = null;
+                        int pointerCount = ev.getPointerCount();
+                        if (pointerCount > 1) {
+                            extras = new android.os.Bundle();
+                            extras.putInt("pointerCount", pointerCount);
+                            extras.putFloat("x0", ev.getX(0));
+                            extras.putFloat("y0", ev.getY(0));
+                            extras.putFloat("x1", ev.getX(1));
+                            extras.putFloat("y1", ev.getY(1));
+                        }
+                        wm.sendWallpaperCommand(mView.getWindowToken(), "jelly_touch", (int) ev.getX(), (int) ev.getY(), ev.getActionMasked(), extras);
                     }
                 }
 

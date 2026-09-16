@@ -1917,4 +1917,11 @@
     <string name="ace_attribution_settings_button_accessibility_description" msgid="8426163772933746374">"Botón Ajustes"</string>
     <string name="ace_attribution_thumbs_up_button_accessibility_description" msgid="3561722934830934360">"Botón Me gusta"</string>
     <string name="ace_attribution_thumbs_down_button_accessibility_description" msgid="5471283747650437662">"Botón No me gusta"</string>
+
+    <!-- Video Wallpaper -->
+    <string name="video_wallpaper_title">Fondo de pantalla en video</string>
+    <string name="video_wallpaper_description">Reproduce videos fluidos en alta definición como fondo de pantalla con aceleración de hardware y 0% de batería en reposo</string>
+    <string name="set_video_wallpaper">Establecer como fondo</string>
+    <string name="select_video_wallpaper">Elegir video</string>
+    <string name="video_wallpaper_saved">Fondo de pantalla en video aplicado correctamente</string>
 </resources>

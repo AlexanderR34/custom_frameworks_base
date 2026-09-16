@@ -179,12 +179,23 @@ constructor(
                 override fun onViewAttachedToWindow(view: View) {
                     layoutRipple()
                     rippleView.startRipple(Runnable { windowManager.removeView(rippleView) })
+                    sendJellyWallpaperChargingWave(view.windowToken)
                     rippleView.removeOnAttachStateChangeListener(this)
                 }
             }
         )
         windowManager.addView(rippleView, windowLayoutParams)
         uiEventLogger.log(WiredChargingRippleEvent.CHARGING_RIPPLE_PLAYED)
+        sendJellyWallpaperChargingWave(rippleView.windowToken)
+    }
+
+    private fun sendJellyWallpaperChargingWave(windowToken: android.os.IBinder? = null) {
+        try {
+            val wp = context.getSystemService(android.app.WallpaperManager::class.java)
+            wp?.sendWallpaperCommand(windowToken ?: rippleView.windowToken, "jelly_charging_wave", 0, 0, 0, null)
+        } catch (e: Exception) {
+            // ignore
+        }
     }
 
     private fun layoutRipple() {

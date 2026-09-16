@@ -5100,4 +5100,10 @@
     <!-- Accessibility label for the thumbs down button on attribution dialog. [CHAR_LIMIT=NONE] -->
     <string name="ace_attribution_thumbs_down_button_accessibility_description">Thumbs down feedback button</string>
 
+    <!-- Video Wallpaper -->
+    <string name="video_wallpaper_title">Video wallpaper</string>
+    <string name="video_wallpaper_description">Plays video files smoothly as live wallpaper with hardware acceleration and 0% battery usage on sleep</string>
+    <string name="set_video_wallpaper">Set as wallpaper</string>
+    <string name="select_video_wallpaper">Choose video</string>
+    <string name="video_wallpaper_saved">Video wallpaper applied successfully</string>
 </resources>
