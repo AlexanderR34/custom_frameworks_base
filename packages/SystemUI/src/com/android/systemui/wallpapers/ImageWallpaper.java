@@ -241,6 +241,9 @@ public class ImageWallpaper extends WallpaperService {
         private boolean mLightGyroParallax = true;
         private float mLightDynamicAngle = 45.0f;
         private float mLightShimmerPhase = 0.0f;
+        private boolean mIsTouching = false;
+        private float mTouchX = 540f;
+        private float mTouchY = 1200f;
         private int mGyroInertiaStrength = 65;
         private boolean mDepthEffectEnabled = false;
         private int mDepthSeparation = 60;
@@ -1139,7 +1142,6 @@ public class ImageWallpaper extends WallpaperService {
 
         @Override
         public void onTouchEvent(MotionEvent event) {
-            if (!mJellyEnabled || !isCurrentTargetActive()) return;
             int action = event.getActionMasked();
             int pointerCount = event.getPointerCount();
             float x0 = event.getX(0);
@@ -1147,9 +1149,24 @@ public class ImageWallpaper extends WallpaperService {
             float x1 = pointerCount > 1 ? event.getX(1) : x0;
             float y1 = pointerCount > 1 ? event.getY(1) : y0;
 
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
+                mIsTouching = true;
+                mTouchX = x0;
+                mTouchY = y0;
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mIsTouching = false;
+            }
+
+            if (!mJellyEnabled || !isCurrentTargetActive()) {
+                if (mLightSourceEnabled && mLightMode == 6) {
+                    startAnimationLoopIfNeeded();
+                }
+                return;
+            }
+
             synchronized (mSurfaceLock) {
                 mJellyMesh.onMultiTouchEvent(action, pointerCount, x0, y0, x1, y1);
-                if (mLightSourceEnabled && mLightMode == 1) {
+                if (mLightSourceEnabled && mLightMode == 6) {
                     float cx = (mBitmap != null) ? mBitmap.getWidth() * 0.5f : 540f;
                     float cy = (mBitmap != null) ? mBitmap.getHeight() * 0.5f : 1200f;
                     float touchAngle = (float) Math.toDegrees(Math.atan2(y0 - cy, x0 - cx));
