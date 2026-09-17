@@ -1365,11 +1365,11 @@ public class ImageWallpaper extends WallpaperService {
                 rgbGlitter = 0x6EE7B7;
             }
 
-            // 1. Foco Solar Principal & Corona Radial (Sun Corona / Spotlight Core)
-            float spotRadius = Math.max(w, h) * (0.35f + 0.40f * spreadFactor);
-            int alphaCenter = (int) (190 * intensity);
-            int alphaBloom = (int) (90 * intensity * (1.0f - hardnessFactor * 0.35f));
-            int alphaHalo = (int) (35 * intensity * (1.0f - hardnessFactor * 0.5f));
+            // 1. Foco Solar / Fuente de Luz (Flashlight / Light Source Core)
+            float spotRadius = Math.max(w, h) * (0.28f + 0.35f * spreadFactor);
+            int alphaCenter = (int) (200 * intensity);
+            int alphaBloom = (int) (95 * intensity * (1.0f - hardnessFactor * 0.35f));
+            int alphaHalo = (int) (40 * intensity * (1.0f - hardnessFactor * 0.5f));
             int colorCenter = (alphaCenter << 24) | rgbCenter;
             int colorBloom = (alphaBloom << 24) | rgbMid;
             int colorHalo = (alphaHalo << 24) | rgbMid;
@@ -1383,57 +1383,85 @@ public class ImageWallpaper extends WallpaperService {
             mLightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
             canvas.drawCircle(lightX, lightY, spotRadius, mLightPaint);
 
-            // 2. Haz y Rayos de Sol Volumétricos (Natural Multi-Shaft Sunbeams / God Rays)
-            float beamLength = Math.max(w, h) * (1.0f + 0.5f * spreadFactor);
-            float beamDirX = cx - lightX;
-            float beamDirY = cy - lightY;
-            float beamDist = (float) Math.hypot(beamDirX, beamDirY);
-            if (beamDist > 1.0f) {
-                beamDirX /= beamDist;
-                beamDirY /= beamDist;
-            } else {
-                beamDirX = (float) Math.cos(rad);
-                beamDirY = (float) Math.sin(rad);
-            }
+            // 2. Ley de Reflexión: Haz Incidente + Punto Focal + Haz Reflejado (Incident & Reflected Light Beams)
+            // Punto de impacto / contacto en la superficie del fondo/cristal
+            float hitX = cx + (mSmoothRoll * w * 0.25f);
+            float hitY = cy + (mSmoothPitch * h * 0.25f) + (h * 0.08f);
 
-            float baseAngleRad = (float) Math.atan2(beamDirY, beamDirX);
+            // Vector y distancia del haz incidente
+            float incDx = hitX - lightX;
+            float incDy = hitY - lightY;
+            float incDist = (float) Math.hypot(incDx, incDy);
+            if (incDist < 1.0f) {
+                incDist = 1.0f;
+                incDx = (float) Math.cos(rad);
+                incDy = (float) Math.sin(rad);
+            }
+            float incAngle = (float) Math.atan2(incDy, incDx);
+
+            // Vector y dirección del haz reflejado (Ley de Reflexión: ángulo simétrico respecto a la normal del plano)
+            float reflAngle = (float) Math.atan2(incDy, -incDx);
+            float beamLength = Math.max(w, h) * (0.95f + 0.50f * spreadFactor);
+            float reflEndX = hitX + (float) Math.cos(reflAngle) * beamLength;
+            float reflEndY = hitY + (float) Math.sin(reflAngle) * beamLength;
+
             mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
 
-            // Haces de luz solar superpuestos que crean un haz suave y realista sin bordes rectos ni lineas
-            int[] shaftRelativeDeg = new int[] { 0, -18, 18, -32, 32 };
-            float[] shaftWidthDeg = new float[] { 40.0f, 24.0f, 24.0f, 18.0f, 18.0f };
-            float[] shaftAlphaMultipliers = new float[] { 0.80f, 0.50f, 0.50f, 0.30f, 0.30f };
+            // Ancho volumétrico amplio del haz (un auténtico haz de luz con volumen, como la linterna en el espejo)
+            float beamStartWidth = (50.0f + 80.0f * spreadFactor);
+            float beamMidWidth = (120.0f + 160.0f * spreadFactor);
+            float beamEndWidth = (200.0f + 260.0f * spreadFactor);
 
-            Path beamPath = new Path();
-            for (int s = 0; s < shaftRelativeDeg.length; s++) {
-                float dynamicShift = (float) Math.sin(mLightShimmerPhase * 0.8f + s * 1.2f) * 3.5f;
-                float shaftCenterAngle = baseAngleRad + (float) Math.toRadians(shaftRelativeDeg[s] + dynamicShift);
-                float halfSpread = (float) Math.toRadians((shaftWidthDeg[s] * (0.6f + 0.6f * spreadFactor)) * 0.5f);
-                float a1 = shaftCenterAngle - halfSpread;
-                float a2 = shaftCenterAngle + halfSpread;
+            // --- A. HAZ INCIDENTE (Desde la linterna/fuente de luz hasta la superficie) ---
+            float perpIncX = -(float) Math.sin(incAngle);
+            float perpIncY = (float) Math.cos(incAngle);
 
-                float endX = lightX + (float) Math.cos(shaftCenterAngle) * beamLength;
-                float endY = lightY + (float) Math.sin(shaftCenterAngle) * beamLength;
+            Path incidentPath = new Path();
+            incidentPath.moveTo(lightX - perpIncX * (beamStartWidth * 0.5f), lightY - perpIncY * (beamStartWidth * 0.5f));
+            incidentPath.lineTo(lightX + perpIncX * (beamStartWidth * 0.5f), lightY + perpIncY * (beamStartWidth * 0.5f));
+            incidentPath.lineTo(hitX + perpIncX * (beamMidWidth * 0.5f), hitY + perpIncY * (beamMidWidth * 0.5f));
+            incidentPath.lineTo(hitX - perpIncX * (beamMidWidth * 0.5f), hitY - perpIncY * (beamMidWidth * 0.5f));
+            incidentPath.close();
 
-                int sAlpha = (int) (125 * intensity * shaftAlphaMultipliers[s]);
-                int sColor = (sAlpha << 24) | rgbCenter;
-                int sMidColor = ((sAlpha / 2) << 24) | rgbMid;
+            int incAlpha = (int) (150 * intensity);
+            LinearGradient incidentGrad = new LinearGradient(
+                    lightX, lightY, hitX, hitY,
+                    new int[] { (incAlpha << 24) | rgbCenter, ((int)(incAlpha * 0.65f) << 24) | rgbMid, ((int)(incAlpha * 0.3f) << 24) | rgbMid, rgbMid & 0x00FFFFFF },
+                    new float[] { 0.0f, 0.35f, 0.80f, 1.0f },
+                    Shader.TileMode.CLAMP);
+            mSpecularPaint.setShader(incidentGrad);
+            canvas.drawPath(incidentPath, mSpecularPaint);
 
-                LinearGradient rayGradient = new LinearGradient(
-                        lightX, lightY, endX, endY,
-                        new int[] { sColor, sMidColor, rgbMid & 0x00FFFFFF },
-                        new float[] { 0.0f, 0.40f, 1.0f },
-                        Shader.TileMode.CLAMP);
-                mSpecularPaint.setShader(rayGradient);
+            // --- B. PUNTO FOCAL DE IMPACTO ESPECULAR (Specular Reflection Contact Point) ---
+            float hitRadius = beamMidWidth * (0.90f + 0.30f * hardnessFactor);
+            int hitAlpha = (int) (180 * intensity);
+            RadialGradient hitGradient = new RadialGradient(
+                    hitX, hitY, hitRadius,
+                    new int[] { (hitAlpha << 24) | rgbCenter, ((int)(hitAlpha * 0.5f) << 24) | rgbMid, rgbCenter & 0x00FFFFFF },
+                    new float[] { 0.0f, 0.40f, 1.0f },
+                    Shader.TileMode.CLAMP);
+            mSpecularPaint.setShader(hitGradient);
+            canvas.drawCircle(hitX, hitY, hitRadius, mSpecularPaint);
 
-                beamPath.reset();
-                beamPath.moveTo(lightX, lightY);
-                beamPath.lineTo(lightX + (float) Math.cos(a1) * beamLength, lightY + (float) Math.sin(a1) * beamLength);
-                beamPath.lineTo(lightX + (float) Math.cos(a2) * beamLength, lightY + (float) Math.sin(a2) * beamLength);
-                beamPath.close();
+            // --- C. HAZ REFLEJADO (Desde el punto de contacto hacia el borde opuesto reflejado) ---
+            float perpReflX = -(float) Math.sin(reflAngle);
+            float perpReflY = (float) Math.cos(reflAngle);
 
-                canvas.drawPath(beamPath, mSpecularPaint);
-            }
+            Path reflectedPath = new Path();
+            reflectedPath.moveTo(hitX - perpReflX * (beamMidWidth * 0.5f), hitY - perpReflY * (beamMidWidth * 0.5f));
+            reflectedPath.lineTo(hitX + perpReflX * (beamMidWidth * 0.5f), hitY + perpReflY * (beamMidWidth * 0.5f));
+            reflectedPath.lineTo(reflEndX + perpReflX * (beamEndWidth * 0.5f), reflEndY + perpReflY * (beamEndWidth * 0.5f));
+            reflectedPath.lineTo(reflEndX - perpReflX * (beamEndWidth * 0.5f), reflEndY - perpReflY * (beamEndWidth * 0.5f));
+            reflectedPath.close();
+
+            int reflAlpha = (int) (135 * intensity);
+            LinearGradient reflectedGrad = new LinearGradient(
+                    hitX, hitY, reflEndX, reflEndY,
+                    new int[] { (reflAlpha << 24) | rgbCenter, ((int)(reflAlpha * 0.55f) << 24) | rgbMid, rgbMid & 0x00FFFFFF },
+                    new float[] { 0.0f, 0.40f, 1.0f },
+                    Shader.TileMode.CLAMP);
+            mSpecularPaint.setShader(reflectedGrad);
+            canvas.drawPath(reflectedPath, mSpecularPaint);
 
             // 3. Reflejo en el Borde de la Pantalla (Edge Rim Sheen / Border Glass Glare)
             float startX = cx - cosA * (w * 0.5f);
@@ -1455,43 +1483,35 @@ public class ImageWallpaper extends WallpaperService {
 
             // 4. Ondas de Agua Cáusticas Fluidas (Fluid Liquid Water Waves)
             if (mLightSpecularColumn) {
-                float colTopWidth = w * (0.20f + 0.30f * spreadFactor);
-                float colBottomWidth = w * (0.45f + 0.50f * spreadFactor);
-                float pathTopX = lightX;
-                float pathTopY = Math.min(lightY, h * 0.35f);
-                float pathBottomX = cx + (mSmoothRoll * w * 0.25f);
-                float pathBottomY = h;
-
                 mGlitterPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
                 mGlitterPaint.setStyle(Paint.Style.STROKE);
                 mGlitterPaint.setStrokeCap(Paint.Cap.ROUND);
                 float shimmerTime = mLightShimmerPhase;
-                int numWaves = 16;
+                int numWaves = 14;
 
                 Path wavePath = new Path();
                 for (int n = 0; n < numWaves; n++) {
                     float vFrac = (n + 1) / (float) (numWaves + 1);
-                    float yCenter = pathTopY + vFrac * (pathBottomY - pathTopY);
-                    float currentWidth = colTopWidth + vFrac * (colBottomWidth - colTopWidth);
-                    float halfSpan = currentWidth * 0.65f;
+                    float curCenterX = hitX + (reflEndX - hitX) * vFrac * 0.8f;
+                    float curCenterY = hitY + (reflEndY - hitY) * vFrac * 0.8f;
+                    float curSpan = (beamMidWidth + (beamEndWidth - beamMidWidth) * vFrac) * 0.7f;
 
                     float wavePhase = shimmerTime * 2.0f + n * 0.95f;
-                    float waveAmp = (5.0f + 12.0f * vFrac) * (0.4f + 0.6f * spreadFactor);
+                    float waveAmp = (4.0f + 10.0f * vFrac) * (0.4f + 0.6f * spreadFactor);
 
-                    float leftX = pathTopX - halfSpan;
-                    float rightX = pathTopX + halfSpan;
-                    float midX1 = pathTopX - halfSpan * 0.45f;
-                    float midX2 = pathTopX + halfSpan * 0.45f;
+                    float leftX = curCenterX - perpReflX * curSpan;
+                    float leftY = curCenterY - perpReflY * curSpan;
+                    float rightX = curCenterX + perpReflX * curSpan;
+                    float rightY = curCenterY + perpReflY * curSpan;
 
-                    float yOffset1 = (float) Math.sin(wavePhase) * waveAmp;
-                    float yOffset2 = (float) Math.cos(wavePhase * 1.3f) * waveAmp;
+                    float midX1 = curCenterX - perpReflX * (curSpan * 0.35f) + perpIncX * ((float) Math.sin(wavePhase) * waveAmp);
+                    float midY1 = curCenterY - perpReflY * (curSpan * 0.35f) + perpIncY * ((float) Math.sin(wavePhase) * waveAmp);
+                    float midX2 = curCenterX + perpReflX * (curSpan * 0.35f) + perpIncX * ((float) Math.cos(wavePhase * 1.3f) * waveAmp);
+                    float midY2 = curCenterY + perpReflY * (curSpan * 0.35f) + perpIncY * ((float) Math.cos(wavePhase * 1.3f) * waveAmp);
 
                     wavePath.reset();
-                    wavePath.moveTo(leftX, yCenter);
-                    wavePath.cubicTo(
-                            midX1, yCenter + yOffset1,
-                            midX2, yCenter + yOffset2,
-                            rightX, yCenter);
+                    wavePath.moveTo(leftX, leftY);
+                    wavePath.cubicTo(midX1, midY1, midX2, midY2, rightX, rightY);
 
                     float waveAlphaFrac = (float) Math.sin(vFrac * Math.PI) * (0.6f + 0.4f * (float) Math.sin(wavePhase * 1.5f));
                     int waveAlpha = (int) (110 * intensity * Math.max(0.1f, waveAlphaFrac));
