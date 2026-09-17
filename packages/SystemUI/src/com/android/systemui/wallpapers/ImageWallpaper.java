@@ -127,6 +127,12 @@ public class ImageWallpaper extends WallpaperService {
     public static final String KEY_JELLY_LIGHT_MODE = "jelly_wallpaper_light_mode";
     public static final String KEY_JELLY_LIGHT_INTENSITY = "jelly_wallpaper_light_intensity";
     public static final String KEY_JELLY_LIGHT_ANGLE = "jelly_wallpaper_light_angle";
+    public static final String KEY_JELLY_LIGHT_BEAM_SPREAD = "jelly_wallpaper_light_beam_spread";
+    public static final String KEY_JELLY_LIGHT_HARDNESS = "jelly_wallpaper_light_hardness";
+    public static final String KEY_JELLY_LIGHT_SHIMMER_SPEED = "jelly_wallpaper_light_shimmer_speed";
+    public static final String KEY_JELLY_LIGHT_SPECULAR_COLUMN = "jelly_wallpaper_light_specular_column";
+    public static final String KEY_JELLY_LIGHT_SOLAR_TRACKING = "jelly_wallpaper_light_solar_tracking";
+    public static final String KEY_JELLY_LIGHT_GYRO_PARALLAX = "jelly_wallpaper_light_gyro_parallax";
     public static final String KEY_JELLY_SNAPBACK_RECOIL = "jelly_wallpaper_snapback_recoil";
     public static final String KEY_JELLY_INTERNAL_TENSION = "jelly_wallpaper_internal_tension";
     public static final String KEY_JELLY_MAX_STRETCH = "jelly_wallpaper_max_stretch";
@@ -227,6 +233,14 @@ public class ImageWallpaper extends WallpaperService {
         private int mLightMode = 2;
         private float mLightAngle = 45.0f;
         private int mLightIntensity = 75;
+        private int mLightBeamSpread = 50;
+        private int mLightHardness = 50;
+        private int mLightShimmerSpeed = 50;
+        private boolean mLightSpecularColumn = true;
+        private boolean mLightSolarTracking = false;
+        private boolean mLightGyroParallax = true;
+        private float mLightDynamicAngle = 45.0f;
+        private float mLightShimmerPhase = 0.0f;
         private int mGyroInertiaStrength = 65;
         private boolean mDepthEffectEnabled = false;
         private int mDepthSeparation = 60;
@@ -262,7 +276,7 @@ public class ImageWallpaper extends WallpaperService {
 
             @Override
             public void onSensorChanged(SensorEvent event) {
-                if ((!mGyroEnabled && !mGyroInertiaEnabled) || !mIsVisible || !isCurrentTargetActive()) return;
+                if ((!mGyroEnabled && !mGyroInertiaEnabled && !(mLightSourceEnabled && mLightGyroParallax)) || !mIsVisible || !isCurrentTargetActive()) return;
                 int type = event.sensor.getType();
 
                 if (type == Sensor.TYPE_ROTATION_VECTOR) {
@@ -295,8 +309,9 @@ public class ImageWallpaper extends WallpaperService {
                         mJellyMesh.resetGyro();
                     }
 
-                    if (mLightSourceEnabled && mLightMode == 2) {
+                    if (mLightSourceEnabled && (mLightMode == 2 || mLightGyroParallax)) {
                         float dynAngle = (float) Math.toDegrees(Math.atan2(finalPitch, -finalRoll));
+                        mLightDynamicAngle = dynAngle;
                         mJellyMesh.setLightSource(true, dynAngle, mLightIntensity / 100.0f);
                         startAnimationLoopIfNeeded();
                     }
@@ -325,6 +340,13 @@ public class ImageWallpaper extends WallpaperService {
                         }
                     } else {
                         mJellyMesh.resetGyro();
+                    }
+
+                    if (mLightSourceEnabled && (mLightMode == 2 || mLightGyroParallax)) {
+                        float dynAngle = (float) Math.toDegrees(Math.atan2(finalPitch, -finalRoll));
+                        mLightDynamicAngle = dynAngle;
+                        mJellyMesh.setLightSource(true, dynAngle, mLightIntensity / 100.0f);
+                        startAnimationLoopIfNeeded();
                     }
                 } else if (type == Sensor.TYPE_LINEAR_ACCELERATION) {
                     float lx = event.values[0];
@@ -637,6 +659,36 @@ public class ImageWallpaper extends WallpaperService {
                     mSettingsObserver
             );
             getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_BEAM_SPREAD),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_HARDNESS),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_SHIMMER_SPEED),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_SPECULAR_COLUMN),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_SOLAR_TRACKING),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_GYRO_PARALLAX),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(KEY_JELLY_MUSIC_STRENGTH),
                     false,
                     mSettingsObserver
@@ -747,20 +799,23 @@ public class ImageWallpaper extends WallpaperService {
         }
 
         private boolean isCurrentTargetActive() {
-            if (!mJellyEnabled) return false;
-            if (mJellyMode == 2) return true; // 2: Both
+            boolean anyFeatureEnabled = mJellyEnabled || mLightSourceEnabled || mGyroEnabled;
+            if (!anyFeatureEnabled) return false;
+
+            int mode = mJellyEnabled ? mJellyMode : mLightMode;
+            if (mode == 2) return true; // 2: Both
 
             int flags = getWallpaperFlags();
             boolean isLockOnlyEngine = (flags == WallpaperManager.FLAG_LOCK);
             boolean isSystemOnlyEngine = (flags == WallpaperManager.FLAG_SYSTEM);
             boolean isLocked = isKeyguardShowing();
 
-            if (mJellyMode == 0) {
+            if (mode == 0) {
                 // 0: Solo pantalla de bloqueo
                 if (isSystemOnlyEngine) return false;
                 if (isLockOnlyEngine) return true;
                 return isLocked;
-            } else if (mJellyMode == 1) {
+            } else if (mode == 1) {
                 // 1: Solo pantalla de inicio
                 if (isLockOnlyEngine) return false;
                 if (isSystemOnlyEngine) return !isLocked;
@@ -925,6 +980,24 @@ public class ImageWallpaper extends WallpaperService {
             mLightAngle = (float) Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_ANGLE, 45);
+            mLightBeamSpread = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_BEAM_SPREAD, 50);
+            mLightHardness = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_HARDNESS, 50);
+            mLightShimmerSpeed = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_SHIMMER_SPEED, 50);
+            mLightSpecularColumn = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_SPECULAR_COLUMN, 1) == 1;
+            mLightSolarTracking = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_SOLAR_TRACKING, 0) == 1;
+            mLightGyroParallax = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_GYRO_PARALLAX, 1) == 1;
             mDepthEffectEnabled = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_DEPTH_EFFECT, 0) == 1;
@@ -1110,6 +1183,16 @@ public class ImageWallpaper extends WallpaperService {
             synchronized (mSurfaceLock) {
                 stillActive = mJellyMesh.stepPhysics(dt);
 
+                if (mLightSourceEnabled && isCurrentTargetActive()) {
+                    if (mLightShimmerSpeed > 0 || mLightMode == 7) {
+                        mLightShimmerPhase += dt * (mLightShimmerSpeed / 50.0f) * 2.8f;
+                        if (mLightShimmerPhase > (float) (Math.PI * 200)) {
+                            mLightShimmerPhase = 0f;
+                        }
+                        stillActive = true;
+                    }
+                }
+
                 if (mBitmap != null && !mBitmap.isRecycled()) {
                     drawActiveFrameOnCanvas();
                 }
@@ -1164,31 +1247,118 @@ public class ImageWallpaper extends WallpaperService {
 
         private final Paint mLightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint mEdgeSheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint mSpecularPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint mGlitterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         private void drawLightAndEdgeSheen(Canvas canvas, int w, int h) {
             if (!mLightSourceEnabled || mLightIntensity <= 0 || !isCurrentTargetActive()) return;
 
-            float intensity = Math.max(0.05f, Math.min(1.0f, mLightIntensity / 100.0f));
-            float rad = (float) Math.toRadians(mLightAngle);
+            float baseIntensity = Math.max(0.05f, Math.min(1.0f, mLightIntensity / 100.0f));
+            float intensity = baseIntensity;
+
+            // Breathing pulse modulation for preset 7
+            if (mLightMode == 7) {
+                float breath = (float) (0.55f + 0.45f * Math.sin(mLightShimmerPhase * 0.8f));
+                intensity *= breath;
+            }
+
+            // Effective angle calculation
+            float baseAngle = mLightAngle;
+            if (mLightSolarTracking) {
+                java.util.Calendar cal = java.util.Calendar.getInstance();
+                int minuteOfDay = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+                float sunProgress = (minuteOfDay >= 360 && minuteOfDay <= 1080)
+                        ? (minuteOfDay - 360) / 720.0f
+                        : 0.5f;
+                baseAngle = 180.0f + sunProgress * 180.0f;
+            }
+
+            if (mLightGyroParallax) {
+                baseAngle += (mSmoothRoll * 45.0f);
+            }
+
+            mLightDynamicAngle = (baseAngle % 360.0f + 360.0f) % 360.0f;
+            float rad = (float) Math.toRadians(mLightDynamicAngle);
             float cosA = (float) Math.cos(rad);
             float sinA = (float) Math.sin(rad);
 
             float cx = w * 0.5f;
             float cy = h * 0.5f;
+            if (mLightGyroParallax) {
+                cx += mSmoothRoll * (w * 0.15f);
+                cy += mSmoothPitch * (h * 0.15f);
+            }
+
             float lightX = cx + cosA * (w * 0.48f);
             float lightY = cy + sinA * (h * 0.48f);
 
-            // 1. Foco de Luz (Spotlight Beam & Glow Cone)
-            float spotRadius = Math.max(w, h) * 0.70f;
-            int alphaCenter = (int) (130 * intensity);
-            int alphaMid = (int) (55 * intensity);
-            int colorCenter = (alphaCenter << 24) | 0x00FFFFFF;
-            int colorMid = (alphaMid << 24) | 0x00FFFFFF;
+            // Preset 6: Touch Follower Beam
+            if (mLightMode == 6 && mIsTouching) {
+                lightX = mTouchX;
+                lightY = mTouchY;
+            }
+
+            float spreadFactor = 0.35f + 0.85f * (mLightBeamSpread / 100.0f);
+            float hardnessFactor = 0.15f + 0.65f * (mLightHardness / 100.0f);
+
+            // Preset color palettes
+            int rgbCenter = 0xFFFFFF;
+            int rgbMid = 0xFFFFFF;
+            int rgbEdge = 0xFFFFFF;
+            int rgbGlitter = 0xFFFFFF;
+
+            if (mLightMode == 2) {
+                // 2: Destello Solar Dorado (Sun Glitter / Golden Ocean Sun)
+                rgbCenter = 0xFFF8E7;
+                rgbMid = 0xFFB300;
+                rgbEdge = 0xFF8F00;
+                rgbGlitter = 0xFFE082;
+            } else if (mLightMode == 0) {
+                // 0: Híbrido Luxe (Platinum Gold & Diamond White)
+                rgbCenter = 0xFFFFFF;
+                rgbMid = 0xFFE6A8;
+                rgbEdge = 0xFFD470;
+                rgbGlitter = 0xFFFFFF;
+            } else if (mLightMode == 1) {
+                // 1: Cristal Diamante Puro (Brilliant White 3D)
+                rgbCenter = 0xFFFFFF;
+                rgbMid = 0xE0F2FE;
+                rgbEdge = 0xBAE6FD;
+                rgbGlitter = 0xFFFFFF;
+            } else if (mLightMode == 3) {
+                // 3: Prisma Holográfico (Spectral rainbow shimmer)
+                float huePhase = (mLightShimmerPhase * 30.0f) % 360.0f;
+                int c1 = Color.HSVToColor(new float[] { huePhase, 0.75f, 1.0f }) & 0x00FFFFFF;
+                int c2 = Color.HSVToColor(new float[] { (huePhase + 60.0f) % 360.0f, 0.65f, 1.0f }) & 0x00FFFFFF;
+                rgbCenter = 0xFFFFFF;
+                rgbMid = c1;
+                rgbEdge = c2;
+                rgbGlitter = 0xFFFFFF;
+            } else if (mLightMode == 4) {
+                // 4: Neón Cyberpunk (Cyan & Hot Pink)
+                rgbCenter = 0x00F0FF;
+                rgbMid = 0x7000FF;
+                rgbEdge = 0xFF007F;
+                rgbGlitter = 0x00FFFF;
+            } else if (mLightMode == 5) {
+                // 5: Aurora Boreal Esmeralda (Emerald & Cyan)
+                rgbCenter = 0x00FF88;
+                rgbMid = 0x00E5FF;
+                rgbEdge = 0x10B981;
+                rgbGlitter = 0x6EE7B7;
+            }
+
+            // 1. Foco de Luz (Spotlight Beam & Radial Glow)
+            float spotRadius = Math.max(w, h) * spreadFactor;
+            int alphaCenter = (int) (175 * intensity);
+            int alphaMid = (int) (75 * intensity * (1.0f - hardnessFactor * 0.35f));
+            int colorCenter = (alphaCenter << 24) | rgbCenter;
+            int colorMid = (alphaMid << 24) | rgbMid;
 
             RadialGradient spotGradient = new RadialGradient(
                     lightX, lightY, spotRadius,
-                    new int[] { colorCenter, colorMid, 0x00FFFFFF },
-                    new float[] { 0.0f, 0.40f, 1.0f },
+                    new int[] { colorCenter, colorMid, rgbCenter & 0x00FFFFFF },
+                    new float[] { 0.0f, Math.min(0.85f, hardnessFactor), 1.0f },
                     Shader.TileMode.CLAMP);
             mLightPaint.setShader(spotGradient);
             mLightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
@@ -1200,16 +1370,66 @@ public class ImageWallpaper extends WallpaperService {
             float endX = cx + cosA * (w * 0.5f);
             float endY = cy + sinA * (h * 0.5f);
 
-            int alphaSheen = (int) (160 * intensity);
-            int sheenColor = (alphaSheen << 24) | 0x00FFFFFF;
+            int alphaSheen = (int) (200 * intensity);
+            int sheenColor = (alphaSheen << 24) | rgbEdge;
+            float stopMid = Math.max(0.50f, 0.90f - 0.30f * (1.0f - hardnessFactor));
             LinearGradient edgeGradient = new LinearGradient(
                     startX, startY, endX, endY,
-                    new int[] { 0x00FFFFFF, 0x00FFFFFF, sheenColor },
-                    new float[] { 0.0f, 0.72f, 1.0f },
+                    new int[] { rgbEdge & 0x00FFFFFF, rgbEdge & 0x00FFFFFF, sheenColor },
+                    new float[] { 0.0f, stopMid, 1.0f },
                     Shader.TileMode.CLAMP);
             mEdgeSheenPaint.setShader(edgeGradient);
             mEdgeSheenPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
             canvas.drawRect(0, 0, w, h, mEdgeSheenPaint);
+
+            // 3. Columna de Reflejo Solar (Sun Glitter / Ocean Specular Path)
+            if (mLightSpecularColumn) {
+                float colTopWidth = w * (0.15f + 0.25f * spreadFactor);
+                float colBottomWidth = w * (0.35f + 0.45f * spreadFactor);
+
+                float pathTopX = lightX;
+                float pathTopY = Math.min(lightY, h * 0.35f);
+                float pathBottomX = cx + (mSmoothRoll * w * 0.25f);
+                float pathBottomY = h;
+
+                int alphaColCore = (int) (140 * intensity * (0.5f + 0.5f * hardnessFactor));
+                int colCoreColor = (alphaColCore << 24) | rgbCenter;
+                int alphaColGlow = (int) (65 * intensity);
+                int colGlowColor = (alphaColGlow << 24) | rgbMid;
+
+                LinearGradient colGrad = new LinearGradient(
+                        pathTopX - colTopWidth * 0.5f, pathTopY,
+                        pathTopX + colTopWidth * 0.5f, pathTopY,
+                        new int[] { rgbMid & 0x00FFFFFF, colGlowColor, colCoreColor, colGlowColor, rgbMid & 0x00FFFFFF },
+                        new float[] { 0.0f, 0.25f, 0.50f, 0.75f, 1.0f },
+                        Shader.TileMode.CLAMP);
+                mSpecularPaint.setShader(colGrad);
+                mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
+                canvas.drawRect(0, 0, w, h, mSpecularPaint);
+
+                // Sparkling Sun Glitter micro-glints dancing over water ripples (Images 3, 4, 5)
+                mGlitterPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
+                int numGlints = 28;
+                float shimmerTime = mLightShimmerPhase;
+
+                for (int g = 0; g < numGlints; g++) {
+                    float vFrac = (g + 1) / (float) (numGlints + 1);
+                    float y = pathTopY + vFrac * (pathBottomY - pathTopY);
+                    float currentWidth = colTopWidth + vFrac * (colBottomWidth - colTopWidth);
+
+                    float waveOffset = (float) Math.sin(shimmerTime * 2.2f + g * 1.35f) * (currentWidth * 0.42f);
+                    float x = pathTopX + waveOffset;
+
+                    float sparkleFactor = (float) Math.max(0.0, Math.sin(shimmerTime * 3.5f + g * 2.1f));
+                    if (sparkleFactor > 0.15f) {
+                        int glintAlpha = (int) (190 * intensity * sparkleFactor);
+                        mGlitterPaint.setColor((glintAlpha << 24) | rgbGlitter);
+                        float glintRadiusX = (4.0f + 12.0f * (1.0f - vFrac * 0.3f)) * spreadFactor;
+                        float glintRadiusY = 2.0f + 4.0f * hardnessFactor;
+                        canvas.drawOval(x - glintRadiusX, y - glintRadiusY, x + glintRadiusX, y + glintRadiusY, mGlitterPaint);
+                    }
+                }
+            }
         }
 
         private void asyncExtractForeground() {
@@ -1382,7 +1602,7 @@ public class ImageWallpaper extends WallpaperService {
             if (mSensorManager == null) return;
 
             if (mIsVisible) {
-                if ((mGyroEnabled || (mLightSourceEnabled && mLightMode == 2)) && mRotationSensor != null) {
+                if ((mGyroEnabled || (mLightSourceEnabled && (mLightMode == 2 || mLightGyroParallax))) && mRotationSensor != null) {
                     mSensorManager.registerListener(mSensorListener, mRotationSensor, SensorManager.SENSOR_DELAY_GAME);
                 }
                 if (mGyroInertiaEnabled) {
