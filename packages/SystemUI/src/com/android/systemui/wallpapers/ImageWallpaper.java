@@ -29,6 +29,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
+import android.graphics.BlendMode;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -105,6 +106,9 @@ public class ImageWallpaper extends WallpaperService {
     public static final String KEY_JELLY_ELASTICITY = "jelly_wallpaper_elasticity";
     public static final String KEY_JELLY_RIPPLE = "jelly_wallpaper_ripple";
     public static final String KEY_JELLY_RIPPLE_STRENGTH = "jelly_wallpaper_ripple_strength";
+    public static final String KEY_JELLY_WATER_RIPPLE = "jelly_wallpaper_water_ripple";
+    public static final String KEY_JELLY_WATER_RIPPLE_STRENGTH = "jelly_wallpaper_water_ripple_strength";
+    public static final String KEY_JELLY_WATER_RIPPLE_MODE = "jelly_wallpaper_water_ripple_mode";
     public static final String KEY_JELLY_GYRO = "jelly_wallpaper_gyro_parallax";
     public static final String KEY_JELLY_GYRO_MODE = "jelly_wallpaper_gyro_mode";
     public static final String KEY_JELLY_GYRO_INERTIA = "jelly_wallpaper_gyro_inertia";
@@ -127,6 +131,12 @@ public class ImageWallpaper extends WallpaperService {
     public static final String KEY_JELLY_LIGHT_MODE = "jelly_wallpaper_light_mode";
     public static final String KEY_JELLY_LIGHT_INTENSITY = "jelly_wallpaper_light_intensity";
     public static final String KEY_JELLY_LIGHT_ANGLE = "jelly_wallpaper_light_angle";
+    public static final String KEY_JELLY_LIGHT_SOLAR_TRACKING = "jelly_wallpaper_light_solar_tracking";
+    public static final String KEY_JELLY_LIGHT_SPECULAR_COLUMN = "jelly_wallpaper_light_specular_column";
+    public static final String KEY_JELLY_LIGHT_GYRO_PARALLAX = "jelly_wallpaper_light_gyro_parallax";
+    public static final String KEY_JELLY_LIGHT_BEAM_SPREAD = "jelly_wallpaper_light_beam_spread";
+    public static final String KEY_JELLY_LIGHT_HARDNESS = "jelly_wallpaper_light_hardness";
+    public static final String KEY_JELLY_LIGHT_SHIMMER_SPEED = "jelly_wallpaper_light_shimmer_speed";
     public static final String KEY_JELLY_SNAPBACK_RECOIL = "jelly_wallpaper_snapback_recoil";
     public static final String KEY_JELLY_INTERNAL_TENSION = "jelly_wallpaper_internal_tension";
     public static final String KEY_JELLY_MAX_STRETCH = "jelly_wallpaper_max_stretch";
@@ -227,6 +237,12 @@ public class ImageWallpaper extends WallpaperService {
         private int mLightMode = 2;
         private float mLightAngle = 45.0f;
         private int mLightIntensity = 75;
+        private boolean mLightSolarTracking = false;
+        private boolean mLightSpecularColumn = true;
+        private boolean mLightGyroParallax = true;
+        private int mLightBeamSpread = 50;
+        private int mLightHardness = 50;
+        private int mLightShimmerSpeed = 50;
         private int mGyroInertiaStrength = 65;
         private boolean mDepthEffectEnabled = false;
         private int mDepthSeparation = 60;
@@ -235,6 +251,12 @@ public class ImageWallpaper extends WallpaperService {
         private BroadcastReceiver mPowerReceiver = null;
         private Bitmap mForegroundBitmap = null;
         private final Paint mShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final Paint mSpecularPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG) {{
+            setBlendMode(BlendMode.SCREEN);
+        }};
+        private final Paint mLightSpotPaint = new Paint(Paint.ANTI_ALIAS_FLAG) {{
+            setBlendMode(BlendMode.SCREEN);
+        }};
         private boolean mIsSegmenting = false;
         private boolean mSnapBackEnabled = true;
         private boolean mMusicReactiveEnabled = false;
@@ -243,6 +265,9 @@ public class ImageWallpaper extends WallpaperService {
         private boolean mHapticsEnabled = true;
         private int mHapticsIntensity = 80;
         private boolean mTapShockwaveEnabled = true;
+        private boolean mWaterRippleEnabled = false;
+        private int mWaterRippleStrength = 75;
+        private int mWaterRippleMode = 2;
         private boolean mMultiTouchEnabled = true;
         private int mSnapBackRecoil = 75;
         private int mInternalTension = 65;
@@ -262,7 +287,8 @@ public class ImageWallpaper extends WallpaperService {
 
             @Override
             public void onSensorChanged(SensorEvent event) {
-                if ((!mGyroEnabled && !mGyroInertiaEnabled) || !mIsVisible || !isCurrentTargetActive()) return;
+                boolean needsRotation = (mGyroEnabled || (mLightSourceEnabled && mLightGyroParallax) || mDepthEffectEnabled);
+                if ((!needsRotation && !mGyroInertiaEnabled) || !mIsVisible || !isCurrentTargetActive()) return;
                 int type = event.sensor.getType();
 
                 if (type == Sensor.TYPE_ROTATION_VECTOR) {
@@ -282,7 +308,7 @@ public class ImageWallpaper extends WallpaperService {
                     float finalRoll = (Math.abs(mSmoothRoll) < 0.005f) ? 0f : mSmoothRoll;
                     float finalPitch = (Math.abs(mSmoothPitch) < 0.005f) ? 0f : mSmoothPitch;
 
-                    if (mGyroEnabled) {
+                    if (needsRotation) {
                         float dR = Math.abs(finalRoll - mLastAppliedRoll);
                         float dP = Math.abs(finalPitch - mLastAppliedPitch);
                         if (dR > 0.0005f || dP > 0.0005f) {
@@ -308,7 +334,7 @@ public class ImageWallpaper extends WallpaperService {
                     float finalRoll = (Math.abs(mSmoothRoll) < 0.005f) ? 0f : mSmoothRoll;
                     float finalPitch = (Math.abs(mSmoothPitch) < 0.005f) ? 0f : mSmoothPitch;
 
-                    if (mGyroEnabled) {
+                    if (needsRotation) {
                         float dR = Math.abs(finalRoll - mLastAppliedRoll);
                         float dP = Math.abs(finalPitch - mLastAppliedPitch);
                         if (dR > 0.0005f || dP > 0.0005f) {
@@ -601,6 +627,21 @@ public class ImageWallpaper extends WallpaperService {
                     mSettingsObserver
             );
             getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_RIPPLE),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_RIPPLE_STRENGTH),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_RIPPLE_MODE),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(KEY_JELLY_MULTITOUCH),
                     false,
                     mSettingsObserver
@@ -627,6 +668,36 @@ public class ImageWallpaper extends WallpaperService {
             );
             getDisplayContext().getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(KEY_JELLY_LIGHT_ANGLE),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_SOLAR_TRACKING),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_SPECULAR_COLUMN),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_GYRO_PARALLAX),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_BEAM_SPREAD),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_HARDNESS),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_SHIMMER_SPEED),
                     false,
                     mSettingsObserver
             );
@@ -694,14 +765,30 @@ public class ImageWallpaper extends WallpaperService {
             IntentFilter powerFilter = new IntentFilter();
             powerFilter.addAction(Intent.ACTION_POWER_CONNECTED);
             powerFilter.addAction(android.os.BatteryManager.ACTION_CHARGING);
+            powerFilter.addAction(Intent.ACTION_TIME_TICK);
+            powerFilter.addAction(Intent.ACTION_TIME_CHANGED);
+            powerFilter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
             mPowerReceiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
-                    if (mJellyEnabled && mChargingWaveEnabled) {
-                        synchronized (mSurfaceLock) {
-                            mJellyMesh.triggerChargingWave(mChargingWaveStrength / 100.0f);
+                    String action = intent != null ? intent.getAction() : null;
+                    if (Intent.ACTION_POWER_CONNECTED.equals(action) || android.os.BatteryManager.ACTION_CHARGING.equals(action)) {
+                        if (mJellyEnabled && mChargingWaveEnabled) {
+                            synchronized (mSurfaceLock) {
+                                mJellyMesh.triggerChargingWave(mChargingWaveStrength / 100.0f);
+                            }
+                            startAnimationLoopIfNeeded();
                         }
-                        startAnimationLoopIfNeeded();
+                    } else if (Intent.ACTION_TIME_TICK.equals(action) || Intent.ACTION_TIME_CHANGED.equals(action) || Intent.ACTION_TIMEZONE_CHANGED.equals(action)) {
+                        if (mLightSourceEnabled && mLightSolarTracking) {
+                            synchronized (mSurfaceLock) {
+                                mJellyMesh.updateAllColors();
+                                if (mBitmap != null && !mBitmap.isRecycled()) {
+                                    drawActiveFrameOnCanvas();
+                                }
+                            }
+                            startAnimationLoopIfNeeded();
+                        }
                     }
                 }
             };
@@ -774,8 +861,11 @@ public class ImageWallpaper extends WallpaperService {
             mJellyMesh.setAmbientOcclusion(mAmbientOcclusionEnabled, mAmbientOcclusionIntensity / 100.0f);
             mJellyMesh.setSnapBackEnabled(mSnapBackEnabled);
             mJellyMesh.setTapShockwaveEnabled(mTapShockwaveEnabled);
+            mJellyMesh.setWaterRippleParams(mWaterRippleEnabled, mWaterRippleStrength, mWaterRippleMode);
             mJellyMesh.setMultiTouchEnabled(mMultiTouchEnabled);
-            mJellyMesh.setLightSource(mLightSourceEnabled, mLightAngle, mLightIntensity / 100.0f);
+            mJellyMesh.setLightSource(mLightSourceEnabled, mLightAngle, mLightIntensity / 100.0f, mLightMode);
+            mJellyMesh.setLightCustomization(mLightSolarTracking, mLightSpecularColumn, mLightGyroParallax,
+                    mLightBeamSpread / 50.0f, mLightHardness / 100.0f, mLightShimmerSpeed / 50.0f);
         }
 
         private void updateVisualizer() {
@@ -855,7 +945,7 @@ public class ImageWallpaper extends WallpaperService {
                     KEY_JELLY_DAMPING, 85);
             mJellyRadius = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
-                    KEY_JELLY_RADIUS, 38);
+                    KEY_JELLY_RADIUS, 10);
             mJellyElasticity = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_ELASTICITY, 70);
@@ -904,6 +994,15 @@ public class ImageWallpaper extends WallpaperService {
             mTapShockwaveEnabled = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_TAP_SHOCKWAVE, 1) == 1;
+            mWaterRippleEnabled = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_RIPPLE, 0) == 1;
+            mWaterRippleStrength = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_RIPPLE_STRENGTH, 75);
+            mWaterRippleMode = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_RIPPLE_MODE, 2);
             mMultiTouchEnabled = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_MULTITOUCH, 1) == 1;
@@ -919,6 +1018,24 @@ public class ImageWallpaper extends WallpaperService {
             mLightAngle = (float) Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_ANGLE, 45);
+            mLightSolarTracking = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_SOLAR_TRACKING, 0) == 1;
+            mLightSpecularColumn = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_SPECULAR_COLUMN, 1) == 1;
+            mLightGyroParallax = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_GYRO_PARALLAX, 1) == 1;
+            mLightBeamSpread = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_BEAM_SPREAD, 50);
+            mLightHardness = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_HARDNESS, 50);
+            mLightShimmerSpeed = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_SHIMMER_SPEED, 50);
             mDepthEffectEnabled = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_DEPTH_EFFECT, 0) == 1;
@@ -1132,11 +1249,27 @@ public class ImageWallpaper extends WallpaperService {
                     int[] colors = mJellyMesh.getColors();
                     canvas.drawBitmapMesh(mBitmap, JellyMesh.COLS, JellyMesh.ROWS, verts, 0, colors, 0, null);
 
+                    int[] specColors = mLightSourceEnabled ? mJellyMesh.getSpecularColors() : null;
+                    short[] indices = mLightSourceEnabled ? mJellyMesh.getIndices() : null;
+
+                    // 1. Reflejo especular y haz de luz sobre el fondo
+                    if (specColors != null && indices != null) {
+                        canvas.drawVertices(Canvas.VertexMode.TRIANGLES, verts.length,
+                                verts, 0, null, 0, specColors, 0, indices, 0, indices.length, mSpecularPaint);
+                    }
+
+                    // 2. Renderizado del sujeto en primer plano (3D Depth) con sombra y su propio brillo
                     if (mDepthEffectEnabled && mForegroundBitmap != null && !mForegroundBitmap.isRecycled()) {
                         float[] fgVerts = mJellyMesh.getForegroundVertices();
-                        mShadowPaint.setColorFilter(new PorterDuffColorFilter(0x35000000, PorterDuff.Mode.SRC_IN));
-                        canvas.drawBitmapMesh(mForegroundBitmap, JellyMesh.COLS, JellyMesh.ROWS, verts, 0, null, 0, mShadowPaint);
-                        canvas.drawBitmapMesh(mForegroundBitmap, JellyMesh.COLS, JellyMesh.ROWS, fgVerts, 0, null, 0, null);
+                        float[] shadowVerts = mJellyMesh.getShadowVertices();
+                        mShadowPaint.setColorFilter(new PorterDuffColorFilter(0x28000000, PorterDuff.Mode.SRC_IN));
+                        canvas.drawBitmapMesh(mForegroundBitmap, JellyMesh.COLS, JellyMesh.ROWS, shadowVerts, 0, null, 0, mShadowPaint);
+                        canvas.drawBitmapMesh(mForegroundBitmap, JellyMesh.COLS, JellyMesh.ROWS, fgVerts, 0, colors, 0, null);
+
+                        if (specColors != null && indices != null) {
+                            canvas.drawVertices(Canvas.VertexMode.TRIANGLES, fgVerts.length,
+                                    fgVerts, 0, null, 0, specColors, 0, indices, 0, indices.length, mSpecularPaint);
+                        }
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "drawActiveFrameOnCanvas error", e);
@@ -1315,8 +1448,12 @@ public class ImageWallpaper extends WallpaperService {
             }
             if (mSensorManager == null) return;
 
+            mSensorManager.unregisterListener(mSensorListener);
+
+            boolean needsRotation = (mGyroEnabled || (mLightSourceEnabled && mLightGyroParallax) || mDepthEffectEnabled);
+
             if (mIsVisible) {
-                if (mGyroEnabled && mRotationSensor != null) {
+                if (needsRotation && mRotationSensor != null) {
                     mSensorManager.registerListener(mSensorListener, mRotationSensor, SensorManager.SENSOR_DELAY_GAME);
                 }
                 if (mGyroInertiaEnabled) {
@@ -1328,7 +1465,6 @@ public class ImageWallpaper extends WallpaperService {
                     }
                 }
             } else {
-                mSensorManager.unregisterListener(mSensorListener);
                 mJellyMesh.resetGyro();
             }
         }
@@ -1450,7 +1586,7 @@ public class ImageWallpaper extends WallpaperService {
                         return;
                     }
                     mBitmapUsages++;
-                    boolean activeMode = mJellyEnabled || mGyroEnabled;
+                    boolean activeMode = mJellyEnabled || mGyroEnabled || mLightSourceEnabled;
                     Rect dest = mSurfaceHolder.getSurfaceFrame();
                     if (dest != null && dest.width() > 0 && dest.height() > 0) {
                         mJellyMesh.setSize(dest.width(), dest.height());

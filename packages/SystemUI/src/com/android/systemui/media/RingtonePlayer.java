@@ -17,9 +17,12 @@
 package com.android.systemui.media;
 
 import android.annotation.Nullable;
+import android.content.BroadcastReceiver;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.database.Cursor;
 import android.media.AudioAttributes;
@@ -32,14 +35,18 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
+import android.media.SoundPool;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.android.systemui.CoreStartable;
 import com.android.systemui.dagger.SysUISingleton;
+import com.android.systemui.res.R;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -64,6 +71,12 @@ public class RingtonePlayer implements CoreStartable {
     private final NotificationPlayer mAsyncPlayer = new NotificationPlayer(TAG);
     private final HashMap<IBinder, Client> mClients = new HashMap<IBinder, Client>();
 
+    private SoundPool mSoundPool;
+    private final int[] mCoinSoundIds = new int[8];
+    private boolean mSoundsLoaded = false;
+    private int mCurrentCoinIndex = -1;
+    private long mLastCoinNotificationTime = 0;
+
     @Inject
     public RingtonePlayer(Context context) {
         mContext = context;
@@ -79,6 +92,75 @@ public class RingtonePlayer implements CoreStartable {
             mAudioService.setRingtonePlayer(mCallback);
         } catch (RemoteException e) {
             Log.e(TAG, "Problem registering RingtonePlayer: " + e);
+        }
+
+        initSm64SoundPool();
+
+        try {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_BOOT_COMPLETED);
+            mContext.registerReceiver(new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+                        playBootSoundIfEnabled();
+                    }
+                }
+            }, filter, Context.RECEIVER_EXPORTED);
+        } catch (Throwable t) {
+            Log.e(TAG, "Error registering boot completed receiver", t);
+        }
+    }
+
+    private void playBootSoundIfEnabled() {
+        try {
+            boolean bootSoundEnabled = Settings.System.getInt(
+                    mContext.getContentResolver(), "system_boot_sound_enabled", 0) == 1;
+            if (!bootSoundEnabled) return;
+
+            String bootUriStr = Settings.System.getString(
+                    mContext.getContentResolver(), "system_boot_sound_uri");
+            if (bootUriStr == null || bootUriStr.isEmpty()) return;
+
+            Uri bootUri = Uri.parse(bootUriStr);
+            AudioAttributes aa = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
+            mAsyncPlayer.play(mContext, bootUri, false, aa, 1.0f);
+        } catch (Throwable t) {
+            Log.e(TAG, "Error playing boot sound", t);
+        }
+    }
+
+    private synchronized void initSm64SoundPool() {
+        if (mSoundPool != null) return;
+        try {
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
+            mSoundPool = new SoundPool.Builder()
+                    .setMaxStreams(8)
+                    .setAudioAttributes(audioAttributes)
+                    .build();
+
+            int[] rawResIds = new int[] {
+                R.raw.sm64_red_coin_1,
+                R.raw.sm64_red_coin_2,
+                R.raw.sm64_red_coin_3,
+                R.raw.sm64_red_coin_4,
+                R.raw.sm64_red_coin_5,
+                R.raw.sm64_red_coin_6,
+                R.raw.sm64_red_coin_7,
+                R.raw.sm64_red_coin_8
+            };
+
+            for (int i = 0; i < 8; i++) {
+                mCoinSoundIds[i] = mSoundPool.load(mContext, rawResIds[i], 1);
+            }
+            mSoundsLoaded = true;
+        } catch (Throwable t) {
+            Log.e(TAG, "Error initializing SM64 SoundPool", t);
         }
     }
 
@@ -197,6 +279,63 @@ public class RingtonePlayer implements CoreStartable {
             if (UserHandle.ALL.equals(user)) {
                 user = UserHandle.SYSTEM;
             }
+
+            boolean isSm64Enabled = Settings.System.getInt(
+                    mContext.getContentResolver(), "sm64_red_coins_sound_enabled", 0) == 1;
+            if (isSm64Enabled && !looping) {
+                initSm64SoundPool();
+                if (mSoundPool != null) {
+                    int mode = Settings.System.getInt(
+                            mContext.getContentResolver(), "sm64_red_coins_sound_mode", 0);
+                    int timeoutSec = Settings.System.getInt(
+                            mContext.getContentResolver(), "sm64_red_coins_burst_timeout", 5);
+                    long timeoutMs = timeoutSec * 1000L;
+                    long now = SystemClock.uptimeMillis();
+
+                    // Build active sound IDs list
+                    int[] activeSounds = new int[8];
+                    int activeCount = 0;
+                    for (int i = 0; i < 8; i++) {
+                        String coinKey = "sm64_coin_" + (i + 1) + "_enabled";
+                        boolean coinEnabled = Settings.System.getInt(
+                                mContext.getContentResolver(), coinKey, 1) == 1;
+                        if (coinEnabled && mCoinSoundIds[i] != 0) {
+                            activeSounds[activeCount++] = mCoinSoundIds[i];
+                        }
+                    }
+
+                    if (activeCount == 0) {
+                        for (int i = 0; i < 8; i++) {
+                            if (mCoinSoundIds[i] != 0) {
+                                activeSounds[activeCount++] = mCoinSoundIds[i];
+                            }
+                        }
+                    }
+
+                    if (activeCount > 0) {
+                        synchronized (mCoinSoundIds) {
+                            if (mode == 1) { // Ráfaga rápida
+                                if (now - mLastCoinNotificationTime < timeoutMs) {
+                                    mCurrentCoinIndex = (mCurrentCoinIndex + 1) % activeCount;
+                                } else {
+                                    mCurrentCoinIndex = 0;
+                                }
+                            } else { // Progresión continua
+                                mCurrentCoinIndex = (mCurrentCoinIndex + 1) % activeCount;
+                            }
+                            mLastCoinNotificationTime = now;
+
+                            int soundId = activeSounds[mCurrentCoinIndex];
+                            if (soundId != 0) {
+                                float playVol = (volume > 0f) ? volume : 1.0f;
+                                mSoundPool.play(soundId, playVol, playVol, 1, 0, 1.0f);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
             mAsyncPlayer.play(getContextForUser(user), uri, looping, aa, volume);
         }
 

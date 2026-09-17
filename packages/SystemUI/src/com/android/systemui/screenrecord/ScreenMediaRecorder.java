@@ -336,12 +336,13 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
 
         if (!mHEVC) {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-            try {
-                mMediaRecorder.setVideoEncodingProfileLevel(
-                        MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
-                        mLowQuality ? MediaCodecInfo.CodecProfileLevel.AVCLevel32
-                        : MediaCodecInfo.CodecProfileLevel.AVCLevel51);
-            } catch (Exception ignored) {}
+            if (mLowQuality) {
+                try {
+                    mMediaRecorder.setVideoEncodingProfileLevel(
+                            MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
+                            MediaCodecInfo.CodecProfileLevel.AVCLevel32);
+                } catch (Exception ignored) {}
+            }
         } else {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.HEVC);
             try {
