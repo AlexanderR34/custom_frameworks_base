@@ -1424,27 +1424,45 @@ public class ImageWallpaper extends WallpaperService {
                 mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
                 canvas.drawRect(0, 0, w, h, mSpecularPaint);
 
-                // Sparkling Sun Glitter micro-glints dancing over water ripples (Images 3, 4, 5)
+                // Continuous Fluid Liquid Water Caustic Wave Ribbons (Pure fluid motion, no dots)
                 mGlitterPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
-                int numGlints = 28;
+                mGlitterPaint.setStyle(Paint.Style.STROKE);
+                mGlitterPaint.setStrokeCap(Paint.Cap.ROUND);
                 float shimmerTime = mLightShimmerPhase;
+                int numWaves = 18;
 
-                for (int g = 0; g < numGlints; g++) {
-                    float vFrac = (g + 1) / (float) (numGlints + 1);
-                    float y = pathTopY + vFrac * (pathBottomY - pathTopY);
+                Path wavePath = new Path();
+                for (int n = 0; n < numWaves; n++) {
+                    float vFrac = (n + 1) / (float) (numWaves + 1);
+                    float yCenter = pathTopY + vFrac * (pathBottomY - pathTopY);
                     float currentWidth = colTopWidth + vFrac * (colBottomWidth - colTopWidth);
+                    float halfSpan = currentWidth * 0.65f;
 
-                    float waveOffset = (float) Math.sin(shimmerTime * 2.2f + g * 1.35f) * (currentWidth * 0.42f);
-                    float x = pathTopX + waveOffset;
+                    float wavePhase = shimmerTime * 2.0f + n * 0.95f;
+                    float waveAmp = (6.0f + 14.0f * vFrac) * (0.4f + 0.6f * spreadFactor);
 
-                    float sparkleFactor = (float) Math.max(0.0, Math.sin(shimmerTime * 3.5f + g * 2.1f));
-                    if (sparkleFactor > 0.15f) {
-                        int glintAlpha = (int) (190 * intensity * sparkleFactor);
-                        mGlitterPaint.setColor((glintAlpha << 24) | rgbGlitter);
-                        float glintRadiusX = (4.0f + 12.0f * (1.0f - vFrac * 0.3f)) * spreadFactor;
-                        float glintRadiusY = 2.0f + 4.0f * hardnessFactor;
-                        canvas.drawOval(x - glintRadiusX, y - glintRadiusY, x + glintRadiusX, y + glintRadiusY, mGlitterPaint);
-                    }
+                    float leftX = pathTopX - halfSpan;
+                    float rightX = pathTopX + halfSpan;
+                    float midX1 = pathTopX - halfSpan * 0.45f;
+                    float midX2 = pathTopX + halfSpan * 0.45f;
+
+                    float yOffset1 = (float) Math.sin(wavePhase) * waveAmp;
+                    float yOffset2 = (float) Math.cos(wavePhase * 1.3f) * waveAmp;
+
+                    wavePath.reset();
+                    wavePath.moveTo(leftX, yCenter);
+                    wavePath.cubicTo(
+                            midX1, yCenter + yOffset1,
+                            midX2, yCenter + yOffset2,
+                            rightX, yCenter);
+
+                    float waveAlphaFrac = (float) Math.sin(vFrac * Math.PI) * (0.6f + 0.4f * (float) Math.sin(wavePhase * 1.5f));
+                    int waveAlpha = (int) (120 * intensity * Math.max(0.1f, waveAlphaFrac));
+                    int waveColor = (waveAlpha << 24) | rgbGlitter;
+
+                    mGlitterPaint.setColor(waveColor);
+                    mGlitterPaint.setStrokeWidth(3.0f + 5.0f * hardnessFactor * (1.0f - vFrac * 0.3f));
+                    canvas.drawPath(wavePath, mGlitterPaint);
                 }
             }
         }
