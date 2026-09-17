@@ -31,9 +31,6 @@ import android.content.IIntentReceiver;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManagerInternal;
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.FileUtils;
 import android.os.Handler;
@@ -790,13 +787,6 @@ public final class ShutdownThread extends Thread {
             Log.e(TAG, "Reboot failed, will attempt shutdown instead");
             reason = null;
         } else if (context != null) {
-            // play custom shutdown sound if enabled
-            try {
-                sInstance.playShutdownSound(context);
-            } catch (Throwable t) {
-                Log.w(TAG, "Failed to play sound during shutdown.", t);
-            }
-
             // vibrate before shutting down
             try {
                 sInstance.playShutdownVibration(context);
@@ -809,40 +799,6 @@ public final class ShutdownThread extends Thread {
         // Shutdown power
         Log.i(TAG, "Performing low-level shutdown...");
         PowerManagerService.lowLevelShutdown(reason);
-    }
-
-    private void playShutdownSound(Context context) {
-        try {
-            boolean shutdownSoundEnabled = Settings.System.getInt(
-                    context.getContentResolver(), "system_shutdown_sound_enabled", 0) == 1;
-            if (!shutdownSoundEnabled) return;
-
-            String shutdownUriStr = Settings.System.getString(
-                    context.getContentResolver(), "system_shutdown_sound_uri");
-            if (TextUtils.isEmpty(shutdownUriStr)) return;
-
-            Uri soundUri = Uri.parse(shutdownUriStr);
-            MediaPlayer mp = new MediaPlayer();
-            mp.setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build());
-            mp.setDataSource(context, soundUri);
-            mp.prepare();
-            final Object syncObj = new Object();
-            mp.setOnCompletionListener(player -> {
-                synchronized (syncObj) {
-                    syncObj.notifyAll();
-                }
-            });
-            mp.start();
-            synchronized (syncObj) {
-                syncObj.wait(3000); // Wait maximum 3 seconds to avoid stalling shutdown
-            }
-            mp.release();
-        } catch (Throwable t) {
-            Log.w(TAG, "Failed to play shutdown sound.", t);
-        }
     }
 
     /**

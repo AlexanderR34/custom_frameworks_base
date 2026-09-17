@@ -15,59 +15,6 @@
      limitations under the License.
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <!-- Barra de estado - iconos -->
-    <string name="status_bar_icons_title">Iconos de la barra de estado</string>
-
-    <!-- Ajustes rápidos personalizados (QS Tiles) -->
-    <!-- Pantalla ambiente QS tile -->
-    <string name="quick_settings_ambient_display_label">Pantalla ambiente</string>
-    <string name="accessibility_quick_settings_ambient_display_off">Pantalla ambiente desactivada.</string>
-    <string name="accessibility_quick_settings_ambient_display_on">Pantalla ambiente activada.</string>
-
-    <!-- AOD QS tile -->
-    <string name="quick_settings_aod_label">AOD</string>
-    <string name="quick_settings_aod_off_powersave_label">AOD desactivado\nAhorro de batería</string>
-
-    <!-- Brillo automático tile -->
-    <string name="quick_settings_autobrightness_label">Brillo automático</string>
-
-    <!-- Cafeína QS tile -->
-    <string name="quick_settings_caffeine_label">Cafeína</string>
-    <string name="accessibility_quick_settings_caffeine_off">Cafeína desactivada.</string>
-    <string name="accessibility_quick_settings_caffeine_on">Cafeína activada.</string>
-
-    <!-- Notificaciones flotantes (Heads up) QS tile -->
-    <string name="quick_settings_heads_up_label">Notificaciones emergentes</string>
-    <string name="accessibility_quick_settings_heads_up_off">Notificaciones emergentes desactivadas.</string>
-    <string name="accessibility_quick_settings_heads_up_on">Notificaciones emergentes activadas.</string>
-
-    <!-- PowerShare inalámbrico QS tile -->
-    <string name="quick_settings_powershare_label">PowerShare inalámbrico</string>
-    <string name="quick_settings_powershare_off_powersave_label">PowerShare inalámbrico desactivado\nAhorro de batería</string>
-    <string name="quick_settings_powershare_off_low_battery_label">PowerShare inalámbrico desactivado\nBatería muy baja</string>
-    <string name="quick_settings_powershare_enabled_label">PowerShare inalámbrico está activado</string>
-
-    <!-- Modo lectura QS tile -->
-    <string name="quick_settings_reading_mode">Modo lectura</string>
-    <string name="accessibility_quick_settings_reading_mode_on">Modo lectura activado.</string>
-    <string name="accessibility_quick_settings_reading_mode_off">Modo lectura desactivado.</string>
-
-    <!-- Sincronización QS tile -->
-    <string name="quick_settings_sync_label">Sincronización</string>
-    <string name="accessibility_quick_settings_sync_off">Sincronización desactivada.</string>
-    <string name="accessibility_quick_settings_sync_on">Sincronización activada.</string>
-
-    <!-- Anclaje a red USB QS tile -->
-    <string name="quick_settings_usb_tether_label">Compartir por USB</string>
-
-    <!-- VPN QS tile -->
-    <string name="quick_settings_vpn_label">VPN</string>
-    <string name="quick_settings_vpn_connect_dialog_title">Conectar a\u2026</string>
-    <string name="vpn_credentials_hint">Introduce tus credenciales para conectar a <xliff:g id="name">%s</xliff:g></string>
-    <string name="vpn_credentials_username">Usuario</string>
-    <string name="vpn_credentials_password">Contraseña</string>
-    <string name="vpn_credentials_dialog_connect">Conectar</string>
-
     <!-- Grabación de pantalla -->
     <string name="screenrecord_lowquality_label">Baja calidad</string>
     <string name="screenrecord_lowquality_summary">Para un tamaño de archivo más pequeño</string>
@@ -77,36 +24,6 @@
     <string name="screenrecord_skip_time_summary">Eliminar la espera de 3 segundos</string>
     <string name="screenrecord_hevc_switch_label">Codificación HEVC</string>
     <string name="screenrecord_hevc_switch_summary">Usar el codificador HEVC más eficiente</string>
-
-    <!-- Captura de pantalla -->
-    <string name="screenshot_delete_label">Eliminar</string>
-    <string name="screenshot_delete_description">Eliminar captura de pantalla</string>
-
-    <!-- DataSwitch Tile -->
-    <string name="qs_data_switch_label">Cambiar tarjeta de datos</string>
-    <string name="qs_data_switch_sim_label">SIM %d</string>
-    <string name="qs_data_switch_sim_desc">SIM %d es la SIM preferida para datos móviles</string>
-    <string name="qs_data_switch_sim_transient">Cambiando\u2026</string>
-
-    <!-- Desbloqueo facial -->
-    <string name="face_unlock_recognizing">Reconociendo rostro...</string>
-
-    <!-- Menú de reinicio avanzado -->
-    <string name="global_action_restart_more">Más</string>
-    <string name="global_action_restart_system">Sistema</string>
-    <string name="global_action_restart_recovery">Recuperación (Recovery)</string>
-    <string name="global_action_restart_bootloader">Bootloader</string>
-    <string name="global_action_restart_download">Descarga (Download)</string>
-    <string name="global_action_restart_progress">Reiniciando\u2026</string>
-    <string name="global_action_restart_recovery_progress">Reiniciando al modo recovery\u2026</string>
-    <string name="global_action_restart_bootloader_progress">Reiniciando al modo bootloader\u2026</string>
-    <string name="global_action_restart_download_progress">Reiniciando al modo download\u2026</string>
-    <string name="global_action_restart_systemui">SystemUI</string>
-
-    <!-- Diálogo de intensidad de linterna -->
-    <string name="flashlight_strength_title">Intensidad de linterna</string>
-    <string name="flashlight_strength_turn_off">Apagar</string>
-    <string name="flashlight_strength_turn_on">Encender</string>
 
     <!-- Samsung One UI 7 Notification Shade & Control Center -->
     <string name="samsung_realtime_notifications">Notificaciones en tiempo real</string>

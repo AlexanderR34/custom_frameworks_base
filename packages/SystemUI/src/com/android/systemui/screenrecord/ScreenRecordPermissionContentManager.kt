@@ -115,6 +115,9 @@ class ScreenRecordPermissionContentManager(
     private lateinit var hevcSwitch: Switch
     private lateinit var tapsView: View
     private lateinit var options: Spinner
+    private lateinit var resolutionSpinner: Spinner
+    private lateinit var videoQualitySpinner: Spinner
+    private lateinit var frameRateSpinner: Spinner
 
     override fun bind(view: View) {
         super.bind(view)
@@ -188,6 +191,50 @@ class ScreenRecordPermissionContentManager(
             audioSwitch.isChecked = true
         }
 
+        resolutionSpinner = containerView.requireViewById(R.id.screenrecord_resolution_spinner)
+        val resAdapter = ArrayAdapter(
+            containerView.context,
+            android.R.layout.simple_spinner_dropdown_item,
+            listOf(
+                containerView.context.getString(R.string.screenrecord_resolution_auto),
+                containerView.context.getString(R.string.screenrecord_resolution_1440p),
+                containerView.context.getString(R.string.screenrecord_resolution_1220p),
+                containerView.context.getString(R.string.screenrecord_resolution_1080p),
+                containerView.context.getString(R.string.screenrecord_resolution_720p),
+                containerView.context.getString(R.string.screenrecord_resolution_480p),
+            )
+        )
+        resAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        resolutionSpinner.adapter = resAdapter
+
+        videoQualitySpinner = containerView.requireViewById(R.id.screenrecord_video_quality_spinner)
+        val qualityAdapter = ArrayAdapter(
+            containerView.context,
+            android.R.layout.simple_spinner_dropdown_item,
+            listOf(
+                containerView.context.getString(R.string.screenrecord_video_quality_high),
+                containerView.context.getString(R.string.screenrecord_video_quality_medium),
+                containerView.context.getString(R.string.screenrecord_video_quality_low),
+            )
+        )
+        qualityAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        videoQualitySpinner.adapter = qualityAdapter
+
+        frameRateSpinner = containerView.requireViewById(R.id.screenrecord_frame_rate_spinner)
+        val fpsAdapter = ArrayAdapter(
+            containerView.context,
+            android.R.layout.simple_spinner_dropdown_item,
+            listOf(
+                containerView.context.getString(R.string.screenrecord_framerate_auto),
+                containerView.context.getString(R.string.screenrecord_framerate_60),
+                containerView.context.getString(R.string.screenrecord_framerate_30),
+                containerView.context.getString(R.string.screenrecord_framerate_90),
+                containerView.context.getString(R.string.screenrecord_framerate_120),
+            )
+        )
+        fpsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        frameRateSpinner.adapter = fpsAdapter
+
         // Disable HEVC when hardware accelerated codec is not available
         if (!hasHevcHwEncoder()) {
             Prefs.putInt(containerView.context, PREF_HEVC, 0)
@@ -237,6 +284,9 @@ class ScreenRecordPermissionContentManager(
             else ScreenRecordingAudioSource.NONE
         val skipTime = skipTimeSwitch.isChecked
         val hevc = hevcSwitch.isChecked
+        val resolution = resolutionSpinner.selectedItemPosition
+        val videoQuality = videoQualitySpinner.selectedItemPosition
+        val frameRate = frameRateSpinner.selectedItemPosition
 
         savePrefs()
 
@@ -253,6 +303,9 @@ class ScreenRecordPermissionContentManager(
                         lowQuality = false,
                         longerDuration = false,
                         hevc = hevc,
+                        videoQuality = videoQuality,
+                        resolution = resolution,
+                        frameRate = frameRate,
                     )
                 )
             },
@@ -267,6 +320,9 @@ class ScreenRecordPermissionContentManager(
         Prefs.putInt(userContext, PREF_AUDIO_SOURCE, options.selectedItemPosition)
         Prefs.putInt(userContext, PREF_SKIP, if (skipTimeSwitch.isChecked) 1 else 0)
         Prefs.putInt(userContext, PREF_HEVC, if (hevcSwitch.isChecked) 1 else 0)
+        Prefs.putInt(userContext, PREF_RESOLUTION, resolutionSpinner.selectedItemPosition)
+        Prefs.putInt(userContext, PREF_VIDEO_QUALITY, videoQualitySpinner.selectedItemPosition)
+        Prefs.putInt(userContext, PREF_FRAME_RATE, frameRateSpinner.selectedItemPosition)
     }
 
     private fun loadPrefs() {
@@ -276,6 +332,9 @@ class ScreenRecordPermissionContentManager(
         options.setSelection(Prefs.getInt(userContext, PREF_AUDIO_SOURCE, 0))
         skipTimeSwitch.isChecked = Prefs.getInt(userContext, PREF_SKIP, 0) == 1
         hevcSwitch.isChecked = Prefs.getInt(userContext, PREF_HEVC, 0) == 1
+        resolutionSpinner.setSelection(Prefs.getInt(userContext, PREF_RESOLUTION, 0))
+        videoQualitySpinner.setSelection(Prefs.getInt(userContext, PREF_VIDEO_QUALITY, 0))
+        frameRateSpinner.setSelection(Prefs.getInt(userContext, PREF_FRAME_RATE, 0))
     }
 
     private fun hasHevcHwEncoder(): Boolean {
@@ -331,6 +390,9 @@ class ScreenRecordPermissionContentManager(
         private const val PREF_AUDIO_SOURCE = "screenrecord_audio_source"
         private const val PREF_SKIP = "screenrecord_skip_timer"
         private const val PREF_HEVC = "screenrecord_use_hevc"
+        private const val PREF_RESOLUTION = "screenrecord_resolution"
+        private const val PREF_VIDEO_QUALITY = "screenrecord_video_quality"
+        private const val PREF_FRAME_RATE = "screenrecord_frame_rate"
 
         fun createOptionList(displayManager: DisplayManager): List<ScreenShareOption> {
             val connectedDisplays = getConnectedDisplays(displayManager)
