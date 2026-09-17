@@ -31,8 +31,10 @@ import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ComposeShader;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.PorterDuffXfermode;
@@ -131,6 +133,12 @@ public class ImageWallpaper extends WallpaperService {
     public static final String KEY_JELLY_LIGHT_HARDNESS = "jelly_wallpaper_light_hardness";
     public static final String KEY_JELLY_LIGHT_SHIMMER_SPEED = "jelly_wallpaper_light_shimmer_speed";
     public static final String KEY_JELLY_LIGHT_SPECULAR_COLUMN = "jelly_wallpaper_light_specular_column";
+    public static final String KEY_JELLY_LIGHT_WATER_WAVES = "jelly_wallpaper_light_water_waves";
+    public static final String KEY_JELLY_LIGHT_WATER_WAVES_INTENSITY = "jelly_wallpaper_light_water_waves_intensity";
+    public static final String KEY_JELLY_WATER_PRESET = "jelly_wallpaper_water_preset";
+    public static final String KEY_JELLY_WATER_WAVE_SIZE = "jelly_wallpaper_water_wave_size";
+    public static final String KEY_JELLY_WATER_WAVE_SPEED = "jelly_wallpaper_water_wave_speed";
+    public static final String KEY_JELLY_WATER_GLITTER_DENSITY = "jelly_wallpaper_water_glitter_density";
     public static final String KEY_JELLY_LIGHT_SOLAR_TRACKING = "jelly_wallpaper_light_solar_tracking";
     public static final String KEY_JELLY_LIGHT_GYRO_PARALLAX = "jelly_wallpaper_light_gyro_parallax";
     public static final String KEY_JELLY_SNAPBACK_RECOIL = "jelly_wallpaper_snapback_recoil";
@@ -237,6 +245,12 @@ public class ImageWallpaper extends WallpaperService {
         private int mLightHardness = 50;
         private int mLightShimmerSpeed = 50;
         private boolean mLightSpecularColumn = true;
+        private boolean mLightWaterWaves = true;
+        private int mLightWaterWavesIntensity = 75;
+        private int mWaterPreset = 1;
+        private int mWaterWaveSize = 50;
+        private int mWaterWaveSpeed = 60;
+        private int mWaterGlitterDensity = 70;
         private boolean mLightSolarTracking = false;
         private boolean mLightGyroParallax = true;
         private float mLightDynamicAngle = 45.0f;
@@ -252,6 +266,8 @@ public class ImageWallpaper extends WallpaperService {
         private BroadcastReceiver mPowerReceiver = null;
         private Bitmap mForegroundBitmap = null;
         private final Paint mShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private float[] mWaterVerts = new float[(JellyMesh.COLS + 1) * (JellyMesh.ROWS + 1) * 2];
+        private int[] mWaterColors = new int[(JellyMesh.COLS + 1) * (JellyMesh.ROWS + 1)];
         private boolean mIsSegmenting = false;
         private boolean mSnapBackEnabled = true;
         private boolean mMusicReactiveEnabled = false;
@@ -682,6 +698,36 @@ public class ImageWallpaper extends WallpaperService {
                     mSettingsObserver
             );
             getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_WATER_WAVES),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_WATER_WAVES_INTENSITY),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_PRESET),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_WAVE_SIZE),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_WAVE_SPEED),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_WATER_GLITTER_DENSITY),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(KEY_JELLY_LIGHT_SOLAR_TRACKING),
                     false,
                     mSettingsObserver
@@ -995,6 +1041,24 @@ public class ImageWallpaper extends WallpaperService {
             mLightSpecularColumn = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_SPECULAR_COLUMN, 1) == 1;
+            mLightWaterWaves = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_WATER_WAVES, 1) == 1;
+            mLightWaterWavesIntensity = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_WATER_WAVES_INTENSITY, 75);
+            mWaterPreset = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_PRESET, 1);
+            mWaterWaveSize = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_WAVE_SIZE, 50);
+            mWaterWaveSpeed = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_WAVE_SPEED, 60);
+            mWaterGlitterDensity = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WATER_GLITTER_DENSITY, 70);
             mLightSolarTracking = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_SOLAR_TRACKING, 0) == 1;
@@ -1242,6 +1306,112 @@ public class ImageWallpaper extends WallpaperService {
                 try {
                     float[] verts = mJellyMesh.getVertices();
                     int[] colors = mJellyMesh.getColors();
+
+                    if (mLightSourceEnabled && mLightWaterWaves && isCurrentTargetActive() && mLightWaterWavesIntensity > 0) {
+                        float wavesMotion = Math.max(0.0f, Math.min(1.0f, mLightWaterWavesIntensity / 100.0f));
+                        float baseWaveAmp = Math.min(mBitmap.getWidth(), mBitmap.getHeight()) * 0.018f * wavesMotion;
+                        if (baseWaveAmp > 0.05f) {
+                            System.arraycopy(verts, 0, mWaterVerts, 0, verts.length);
+                            System.arraycopy(colors, 0, mWaterColors, 0, colors.length);
+
+                            float waveScale = 0.35f + 1.65f * (Math.max(10, Math.min(100, mWaterWaveSize)) / 100.0f);
+                            float waveSpeedMult = 0.20f + 1.80f * (Math.max(10, Math.min(100, mWaterWaveSpeed)) / 100.0f);
+                            float t = mLightShimmerPhase * waveSpeedMult;
+
+                            double radAngle = Math.toRadians(mLightDynamicAngle + 180f);
+                            float wDirX = (float) Math.cos(radAngle);
+                            float wDirY = (float) Math.sin(radAngle);
+                            float minDim = Math.min(mBitmap.getWidth(), mBitmap.getHeight());
+
+                            // Gerstner Wave Parameters (4 Octaves: Primary Swell, Secondary, Cross, Capillary)
+                            float k1 = (float) (2.0 * Math.PI / (minDim * 0.50f * waveScale));
+                            float k2 = (float) (2.0 * Math.PI / (minDim * 0.32f * waveScale));
+                            float k3 = (float) (2.0 * Math.PI / (minDim * 0.18f * waveScale));
+                            float k4 = (float) (2.0 * Math.PI / (minDim * 0.09f * waveScale));
+
+                            float dir1X = wDirX, dir1Y = wDirY;
+                            float dir2X = (float) Math.cos(radAngle + 0.52), dir2Y = (float) Math.sin(radAngle + 0.52);
+                            float dir3X = (float) Math.cos(radAngle - 0.44), dir3Y = (float) Math.sin(radAngle - 0.44);
+                            float dir4X = (float) Math.cos(radAngle + 1.15), dir4Y = (float) Math.sin(radAngle + 1.15);
+
+                            float a1 = baseWaveAmp * 0.50f;
+                            float a2 = baseWaveAmp * 0.28f;
+                            float a3 = baseWaveAmp * 0.15f;
+                            float a4 = baseWaveAmp * 0.07f;
+
+                            float q1 = 0.45f, q2 = 0.40f, q3 = 0.35f, q4 = 0.25f;
+
+                            // Light source position for specular shading
+                            float cx = mBitmap.getWidth() * 0.5f;
+                            float cy = mBitmap.getHeight() * 0.5f;
+                            float lRad = (float) Math.toRadians(mLightDynamicAngle);
+                            float lightPosX = cx + (float) Math.cos(lRad) * (mBitmap.getWidth() * 0.48f);
+                            float lightPosY = cy + (float) Math.sin(lRad) * (mBitmap.getHeight() * 0.48f);
+
+                            int totalVerts = (JellyMesh.COLS + 1) * (JellyMesh.ROWS + 1);
+                            for (int vi = 0; vi < totalVerts; vi++) {
+                                float vx = verts[vi * 2];
+                                float vy = verts[vi * 2 + 1];
+
+                                float p1 = (vx * dir1X + vy * dir1Y) * k1 - t * 2.0f;
+                                float p2 = (vx * dir2X + vy * dir2Y) * k2 - t * 2.8f;
+                                float p3 = (vx * dir3X + vy * dir3Y) * k3 - t * 3.6f;
+                                float p4 = (vx * dir4X + vy * dir4Y) * k4 - t * 4.8f;
+
+                                float s1 = (float) Math.sin(p1), c1 = (float) Math.cos(p1);
+                                float s2 = (float) Math.sin(p2), c2 = (float) Math.cos(p2);
+                                float s3 = (float) Math.sin(p3), c3 = (float) Math.cos(p3);
+                                float s4 = (float) Math.sin(p4), c4 = (float) Math.cos(p4);
+
+                                // Trochoidal Gerstner Displacement
+                                float dx = -(q1 * dir1X * a1 * s1 + q2 * dir2X * a2 * s2 + q3 * dir3X * a3 * s3 + q4 * dir4X * a4 * s4);
+                                float dy = -(q1 * dir1Y * a1 * s1 + q2 * dir2Y * a2 * s2 + q3 * dir3Y * a3 * s3 + q4 * dir4Y * a4 * s4);
+
+                                mWaterVerts[vi * 2] = vx + dx;
+                                mWaterVerts[vi * 2 + 1] = vy + dy;
+
+                                // Surface Normal derivatives
+                                float nx = -(dir1X * k1 * a1 * s1 + dir2X * k2 * a2 * s2 + dir3X * k3 * a3 * s3 + dir4X * k4 * a4 * s4);
+                                float ny = -(dir1Y * k1 * a1 * s1 + dir2Y * k2 * a2 * s2 + dir3Y * k3 * a3 * s3 + dir4Y * k4 * a4 * s4);
+                                float nz = 1.0f - (q1 * k1 * a1 * c1 + q2 * k2 * a2 * c2 + q3 * k3 * a3 * c3 + q4 * k4 * a4 * c4);
+                                float invN = 1.0f / (float) Math.hypot(Math.hypot(nx, ny), nz);
+                                nx *= invN; ny *= invN; nz *= invN;
+
+                                // Light vector
+                                float lx = lightPosX - vx;
+                                float ly = lightPosY - vy;
+                                float lz = 320.0f;
+                                float invL = 1.0f / (float) Math.hypot(Math.hypot(lx, ly), lz);
+                                lx *= invL; ly *= invL; lz *= invL;
+
+                                // Half vector (View towards camera = 0, 0, 1)
+                                float hx = lx;
+                                float hy = ly;
+                                float hz = lz + 1.0f;
+                                float invH = 1.0f / (float) Math.hypot(Math.hypot(hx, hy), hz);
+                                hx *= invH; hy *= invH; hz *= invH;
+
+                                float dotNL = Math.max(0.0f, nx * lx + ny * ly + nz * lz);
+                                float dotNH = Math.max(0.0f, nx * hx + ny * hy + nz * hz);
+                                float waterSpecular = (float) Math.pow(dotNH, 24.0) * (65.0f * (mLightIntensity / 100.0f) * wavesMotion);
+                                float diffuseShade = 0.88f + 0.22f * dotNL;
+
+                                int origCol = colors[vi];
+                                int rBase = (origCol >> 16) & 0xFF;
+                                int gBase = (origCol >> 8) & 0xFF;
+                                int bBase = origCol & 0xFF;
+
+                                int rFinal = Math.min(255, Math.max(0, (int) (rBase * diffuseShade + waterSpecular * 0.9f)));
+                                int gFinal = Math.min(255, Math.max(0, (int) (gBase * diffuseShade + waterSpecular * 0.95f)));
+                                int bFinal = Math.min(255, Math.max(0, (int) (bBase * diffuseShade + waterSpecular * 1.0f)));
+
+                                mWaterColors[vi] = (origCol & 0xFF000000) | (rFinal << 16) | (gFinal << 8) | bFinal;
+                            }
+                            verts = mWaterVerts;
+                            colors = mWaterColors;
+                        }
+                    }
+
                     canvas.drawBitmapMesh(mBitmap, JellyMesh.COLS, JellyMesh.ROWS, verts, 0, colors, 0, null);
 
                     if (mDepthEffectEnabled && mForegroundBitmap != null && !mForegroundBitmap.isRecycled()) {
@@ -1315,8 +1485,9 @@ public class ImageWallpaper extends WallpaperService {
                 lightY = mTouchY;
             }
 
-            float spreadFactor = 0.35f + 0.85f * (mLightBeamSpread / 100.0f);
-            float hardnessFactor = 0.15f + 0.65f * (mLightHardness / 100.0f);
+            float spreadProgress = Math.max(0.0f, Math.min(1.0f, mLightBeamSpread / 100.0f));
+            float spreadFactor = 0.15f + 2.85f * spreadProgress;
+            float hardnessFactor = 0.05f + 0.90f * (mLightHardness / 100.0f);
 
             // Preset color palettes
             int rgbCenter = 0xFFFFFF;
@@ -1365,33 +1536,33 @@ public class ImageWallpaper extends WallpaperService {
                 rgbGlitter = 0x6EE7B7;
             }
 
-            // 1. Foco / Linterna (Flashlight Source & Radial Halo)
-            float spotRadius = Math.max(w, h) * (0.28f + 0.35f * spreadFactor);
-            int alphaCenter = (int) (210 * intensity);
-            int alphaBloom = (int) (100 * intensity * (1.0f - hardnessFactor * 0.35f));
-            int alphaHalo = (int) (45 * intensity * (1.0f - hardnessFactor * 0.5f));
-            int colorCenter = (alphaCenter << 24) | rgbCenter;
-            int colorBloom = (alphaBloom << 24) | rgbMid;
-            int colorHalo = (alphaHalo << 24) | rgbMid;
+            // 1. Halo Solar / Destello Radial Suave y Natural (Seamless Multi-Stop Radial Flare)
+            float spotRadius = Math.max(w, h) * (0.30f + 1.10f * spreadProgress);
+            int alphaCenter = (int) (180 * intensity);
+            int alphaBloom = (int) (85 * intensity * (1.0f - hardnessFactor * 0.35f));
+            int alphaHalo = (int) (30 * intensity * (1.0f - hardnessFactor * 0.5f));
 
             RadialGradient spotGradient = new RadialGradient(
                     lightX, lightY, spotRadius,
-                    new int[] { colorCenter, colorBloom, colorHalo, rgbCenter & 0x00FFFFFF },
-                    new float[] { 0.0f, 0.25f, 0.65f, 1.0f },
+                    new int[] {
+                        (alphaCenter << 24) | rgbCenter,
+                        (alphaBloom << 24) | rgbMid,
+                        (alphaHalo << 24) | rgbEdge,
+                        rgbEdge & 0x00FFFFFF
+                    },
+                    new float[] { 0.0f, 0.22f, 0.55f, 1.0f },
                     Shader.TileMode.CLAMP);
             mLightPaint.setShader(spotGradient);
             mLightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
             canvas.drawCircle(lightX, lightY, spotRadius, mLightPaint);
 
-            // 2. Haz de Luz Volumétrico Directo (Continuous Volumetric Flashlight Beam)
+            // 2. Haz de Luz Volumétrico Suave con Gran Apertura y Degradado Bilateral
             float targetX = cx + (mSmoothRoll * w * 0.35f);
             float targetY = cy + (mSmoothPitch * h * 0.35f);
-
             float dirX = targetX - lightX;
             float dirY = targetY - lightY;
             float dist = (float) Math.hypot(dirX, dirY);
             if (dist < 1.0f) {
-                dist = 1.0f;
                 dirX = (float) Math.cos(rad);
                 dirY = (float) Math.sin(rad);
             } else {
@@ -1399,112 +1570,119 @@ public class ImageWallpaper extends WallpaperService {
                 dirY /= dist;
             }
 
-            float beamLength = Math.max(w, h) * (1.2f + 0.6f * spreadFactor);
-            float endX = lightX + dirX * beamLength;
-            float endY = lightY + dirY * beamLength;
+            float beamAngleDeg = (float) Math.toDegrees(Math.atan2(dirY, dirX));
+            float maxDim = (float) Math.hypot(w, h) * 1.8f;
+            float beamHalfW = w * (0.15f + 1.45f * spreadProgress);
 
-            float perpX = -dirY;
-            float perpY = dirX;
+            int beamCoreAlpha = (int) (140 * intensity);
+            int beamMidAlpha = (int) (65 * intensity * (1.0f - hardnessFactor * 0.3f));
 
-            mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
-
-            // Capa A: Haz Exterior Difuso y Translúcido (Soft Outer Volumetric Shaft)
-            float outerStartWidth = (70.0f + 90.0f * spreadFactor);
-            float outerEndWidth = (280.0f + 360.0f * spreadFactor);
-
-            Path outerBeamPath = new Path();
-            outerBeamPath.moveTo(lightX - perpX * (outerStartWidth * 0.5f), lightY - perpY * (outerStartWidth * 0.5f));
-            outerBeamPath.lineTo(lightX + perpX * (outerStartWidth * 0.5f), lightY + perpY * (outerStartWidth * 0.5f));
-            outerBeamPath.lineTo(endX + perpX * (outerEndWidth * 0.5f), endY + perpY * (outerEndWidth * 0.5f));
-            outerBeamPath.lineTo(endX - perpX * (outerEndWidth * 0.5f), endY - perpY * (outerEndWidth * 0.5f));
-            outerBeamPath.close();
-
-            int outerAlpha = (int) (110 * intensity * (1.0f - hardnessFactor * 0.3f));
-            LinearGradient outerGrad = new LinearGradient(
-                    lightX, lightY, endX, endY,
-                    new int[] { (outerAlpha << 24) | rgbMid, ((int)(outerAlpha * 0.6f) << 24) | rgbMid, rgbMid & 0x00FFFFFF },
-                    new float[] { 0.0f, 0.40f, 1.0f },
+            // Degradado lateral dinámico (Eje Y rotado): Fades suave de 0% -> Suave -> Centro -> Suave -> 0%
+            LinearGradient lateralGrad = new LinearGradient(
+                    0, -beamHalfW, 0, beamHalfW,
+                    new int[] {
+                        rgbMid & 0x00FFFFFF,
+                        ((int)(beamMidAlpha * 0.3f) << 24) | rgbEdge,
+                        (beamMidAlpha << 24) | rgbMid,
+                        (beamCoreAlpha << 24) | rgbCenter,
+                        (beamMidAlpha << 24) | rgbMid,
+                        ((int)(beamMidAlpha * 0.3f) << 24) | rgbEdge,
+                        rgbMid & 0x00FFFFFF
+                    },
+                    new float[] { 0.0f, 0.20f, 0.38f, 0.50f, 0.62f, 0.80f, 1.0f },
                     Shader.TileMode.CLAMP);
-            mSpecularPaint.setShader(outerGrad);
-            canvas.drawPath(outerBeamPath, mSpecularPaint);
 
-            // Capa B: Haz Central Luminoso (Bright Core Volumetric Light Beam)
-            float coreStartWidth = (40.0f + 50.0f * spreadFactor);
-            float coreEndWidth = (140.0f + 180.0f * spreadFactor);
-
-            Path coreBeamPath = new Path();
-            coreBeamPath.moveTo(lightX - perpX * (coreStartWidth * 0.5f), lightY - perpY * (coreStartWidth * 0.5f));
-            coreBeamPath.lineTo(lightX + perpX * (coreStartWidth * 0.5f), lightY + perpY * (coreStartWidth * 0.5f));
-            coreBeamPath.lineTo(endX + perpX * (coreEndWidth * 0.5f), endY + perpY * (coreEndWidth * 0.5f));
-            coreBeamPath.lineTo(endX - perpX * (coreEndWidth * 0.5f), endY - perpY * (coreEndWidth * 0.5f));
-            coreBeamPath.close();
-
-            int coreAlpha = (int) (160 * intensity);
-            LinearGradient coreGrad = new LinearGradient(
-                    lightX, lightY, endX, endY,
-                    new int[] { (coreAlpha << 24) | rgbCenter, ((int)(coreAlpha * 0.6f) << 24) | rgbMid, rgbCenter & 0x00FFFFFF },
-                    new float[] { 0.0f, 0.35f, 1.0f },
+            // Degradado longitudinal (Eje X rotado): Fades suave a lo largo del haz
+            LinearGradient lengthGrad = new LinearGradient(
+                    0, 0, maxDim, 0,
+                    new int[] {
+                        0xFFFFFFFF,
+                        0xCCFFFFFF,
+                        0x66FFFFFF,
+                        0x00FFFFFF
+                    },
+                    new float[] { 0.0f, 0.15f, 0.65f, 1.0f },
                     Shader.TileMode.CLAMP);
-            mSpecularPaint.setShader(coreGrad);
-            canvas.drawPath(coreBeamPath, mSpecularPaint);
 
-            // 3. Reflejo en el Borde de la Pantalla (Edge Rim Sheen / Border Glass Glare)
+            // 2. Haz de Luz Volumétrico Suave con Gran Apertura y Degradado Bilateral
+            if (mLightSpecularColumn) {
+                ComposeShader beamShader = new ComposeShader(lateralGrad, lengthGrad, PorterDuff.Mode.MULTIPLY);
+                mSpecularPaint.setShader(beamShader);
+                mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
+
+                canvas.save();
+                canvas.translate(lightX, lightY);
+                canvas.rotate(beamAngleDeg);
+                canvas.drawRect(0, -beamHalfW, maxDim, beamHalfW, mSpecularPaint);
+                canvas.restore();
+            }
+
+            // 3. Reflejo Sutil en Borde de Cristal (Subtle Soft Rim Sheen)
             float startX = cx - cosA * (w * 0.5f);
             float startY = cy - sinA * (h * 0.5f);
             float borderEndX = cx + cosA * (w * 0.5f);
             float borderEndY = cy + sinA * (h * 0.5f);
 
-            int alphaSheen = (int) (200 * intensity);
+            int alphaSheen = (int) (120 * intensity);
             int sheenColor = (alphaSheen << 24) | rgbEdge;
-            float stopMid = Math.max(0.50f, 0.90f - 0.30f * (1.0f - hardnessFactor));
             LinearGradient edgeGradient = new LinearGradient(
                     startX, startY, borderEndX, borderEndY,
                     new int[] { rgbEdge & 0x00FFFFFF, rgbEdge & 0x00FFFFFF, sheenColor },
-                    new float[] { 0.0f, stopMid, 1.0f },
+                    new float[] { 0.0f, 0.65f, 1.0f },
                     Shader.TileMode.CLAMP);
             mEdgeSheenPaint.setShader(edgeGradient);
             mEdgeSheenPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
             canvas.drawRect(0, 0, w, h, mEdgeSheenPaint);
 
-            // 4. Ondas de Agua Cáusticas Fluidas (Fluid Liquid Water Waves)
-            if (mLightSpecularColumn) {
+            // 4. Destellos Solares Oceánicos en Crestas de Agua (Ocean Sun Glitter Field)
+            if (mLightWaterWaves) {
                 mGlitterPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
-                mGlitterPaint.setStyle(Paint.Style.STROKE);
-                mGlitterPaint.setStrokeCap(Paint.Cap.ROUND);
-                float shimmerTime = mLightShimmerPhase;
-                int numWaves = 14;
+                mGlitterPaint.setStyle(Paint.Style.FILL);
+                float waveSpeedMult = 0.20f + 1.80f * (Math.max(10, Math.min(100, mWaterWaveSpeed)) / 100.0f);
+                float shimmerTime = mLightShimmerPhase * waveSpeedMult;
+                float wavesMotion = Math.max(0.0f, Math.min(1.0f, mLightWaterWavesIntensity / 100.0f));
+                float glitterFactor = Math.max(0.0f, Math.min(1.0f, mWaterGlitterDensity / 100.0f));
+                float beamLength = maxDim * 0.75f;
+                float perpX = -dirY;
+                float perpY = dirX;
 
-                Path wavePath = new Path();
-                for (int n = 0; n < numWaves; n++) {
-                    float vFrac = (n + 1) / (float) (numWaves + 1);
-                    float curCenterX = lightX + dirX * (beamLength * 0.75f * vFrac);
-                    float curCenterY = lightY + dirY * (beamLength * 0.75f * vFrac);
-                    float curSpan = (coreStartWidth + (coreEndWidth - coreStartWidth) * vFrac) * 0.8f;
+                int numSparkles = (int) (12 + 52 * glitterFactor);
+                for (int s = 0; s < numSparkles; s++) {
+                    float sFrac = (s + 0.5f) / (float) numSparkles;
+                    float sparkX = lightX + dirX * (beamLength * sFrac);
+                    float sparkY = lightY + dirY * (beamLength * sFrac);
+                    float latPhase = shimmerTime * 1.7f + s * 2.3f;
+                    float lateralOffset = (float) (Math.sin(latPhase) * 0.75f + Math.sin(latPhase * 1.8f) * 0.25f)
+                            * (beamHalfW * 0.55f * sFrac) * (0.3f + 0.7f * wavesMotion);
+                    sparkX += perpX * lateralOffset;
+                    sparkY += perpY * lateralOffset;
 
-                    float wavePhase = shimmerTime * 2.0f + n * 0.95f;
-                    float waveAmp = (4.0f + 10.0f * vFrac) * (0.4f + 0.6f * spreadFactor);
+                    // Scintillation de faceta de ola
+                    float twinkle = (float) Math.sin(shimmerTime * 3.6f + s * 2.8f);
+                    if (twinkle < 0.15f) continue;
+                    float blink = (float) Math.pow((twinkle - 0.15f) / 0.85f, 2.2);
 
-                    float leftX = curCenterX - perpX * curSpan;
-                    float leftY = curCenterY - perpY * curSpan;
-                    float rightX = curCenterX + perpX * curSpan;
-                    float rightY = curCenterY + perpY * curSpan;
+                    int sparkAlpha = (int) (190 * intensity * blink * (0.25f + 0.75f * wavesMotion) * (0.3f + 0.7f * glitterFactor));
+                    if (sparkAlpha > 6) {
+                        float sparkRadius = (2.2f + 4.0f * blink) * (0.6f + 0.4f * hardnessFactor) * (0.7f + 0.3f * wavesMotion) * (0.5f + 0.5f * glitterFactor);
 
-                    float midX1 = curCenterX - perpX * (curSpan * 0.35f) + dirX * ((float) Math.sin(wavePhase) * waveAmp);
-                    float midY1 = curCenterY - perpY * (curSpan * 0.35f) + dirY * ((float) Math.sin(wavePhase) * waveAmp);
-                    float midX2 = curCenterX + perpX * (curSpan * 0.35f) + dirX * ((float) Math.cos(wavePhase * 1.3f) * waveAmp);
-                    float midY2 = curCenterY + perpY * (curSpan * 0.35f) + dirY * ((float) Math.cos(wavePhase * 1.3f) * waveAmp);
+                        // 1. Halo difuso del destello (Bloom halo)
+                        int bloomAlpha = sparkAlpha / 3;
+                        mGlitterPaint.setColor((bloomAlpha << 24) | rgbEdge);
+                        canvas.drawCircle(sparkX, sparkY, sparkRadius * 2.4f, mGlitterPaint);
 
-                    wavePath.reset();
-                    wavePath.moveTo(leftX, leftY);
-                    wavePath.cubicTo(midX1, midY1, midX2, midY2, rightX, rightY);
+                        // 2. Destello en cruz / estrella de 4 puntas (Sun Star Glint)
+                        if (blink > 0.50f) {
+                            mGlitterPaint.setColor(((int)(sparkAlpha * 0.75f) << 24) | rgbCenter);
+                            float flareLen = sparkRadius * 3.5f;
+                            canvas.drawLine(sparkX - flareLen, sparkY, sparkX + flareLen, sparkY, mGlitterPaint);
+                            canvas.drawLine(sparkX, sparkY - flareLen, sparkX, sparkY + flareLen, mGlitterPaint);
+                        }
 
-                    float waveAlphaFrac = (float) Math.sin(vFrac * Math.PI) * (0.6f + 0.4f * (float) Math.sin(wavePhase * 1.5f));
-                    int waveAlpha = (int) (110 * intensity * Math.max(0.1f, waveAlphaFrac));
-                    int waveColor = (waveAlpha << 24) | rgbGlitter;
-
-                    mGlitterPaint.setColor(waveColor);
-                    mGlitterPaint.setStrokeWidth(3.0f + 4.0f * hardnessFactor * (1.0f - vFrac * 0.3f));
-                    canvas.drawPath(wavePath, mGlitterPaint);
+                        // 3. Núcleo brillante ultra-intenso (Specular Hotspot Core)
+                        mGlitterPaint.setColor((sparkAlpha << 24) | rgbCenter);
+                        canvas.drawCircle(sparkX, sparkY, sparkRadius, mGlitterPaint);
+                    }
                 }
             }
         }
