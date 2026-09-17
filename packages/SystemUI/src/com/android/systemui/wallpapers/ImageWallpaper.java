@@ -1365,23 +1365,77 @@ public class ImageWallpaper extends WallpaperService {
                 rgbGlitter = 0x6EE7B7;
             }
 
-            // 1. Foco de Luz (Spotlight Beam & Radial Glow)
-            float spotRadius = Math.max(w, h) * spreadFactor;
-            int alphaCenter = (int) (175 * intensity);
-            int alphaMid = (int) (75 * intensity * (1.0f - hardnessFactor * 0.35f));
+            // 1. Foco Solar Principal & Corona Radial (Sun Corona / Spotlight Core)
+            float spotRadius = Math.max(w, h) * (0.35f + 0.40f * spreadFactor);
+            int alphaCenter = (int) (190 * intensity);
+            int alphaBloom = (int) (90 * intensity * (1.0f - hardnessFactor * 0.35f));
+            int alphaHalo = (int) (35 * intensity * (1.0f - hardnessFactor * 0.5f));
             int colorCenter = (alphaCenter << 24) | rgbCenter;
-            int colorMid = (alphaMid << 24) | rgbMid;
+            int colorBloom = (alphaBloom << 24) | rgbMid;
+            int colorHalo = (alphaHalo << 24) | rgbMid;
 
             RadialGradient spotGradient = new RadialGradient(
                     lightX, lightY, spotRadius,
-                    new int[] { colorCenter, colorMid, rgbCenter & 0x00FFFFFF },
-                    new float[] { 0.0f, Math.min(0.85f, hardnessFactor), 1.0f },
+                    new int[] { colorCenter, colorBloom, colorHalo, rgbCenter & 0x00FFFFFF },
+                    new float[] { 0.0f, 0.25f, 0.65f, 1.0f },
                     Shader.TileMode.CLAMP);
             mLightPaint.setShader(spotGradient);
             mLightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
-            canvas.drawRect(0, 0, w, h, mLightPaint);
+            canvas.drawCircle(lightX, lightY, spotRadius, mLightPaint);
 
-            // 2. Reflejo en el Borde de la Pantalla (Edge Rim Sheen / Border Glass Glare)
+            // 2. Haz y Rayos de Sol Volumétricos (Natural Multi-Shaft Sunbeams / God Rays)
+            float beamLength = Math.max(w, h) * (1.0f + 0.5f * spreadFactor);
+            float beamDirX = cx - lightX;
+            float beamDirY = cy - lightY;
+            float beamDist = (float) Math.hypot(beamDirX, beamDirY);
+            if (beamDist > 1.0f) {
+                beamDirX /= beamDist;
+                beamDirY /= beamDist;
+            } else {
+                beamDirX = (float) Math.cos(rad);
+                beamDirY = (float) Math.sin(rad);
+            }
+
+            float baseAngleRad = (float) Math.atan2(beamDirY, beamDirX);
+            mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
+
+            // Haces de luz solar superpuestos que crean un haz suave y realista sin bordes rectos ni lineas
+            int[] shaftRelativeDeg = new int[] { 0, -18, 18, -32, 32 };
+            float[] shaftWidthDeg = new float[] { 40.0f, 24.0f, 24.0f, 18.0f, 18.0f };
+            float[] shaftAlphaMultipliers = new float[] { 0.80f, 0.50f, 0.50f, 0.30f, 0.30f };
+
+            Path beamPath = new Path();
+            for (int s = 0; s < shaftRelativeDeg.length; s++) {
+                float dynamicShift = (float) Math.sin(mLightShimmerPhase * 0.8f + s * 1.2f) * 3.5f;
+                float shaftCenterAngle = baseAngleRad + (float) Math.toRadians(shaftRelativeDeg[s] + dynamicShift);
+                float halfSpread = (float) Math.toRadians((shaftWidthDeg[s] * (0.6f + 0.6f * spreadFactor)) * 0.5f);
+                float a1 = shaftCenterAngle - halfSpread;
+                float a2 = shaftCenterAngle + halfSpread;
+
+                float endX = lightX + (float) Math.cos(shaftCenterAngle) * beamLength;
+                float endY = lightY + (float) Math.sin(shaftCenterAngle) * beamLength;
+
+                int sAlpha = (int) (125 * intensity * shaftAlphaMultipliers[s]);
+                int sColor = (sAlpha << 24) | rgbCenter;
+                int sMidColor = ((sAlpha / 2) << 24) | rgbMid;
+
+                LinearGradient rayGradient = new LinearGradient(
+                        lightX, lightY, endX, endY,
+                        new int[] { sColor, sMidColor, rgbMid & 0x00FFFFFF },
+                        new float[] { 0.0f, 0.40f, 1.0f },
+                        Shader.TileMode.CLAMP);
+                mSpecularPaint.setShader(rayGradient);
+
+                beamPath.reset();
+                beamPath.moveTo(lightX, lightY);
+                beamPath.lineTo(lightX + (float) Math.cos(a1) * beamLength, lightY + (float) Math.sin(a1) * beamLength);
+                beamPath.lineTo(lightX + (float) Math.cos(a2) * beamLength, lightY + (float) Math.sin(a2) * beamLength);
+                beamPath.close();
+
+                canvas.drawPath(beamPath, mSpecularPaint);
+            }
+
+            // 3. Reflejo en el Borde de la Pantalla (Edge Rim Sheen / Border Glass Glare)
             float startX = cx - cosA * (w * 0.5f);
             float startY = cy - sinA * (h * 0.5f);
             float endX = cx + cosA * (w * 0.5f);
@@ -1399,37 +1453,20 @@ public class ImageWallpaper extends WallpaperService {
             mEdgeSheenPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
             canvas.drawRect(0, 0, w, h, mEdgeSheenPaint);
 
-            // 3. Columna de Reflejo Solar (Sun Glitter / Ocean Specular Path)
+            // 4. Ondas de Agua Cáusticas Fluidas (Fluid Liquid Water Waves)
             if (mLightSpecularColumn) {
-                float colTopWidth = w * (0.15f + 0.25f * spreadFactor);
-                float colBottomWidth = w * (0.35f + 0.45f * spreadFactor);
-
+                float colTopWidth = w * (0.20f + 0.30f * spreadFactor);
+                float colBottomWidth = w * (0.45f + 0.50f * spreadFactor);
                 float pathTopX = lightX;
                 float pathTopY = Math.min(lightY, h * 0.35f);
                 float pathBottomX = cx + (mSmoothRoll * w * 0.25f);
                 float pathBottomY = h;
 
-                int alphaColCore = (int) (140 * intensity * (0.5f + 0.5f * hardnessFactor));
-                int colCoreColor = (alphaColCore << 24) | rgbCenter;
-                int alphaColGlow = (int) (65 * intensity);
-                int colGlowColor = (alphaColGlow << 24) | rgbMid;
-
-                LinearGradient colGrad = new LinearGradient(
-                        pathTopX - colTopWidth * 0.5f, pathTopY,
-                        pathTopX + colTopWidth * 0.5f, pathTopY,
-                        new int[] { rgbMid & 0x00FFFFFF, colGlowColor, colCoreColor, colGlowColor, rgbMid & 0x00FFFFFF },
-                        new float[] { 0.0f, 0.25f, 0.50f, 0.75f, 1.0f },
-                        Shader.TileMode.CLAMP);
-                mSpecularPaint.setShader(colGrad);
-                mSpecularPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
-                canvas.drawRect(0, 0, w, h, mSpecularPaint);
-
-                // Continuous Fluid Liquid Water Caustic Wave Ribbons (Pure fluid motion, no dots)
                 mGlitterPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
                 mGlitterPaint.setStyle(Paint.Style.STROKE);
                 mGlitterPaint.setStrokeCap(Paint.Cap.ROUND);
                 float shimmerTime = mLightShimmerPhase;
-                int numWaves = 18;
+                int numWaves = 16;
 
                 Path wavePath = new Path();
                 for (int n = 0; n < numWaves; n++) {
@@ -1439,7 +1476,7 @@ public class ImageWallpaper extends WallpaperService {
                     float halfSpan = currentWidth * 0.65f;
 
                     float wavePhase = shimmerTime * 2.0f + n * 0.95f;
-                    float waveAmp = (6.0f + 14.0f * vFrac) * (0.4f + 0.6f * spreadFactor);
+                    float waveAmp = (5.0f + 12.0f * vFrac) * (0.4f + 0.6f * spreadFactor);
 
                     float leftX = pathTopX - halfSpan;
                     float rightX = pathTopX + halfSpan;
@@ -1457,11 +1494,11 @@ public class ImageWallpaper extends WallpaperService {
                             rightX, yCenter);
 
                     float waveAlphaFrac = (float) Math.sin(vFrac * Math.PI) * (0.6f + 0.4f * (float) Math.sin(wavePhase * 1.5f));
-                    int waveAlpha = (int) (120 * intensity * Math.max(0.1f, waveAlphaFrac));
+                    int waveAlpha = (int) (110 * intensity * Math.max(0.1f, waveAlphaFrac));
                     int waveColor = (waveAlpha << 24) | rgbGlitter;
 
                     mGlitterPaint.setColor(waveColor);
-                    mGlitterPaint.setStrokeWidth(3.0f + 5.0f * hardnessFactor * (1.0f - vFrac * 0.3f));
+                    mGlitterPaint.setStrokeWidth(3.0f + 4.0f * hardnessFactor * (1.0f - vFrac * 0.3f));
                     canvas.drawPath(wavePath, mGlitterPaint);
                 }
             }
