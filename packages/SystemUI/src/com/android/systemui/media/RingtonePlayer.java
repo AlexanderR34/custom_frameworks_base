@@ -188,6 +188,15 @@ public class RingtonePlayer implements CoreStartable {
             }
             enforceUriUserId(uri, token);
 
+            if (!looping && aa != null && (aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION
+                    || aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION_RINGTONE
+                    || aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)) {
+                final UserHandle user = Binder.getCallingUserHandle();
+                if (tryPlayCoinSequence(user, aa, volume)) {
+                    return;
+                }
+            }
+
             Client client;
             synchronized (mClients) {
                 client = mClients.get(token);
@@ -242,23 +251,14 @@ public class RingtonePlayer implements CoreStartable {
                 client.mRingtone.setLooping(looping);
                 client.mRingtone.setHapticGeneratorEnabled(hapticGeneratorEnabled);
             }
-            // else no client for token when setting playback properties but will be set at play()
         }
 
-        @Override
-        public void playAsync(Uri uri, UserHandle user, boolean looping, AudioAttributes aa,
-                float volume) {
-            if (LOGD) Log.d(TAG, "playAsync(uri=" + uri + ", user=" + user + ")");
-            if (Binder.getCallingUid() != Process.SYSTEM_UID) {
-                throw new SecurityException("Async playback only available from system UID.");
-            }
-            if (UserHandle.ALL.equals(user)) {
-                user = UserHandle.SYSTEM;
-            }
+        private boolean tryPlayCoinSequence(UserHandle user, AudioAttributes aa, float volume) {
+            try {
+                boolean isSm64Enabled = Settings.System.getInt(
+                        mContext.getContentResolver(), "sm64_red_coins_sound_enabled", 0) == 1;
+                if (!isSm64Enabled) return false;
 
-            boolean isSm64Enabled = Settings.System.getInt(
-                    mContext.getContentResolver(), "sm64_red_coins_sound_enabled", 0) == 1;
-            if (isSm64Enabled && !looping) {
                 initSm64SoundPool();
                 int mode = Settings.System.getInt(
                         mContext.getContentResolver(), "sm64_red_coins_sound_mode", 0);
@@ -305,7 +305,7 @@ public class RingtonePlayer implements CoreStartable {
                             try {
                                 Uri customSoundUri = Uri.parse(track.customUriString);
                                 mAsyncPlayer.play(getContextForUser(user), customSoundUri, false, aa, volume);
-                                return;
+                                return true;
                             } catch (Throwable t) {
                                 Log.e(TAG, "Failed to play custom coin sound URI: " + track.customUriString, t);
                             }
@@ -314,10 +314,29 @@ public class RingtonePlayer implements CoreStartable {
                         if (mSoundPool != null && track.defaultSoundId != 0) {
                             float playVol = (volume > 0f) ? volume : 1.0f;
                             mSoundPool.play(track.defaultSoundId, playVol, playVol, 1, 0, 1.0f);
-                            return;
+                            return true;
                         }
                     }
                 }
+            } catch (Throwable t) {
+                Log.e(TAG, "Error in coin sequence playback", t);
+            }
+            return false;
+        }
+
+        @Override
+        public void playAsync(Uri uri, UserHandle user, boolean looping, AudioAttributes aa,
+                float volume) {
+            if (LOGD) Log.d(TAG, "playAsync(uri=" + uri + ", user=" + user + ")");
+            if (Binder.getCallingUid() != Process.SYSTEM_UID) {
+                throw new SecurityException("Async playback only available from system UID.");
+            }
+            if (UserHandle.ALL.equals(user)) {
+                user = UserHandle.SYSTEM;
+            }
+
+            if (!looping && tryPlayCoinSequence(user, aa, volume)) {
+                return;
             }
 
             mAsyncPlayer.play(getContextForUser(user), uri, looping, aa, volume);
