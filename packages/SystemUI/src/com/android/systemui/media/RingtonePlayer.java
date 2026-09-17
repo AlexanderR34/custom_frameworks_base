@@ -23,6 +23,7 @@ import android.content.Context;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.database.Cursor;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.IAudioService;
 import android.media.IRingtonePlayer;
 import android.media.Ringtone;
@@ -50,7 +51,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.inject.Inject;
 
@@ -74,7 +77,7 @@ public class RingtonePlayer implements CoreStartable {
     // SM64 / Custom Coin Sequence Player
     private SoundPool mSoundPool;
     private final int[] mCoinSoundIds = new int[8];
-    private boolean mSoundPoolLoaded = false;
+    private final Set<Integer> mLoadedSoundIds = new HashSet<>();
     private int mCurrentCoinIndex = -1;
     private long mLastCoinNotificationTime = 0;
 
@@ -99,6 +102,9 @@ public class RingtonePlayer implements CoreStartable {
     public void start() {
         mAsyncPlayer.setUsesWakeLock(mContext);
 
+        // Preload SM64 sound assets at start
+        initSm64SoundPool();
+
         mAudioService = IAudioService.Stub.asInterface(
                 ServiceManager.getService(Context.AUDIO_SERVICE));
         try {
@@ -116,9 +122,17 @@ public class RingtonePlayer implements CoreStartable {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build();
             mSoundPool = new SoundPool.Builder()
-                    .setMaxStreams(4)
+                    .setMaxStreams(8)
                     .setAudioAttributes(attrs)
                     .build();
+
+            mSoundPool.setOnLoadCompleteListener((soundPool, sampleId, status) -> {
+                if (status == 0) {
+                    synchronized (mLoadedSoundIds) {
+                        mLoadedSoundIds.add(sampleId);
+                    }
+                }
+            });
 
             int[] rawResIds = new int[] {
                 R.raw.sm64_red_coin_1,
@@ -134,7 +148,6 @@ public class RingtonePlayer implements CoreStartable {
             for (int i = 0; i < 8; i++) {
                 mCoinSoundIds[i] = mSoundPool.load(mContext, rawResIds[i], 1);
             }
-            mSoundPoolLoaded = true;
         } catch (Throwable t) {
             Log.e(TAG, "Failed to initialize SM64 SoundPool", t);
         }
@@ -188,12 +201,19 @@ public class RingtonePlayer implements CoreStartable {
             }
             enforceUriUserId(uri, token);
 
-            if (!looping && aa != null && (aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION
-                    || aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION_RINGTONE
-                    || aa.getUsage() == AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)) {
-                final UserHandle user = Binder.getCallingUserHandle();
-                if (tryPlayCoinSequence(user, aa, volume)) {
-                    return;
+            if (!looping) {
+                final int usage = (aa != null) ? aa.getUsage() : AudioAttributes.USAGE_UNKNOWN;
+                if (usage == AudioAttributes.USAGE_NOTIFICATION
+                        || usage == AudioAttributes.USAGE_NOTIFICATION_RINGTONE
+                        || usage == AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT
+                        || usage == AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_DELAYED
+                        || usage == AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_REQUEST
+                        || usage == AudioAttributes.USAGE_NOTIFICATION_EVENT
+                        || usage == AudioAttributes.USAGE_UNKNOWN) {
+                    final UserHandle user = Binder.getCallingUserHandle();
+                    if (tryPlayCoinSequence(user, aa, volume)) {
+                        return;
+                    }
                 }
             }
 
@@ -255,66 +275,154 @@ public class RingtonePlayer implements CoreStartable {
 
         private boolean tryPlayCoinSequence(UserHandle user, AudioAttributes aa, float volume) {
             try {
-                boolean isSm64Enabled = Settings.System.getInt(
-                        mContext.getContentResolver(), "sm64_red_coins_sound_enabled", 0) == 1;
+                boolean isSm64Enabled = false;
+                try {
+                    isSm64Enabled = Settings.System.getIntForUser(
+                            mContext.getContentResolver(), "sm64_red_coins_sound_enabled", 0,
+                            UserHandle.USER_CURRENT) == 1;
+                } catch (Throwable ignored) {}
+                if (!isSm64Enabled) {
+                    isSm64Enabled = Settings.System.getInt(
+                            mContext.getContentResolver(), "sm64_red_coins_sound_enabled", 0) == 1;
+                }
                 if (!isSm64Enabled) return false;
 
+                // Check ringer mode
+                AudioManager am = mContext.getSystemService(AudioManager.class);
+                if (am != null) {
+                    int ringerMode = am.getRingerModeInternal();
+                    if (ringerMode == AudioManager.RINGER_MODE_SILENT
+                            || ringerMode == AudioManager.RINGER_MODE_VIBRATE) {
+                        return true; // Suppress sound in silent / vibrate
+                    }
+                }
+
                 initSm64SoundPool();
-                int mode = Settings.System.getInt(
-                        mContext.getContentResolver(), "sm64_red_coins_sound_mode", 0);
-                int timeoutSec = Settings.System.getInt(
-                        mContext.getContentResolver(), "sm64_red_coins_burst_timeout", 5);
+
+                int mode = 0;
+                int timeoutSec = 5;
+                try {
+                    mode = Settings.System.getIntForUser(
+                            mContext.getContentResolver(), "sm64_red_coins_sound_mode", 0,
+                            UserHandle.USER_CURRENT);
+                    timeoutSec = Settings.System.getIntForUser(
+                            mContext.getContentResolver(), "sm64_red_coins_burst_timeout", 5,
+                            UserHandle.USER_CURRENT);
+                } catch (Throwable ignored) {
+                    mode = Settings.System.getInt(
+                            mContext.getContentResolver(), "sm64_red_coins_sound_mode", 0);
+                    timeoutSec = Settings.System.getInt(
+                            mContext.getContentResolver(), "sm64_red_coins_burst_timeout", 5);
+                }
+
                 long timeoutMs = timeoutSec * 1000L;
                 long now = SystemClock.uptimeMillis();
 
                 List<CoinTrackInfo> activeTracks = new ArrayList<>();
                 for (int i = 0; i < 8; i++) {
                     String coinKey = "sm64_coin_" + (i + 1) + "_enabled";
-                    boolean coinEnabled = Settings.System.getInt(
-                            mContext.getContentResolver(), coinKey, 1) == 1;
+                    boolean coinEnabled = true;
+                    try {
+                        coinEnabled = Settings.System.getIntForUser(
+                                mContext.getContentResolver(), coinKey, 1,
+                                UserHandle.USER_CURRENT) == 1;
+                    } catch (Throwable ignored) {
+                        coinEnabled = Settings.System.getInt(
+                                mContext.getContentResolver(), coinKey, 1) == 1;
+                    }
+
                     if (coinEnabled) {
-                        String customUri = Settings.System.getString(
-                                mContext.getContentResolver(), "sm64_coin_" + (i + 1) + "_uri");
-                        activeTracks.add(new CoinTrackInfo(i, mCoinSoundIds[i], customUri));
+                        String customUri = null;
+                        try {
+                            customUri = Settings.System.getStringForUser(
+                                    mContext.getContentResolver(), "sm64_coin_" + (i + 1) + "_uri",
+                                    UserHandle.USER_CURRENT);
+                        } catch (Throwable ignored) {
+                            customUri = Settings.System.getString(
+                                    mContext.getContentResolver(), "sm64_coin_" + (i + 1) + "_uri");
+                        }
+                        activeTracks.add(new CoinTrackInfo(i, 0, customUri));
                     }
                 }
 
                 if (activeTracks.isEmpty()) {
                     for (int i = 0; i < 8; i++) {
-                        String customUri = Settings.System.getString(
-                                mContext.getContentResolver(), "sm64_coin_" + (i + 1) + "_uri");
-                        activeTracks.add(new CoinTrackInfo(i, mCoinSoundIds[i], customUri));
+                        activeTracks.add(new CoinTrackInfo(i, 0, null));
                     }
                 }
 
                 if (!activeTracks.isEmpty()) {
                     synchronized (mCoinSoundIds) {
-                        if (mode == 1) { // Ráfaga rápida
+                        if (mode == 1) { // Rapid burst
                             if (now - mLastCoinNotificationTime < timeoutMs) {
                                 mCurrentCoinIndex = (mCurrentCoinIndex + 1) % activeTracks.size();
                             } else {
                                 mCurrentCoinIndex = 0;
                             }
-                        } else { // Progresión continua
+                        } else { // Continuous progression
                             mCurrentCoinIndex = (mCurrentCoinIndex + 1) % activeTracks.size();
                         }
                         mLastCoinNotificationTime = now;
 
                         CoinTrackInfo track = activeTracks.get(mCurrentCoinIndex);
+                        Context playCtx = mContext;
+                        try {
+                            if (user != null) {
+                                playCtx = getContextForUser(user);
+                            }
+                        } catch (Throwable ignored) {
+                            playCtx = mContext;
+                        }
+
+                        // Determine playback volume
+                        float playVol = volume;
+                        if (playVol <= 0f && am != null) {
+                            int streamVol = am.getStreamVolume(AudioManager.STREAM_NOTIFICATION);
+                            int maxVol = am.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION);
+                            playVol = (maxVol > 0) ? ((float) streamVol / maxVol) : 1.0f;
+                        }
+                        if (playVol <= 0f) {
+                            playVol = 1.0f;
+                        }
+
+                        // 1. Try Custom URI if set
                         if (!TextUtils.isEmpty(track.customUriString)) {
                             try {
                                 Uri customSoundUri = Uri.parse(track.customUriString);
-                                mAsyncPlayer.play(getContextForUser(user), customSoundUri, false, aa, volume);
+                                mAsyncPlayer.play(playCtx, customSoundUri, false, aa, playVol);
                                 return true;
                             } catch (Throwable t) {
                                 Log.e(TAG, "Failed to play custom coin sound URI: " + track.customUriString, t);
                             }
                         }
 
-                        if (mSoundPool != null && track.defaultSoundId != 0) {
-                            float playVol = (volume > 0f) ? volume : 1.0f;
-                            mSoundPool.play(track.defaultSoundId, playVol, playVol, 1, 0, 1.0f);
+                        // 2. Try preloaded SoundPool
+                        int soundId = mCoinSoundIds[track.trackIndex % 8];
+                        if (mSoundPool != null && soundId != 0) {
+                            int streamId = mSoundPool.play(soundId, playVol, playVol, 1, 0, 1.0f);
+                            if (streamId != 0) {
+                                return true;
+                            }
+                        }
+
+                        // 3. Fallback to playing raw resource via NotificationPlayer
+                        try {
+                            int[] rawResIds = new int[] {
+                                R.raw.sm64_red_coin_1,
+                                R.raw.sm64_red_coin_2,
+                                R.raw.sm64_red_coin_3,
+                                R.raw.sm64_red_coin_4,
+                                R.raw.sm64_red_coin_5,
+                                R.raw.sm64_red_coin_6,
+                                R.raw.sm64_red_coin_7,
+                                R.raw.sm64_red_coin_8
+                            };
+                            int resId = rawResIds[track.trackIndex % 8];
+                            Uri fallbackUri = Uri.parse("android.resource://" + mContext.getPackageName() + "/" + resId);
+                            mAsyncPlayer.play(mContext, fallbackUri, false, aa, playVol);
                             return true;
+                        } catch (Throwable t2) {
+                            Log.e(TAG, "Fallback playback failed for track " + track.trackIndex, t2);
                         }
                     }
                 }
