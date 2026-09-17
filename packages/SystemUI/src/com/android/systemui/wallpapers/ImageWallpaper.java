@@ -294,6 +294,12 @@ public class ImageWallpaper extends WallpaperService {
                     } else {
                         mJellyMesh.resetGyro();
                     }
+
+                    if (mLightSourceEnabled && mLightMode == 2) {
+                        float dynAngle = (float) Math.toDegrees(Math.atan2(finalPitch, -finalRoll));
+                        mJellyMesh.setLightSource(true, dynAngle, mLightIntensity / 100.0f);
+                        startAnimationLoopIfNeeded();
+                    }
                 } else if (type == Sensor.TYPE_GRAVITY) {
                     float gx = event.values[0] / 9.81f;
                     float gy = event.values[1] / 9.81f;
@@ -1070,6 +1076,12 @@ public class ImageWallpaper extends WallpaperService {
 
             synchronized (mSurfaceLock) {
                 mJellyMesh.onMultiTouchEvent(action, pointerCount, x0, y0, x1, y1);
+                if (mLightSourceEnabled && mLightMode == 1) {
+                    float cx = (mBitmap != null) ? mBitmap.getWidth() * 0.5f : 540f;
+                    float cy = (mBitmap != null) ? mBitmap.getHeight() * 0.5f : 1200f;
+                    float touchAngle = (float) Math.toDegrees(Math.atan2(y0 - cy, x0 - cx));
+                    mJellyMesh.setLightSource(true, touchAngle, mLightIntensity / 100.0f);
+                }
             }
             startAnimationLoopIfNeeded();
         }
@@ -1138,12 +1150,66 @@ public class ImageWallpaper extends WallpaperService {
                         canvas.drawBitmapMesh(mForegroundBitmap, JellyMesh.COLS, JellyMesh.ROWS, verts, 0, null, 0, mShadowPaint);
                         canvas.drawBitmapMesh(mForegroundBitmap, JellyMesh.COLS, JellyMesh.ROWS, fgVerts, 0, null, 0, null);
                     }
+
+                    if (mLightSourceEnabled) {
+                        drawLightAndEdgeSheen(canvas, mBitmap.getWidth(), mBitmap.getHeight());
+                    }
                 } catch (Exception e) {
                     Log.e(TAG, "drawActiveFrameOnCanvas error", e);
                 } finally {
                     surface.unlockCanvasAndPost(canvas);
                 }
             }
+        }
+
+        private final Paint mLightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint mEdgeSheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        private void drawLightAndEdgeSheen(Canvas canvas, int w, int h) {
+            if (!mLightSourceEnabled || mLightIntensity <= 0 || !isCurrentTargetActive()) return;
+
+            float intensity = Math.max(0.05f, Math.min(1.0f, mLightIntensity / 100.0f));
+            float rad = (float) Math.toRadians(mLightAngle);
+            float cosA = (float) Math.cos(rad);
+            float sinA = (float) Math.sin(rad);
+
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float lightX = cx + cosA * (w * 0.48f);
+            float lightY = cy + sinA * (h * 0.48f);
+
+            // 1. Foco de Luz (Spotlight Beam & Glow Cone)
+            float spotRadius = Math.max(w, h) * 0.70f;
+            int alphaCenter = (int) (130 * intensity);
+            int alphaMid = (int) (55 * intensity);
+            int colorCenter = (alphaCenter << 24) | 0x00FFFFFF;
+            int colorMid = (alphaMid << 24) | 0x00FFFFFF;
+
+            RadialGradient spotGradient = new RadialGradient(
+                    lightX, lightY, spotRadius,
+                    new int[] { colorCenter, colorMid, 0x00FFFFFF },
+                    new float[] { 0.0f, 0.40f, 1.0f },
+                    Shader.TileMode.CLAMP);
+            mLightPaint.setShader(spotGradient);
+            mLightPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
+            canvas.drawRect(0, 0, w, h, mLightPaint);
+
+            // 2. Reflejo en el Borde de la Pantalla (Edge Rim Sheen / Border Glass Glare)
+            float startX = cx - cosA * (w * 0.5f);
+            float startY = cy - sinA * (h * 0.5f);
+            float endX = cx + cosA * (w * 0.5f);
+            float endY = cy + sinA * (h * 0.5f);
+
+            int alphaSheen = (int) (160 * intensity);
+            int sheenColor = (alphaSheen << 24) | 0x00FFFFFF;
+            LinearGradient edgeGradient = new LinearGradient(
+                    startX, startY, endX, endY,
+                    new int[] { 0x00FFFFFF, 0x00FFFFFF, sheenColor },
+                    new float[] { 0.0f, 0.72f, 1.0f },
+                    Shader.TileMode.CLAMP);
+            mEdgeSheenPaint.setShader(edgeGradient);
+            mEdgeSheenPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SCREEN));
+            canvas.drawRect(0, 0, w, h, mEdgeSheenPaint);
         }
 
         private void asyncExtractForeground() {
@@ -1316,7 +1382,7 @@ public class ImageWallpaper extends WallpaperService {
             if (mSensorManager == null) return;
 
             if (mIsVisible) {
-                if (mGyroEnabled && mRotationSensor != null) {
+                if ((mGyroEnabled || (mLightSourceEnabled && mLightMode == 2)) && mRotationSensor != null) {
                     mSensorManager.registerListener(mSensorListener, mRotationSensor, SensorManager.SENSOR_DELAY_GAME);
                 }
                 if (mGyroInertiaEnabled) {
@@ -1485,6 +1551,9 @@ public class ImageWallpaper extends WallpaperService {
                 Rect dest = mSurfaceHolder.getSurfaceFrame();
                 try {
                     canvas.drawBitmap(bitmap, null, dest, null);
+                    if (mLightSourceEnabled && dest != null) {
+                        drawLightAndEdgeSheen(canvas, dest.width(), dest.height());
+                    }
                     mDrawn = true;
                 } finally {
                     surface.unlockCanvasAndPost(canvas);

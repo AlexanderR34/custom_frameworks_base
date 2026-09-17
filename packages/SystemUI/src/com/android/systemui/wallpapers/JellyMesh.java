@@ -889,8 +889,8 @@ public class JellyMesh {
                         dY = (mPosY[i + (COLS + 1)] - mRestY[i + (COLS + 1)]) - (mPosY[i - (COLS + 1)] - mRestY[i - (COLS + 1)]);
                     }
 
-                    float nx = -dX * 0.08f;
-                    float ny = -dY * 0.08f;
+                    float nx = -dX * 0.12f;
+                    float ny = -dY * 0.12f;
                     float nz = 1.0f;
                     float invN = 1.0f / (float) Math.hypot(Math.hypot(nx, ny), nz);
                     nx *= invN; ny *= invN; nz *= invN;
@@ -898,9 +898,12 @@ public class JellyMesh {
                     // Vector de rayo de luz incidente hacia este punto
                     float lx = lightX - px;
                     float ly = lightY - py;
-                    float lz = 320.0f;
+                    float lz = 280.0f;
                     float invL = 1.0f / (float) Math.hypot(Math.hypot(lx, ly), lz);
                     lx *= invL; ly *= invL; lz *= invL;
+
+                    // Iluminación difusa
+                    float dotNL = Math.max(0.0f, nx * lx + ny * ly + nz * lz);
 
                     // Vector intermedio (Half Vector) para reflejo especular de Blinn-Phong
                     float hx = lx;
@@ -910,14 +913,18 @@ public class JellyMesh {
                     hx *= invH; hy *= invH; hz *= invH;
 
                     float dotNH = Math.max(0.0f, nx * hx + ny * hy + nz * hz);
-                    // Brillo especular concentrado en crestas y pliegues donde impacta el rayo
-                    float spec = (float) Math.pow(dotNH, 24.0) * (45.0f * mLightIntensity);
+                    // Brillo especular concentrado en crestas y pliegues donde impacta el foco de luz
+                    float spec = (float) Math.pow(dotNH, 16.0) * (55.0f * mLightIntensity);
 
-                    // Reflejo direccional suave que barre la superficie
-                    float dirRay = Math.max(0.0f, (lx * cosA + ly * sinA));
-                    float raySheen = (float) Math.pow(dirRay, 4.0) * (18.0f * mLightIntensity);
+                    // Reflejo en el borde de la pantalla (Rim Light / Edge Sheen)
+                    float fracX = c / (float) COLS;
+                    float fracY = r / (float) ROWS;
+                    float edgeDist = Math.min(Math.min(fracX, 1.0f - fracX), Math.min(fracY, 1.0f - fracY));
+                    float rimGlow = (float) Math.max(0.0f, 1.0f - Math.sqrt(edgeDist * 4.0f));
+                    float dirGlow = Math.max(0.0f, ((fracX - 0.5f) * cosA + (fracY - 0.5f) * sinA) * 2.0f + 0.5f);
+                    float edgeSheen = rimGlow * dirGlow * (45.0f * mLightIntensity);
 
-                    float finalShade = baseShade - (1.0f - mLightIntensity * 0.3f) * 10.0f + spec + raySheen;
+                    float finalShade = baseShade * (0.82f + 0.18f * dotNL) + spec + edgeSheen;
                     int shadeVal = Math.min(255, Math.max(0, (int) finalShade));
                     mColors[i] = 0xFF000000 | (shadeVal << 16) | (shadeVal << 8) | shadeVal;
                 } else {
