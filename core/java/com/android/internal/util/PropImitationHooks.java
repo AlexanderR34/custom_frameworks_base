@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -74,7 +75,15 @@ public class PropImitationHooks {
     private static final String PACKAGE_GMS = "com.google.android.gms";
     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
     private static final String PACKAGE_NETFLIX = "com.netflix.mediaclient";
+    private static final String PACKAGE_PRIME_VIDEO = "com.amazon.avod.thirdpartyclient";
+    private static final String PACKAGE_DISNEY_PLUS = "com.disney.disneyplus";
     private static final String PACKAGE_GPHOTOS = "com.google.android.apps.photos";
+
+    private static final Set<String> sStreamingPackages = Set.of(
+        PACKAGE_NETFLIX,
+        PACKAGE_PRIME_VIDEO,
+        PACKAGE_DISNEY_PLUS
+    );
 
     private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
             "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
@@ -89,6 +98,15 @@ public class PropImitationHooks {
         "BRAND", "google",
         "MODEL", "Pixel",
         "FINGERPRINT", "google/sailfish/sailfish:10/QP1A.191005.007.A3/5972272:user/release-keys"
+    );
+
+    private static final Map<String, String> sStreamingProps = Map.of(
+        "PRODUCT", "husky",
+        "DEVICE", "husky",
+        "MANUFACTURER", "Google",
+        "BRAND", "google",
+        "MODEL", "Pixel 8 Pro",
+        "FINGERPRINT", "google/husky/husky:14/AP2A.240805.005/12025142:user/release-keys"
     );
 
     private static final Set<String> sPixelFeatures = Set.of(
@@ -165,7 +183,7 @@ public class PropImitationHooks {
         sNetflixModel = res.getString(R.string.config_netflixSpoofModel);
 
         sProcessName = processName;
-        sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
+        sIsGms = packageName.equals(PACKAGE_GMS) && (processName.equals(PROCESS_GMS_UNSTABLE) || processName.contains("droidguard"));
         sIsFinsky = packageName.equals(PACKAGE_FINSKY);
         sIsPhotos = packageName.equals(PACKAGE_GPHOTOS);
 
@@ -196,9 +214,22 @@ public class PropImitationHooks {
                 dlog("Spoofing Pixel 1 for Google Photos");
                 sPixelOneProps.forEach((PropImitationHooks::setPropValue));
             }
-        } else if (!sNetflixModel.isEmpty() && packageName.equals(PACKAGE_NETFLIX)) {
-            dlog("Setting model to " + sNetflixModel + " for Netflix");
-            setPropValue("MODEL", sNetflixModel);
+        } else if (sStreamingPackages.contains(packageName)) {
+            boolean spoofStreaming = true;
+            if (!android.os.Process.isIsolated()) {
+                try {
+                    spoofStreaming = Settings.Secure.getInt(
+                            context.getContentResolver(), "spoof_streaming", 1) == 1;
+                } catch (Exception ignored) {}
+            }
+            if (spoofStreaming) {
+                dlog("Spoofing Pixel 8 Pro for streaming app: " + packageName);
+                if (!sNetflixModel.isEmpty() && packageName.equals(PACKAGE_NETFLIX)) {
+                    setPropValue("MODEL", sNetflixModel);
+                } else {
+                    sStreamingProps.forEach((PropImitationHooks::setPropValue));
+                }
+            }
         } else {
             setGameProps(context, packageName);
         }
@@ -341,9 +372,16 @@ public class PropImitationHooks {
                 SystemProperties.setOverrideProperty("ro.build.fingerprint", value);
                 SystemProperties.setOverrideProperty("ro.system.build.fingerprint", value);
                 SystemProperties.setOverrideProperty("ro.vendor.build.fingerprint", value);
+                SystemProperties.setOverrideProperty("ro.bootimage.build.fingerprint", value);
                 SystemProperties.setOverrideProperty("ro.odm.build.fingerprint", value);
                 SystemProperties.setOverrideProperty("ro.product.build.fingerprint", value);
                 SystemProperties.setOverrideProperty("ro.system_ext.build.fingerprint", value);
+                break;
+            case "DEVICE_INITIAL_SDK_INT":
+            case "VERSION.DEVICE_INITIAL_SDK_INT":
+            case "FIRST_API_LEVEL":
+                SystemProperties.setOverrideProperty("ro.product.first_api_level", value);
+                SystemProperties.setOverrideProperty("ro.board.first_api_level", value);
                 break;
             case "ID":
                 SystemProperties.setOverrideProperty("ro.build.id", value);
@@ -395,9 +433,13 @@ public class PropImitationHooks {
             savedProps = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.FETCHED_PIF);
         }
 
+        List<String> certifiedProps = new ArrayList<>();
         if (savedProps == null || TextUtils.isEmpty(savedProps)) {
             dlog("Parsing props locally - fetched pif / user provided pif unavailable");
-            sCertifiedProps = Arrays.asList(context.getResources().getStringArray(R.array.config_certifiedBuildProperties));
+            String[] localProps = context.getResources().getStringArray(R.array.config_certifiedBuildProperties);
+            if (localProps != null) {
+                Collections.addAll(certifiedProps, localProps);
+            }
         } else {
             dlog("Parsing props fetched / provided by user");
             try {
@@ -406,14 +448,18 @@ public class PropImitationHooks {
                 while (keys.hasNext()) {
                     String key = keys.next();
                     String value = parsedProps.getString(key);
-                    sCertifiedProps.add(key + ":" + value);
+                    certifiedProps.add(key + ":" + value);
                 }
             } catch (JSONException e) {
                 Log.e(TAG, "Error parsing JSON data", e);
                 dlog("Parsing props locally as fallback");
-                sCertifiedProps = Arrays.asList(context.getResources().getStringArray(R.array.config_certifiedBuildProperties));
+                String[] localProps = context.getResources().getStringArray(R.array.config_certifiedBuildProperties);
+                if (localProps != null) {
+                    Collections.addAll(certifiedProps, localProps);
+                }
             }
         }
+        sCertifiedProps = certifiedProps;
 
         if (sCertifiedProps.isEmpty()) {
             dlog("Certified props are not set");
@@ -509,7 +555,10 @@ public class PropImitationHooks {
     private static boolean isCallerPlayIntegrity() {
         return Arrays.stream(Thread.currentThread().getStackTrace())
                 .map(StackTraceElement::getClassName)
-                .anyMatch(name -> name.toLowerCase(Locale.US).contains("droidguard"));
+                .anyMatch(name -> {
+                    String lower = name.toLowerCase(Locale.US);
+                    return lower.contains("droidguard") || lower.contains("playintegrity") || lower.contains("integrity");
+                });
     }
 
     public static void onEngineGetCertificateChain() {

@@ -875,6 +875,9 @@
     <protected-broadcast android:name="android.app.action.DYNAMIC_BUNDLE_MODIFIED" />
     <protected-broadcast android:name="android.app.action.BRIDGED_NOTIFICATION_PREFERENCES" />
 
+    <!-- LMO Freeform -->
+    <protected-broadcast android:name="com.libremobileos.freeform.START_FREEFORM" />
+
     <!-- ====================================================================== -->
     <!--                          RUNTIME PERMISSIONS                           -->
     <!-- ====================================================================== -->

@@ -305,6 +305,26 @@ public class JellyMesh {
         mGyroActive = false;
     }
 
+    public void reset() {
+        resetGyro();
+        mIsTouching = false;
+        mActivePointerCount = 0;
+        mInertialForceX = 0f;
+        mInertialForceY = 0f;
+        for (int i = 0; i < NUM_VERTICES; i++) {
+            mPosX[i] = mRestX[i];
+            mPosY[i] = mRestY[i];
+            mVelX[i] = 0f;
+            mVelY[i] = 0f;
+            mVerts[i * 2] = mRestX[i];
+            mVerts[i * 2 + 1] = mRestY[i];
+            mForegroundVerts[i * 2] = mRestX[i];
+            mForegroundVerts[i * 2 + 1] = mRestY[i];
+            mColors[i] = 0xFFFFFFFF;
+        }
+        mIsAsleep = true;
+    }
+
     public void setSize(float width, float height) {
         if (width <= 0 || height <= 0) return;
         mWidth = width;
@@ -428,7 +448,7 @@ public class JellyMesh {
         for (int i = 0; i < NUM_VERTICES; i++) {
             float dx = mPosX[i] - originX;
             float dy = mPosY[i] - originY;
-            float dist = (float) Math.hypot(dx, dy);
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
             if (dist > 1.0f) {
                 float normX = dx / dist;
                 float normY = dy / dist;
@@ -465,7 +485,7 @@ public class JellyMesh {
         mTouchY = y;
         mIsAsleep = false;
 
-        float stepDist = (float) Math.hypot(x - mPrevTouchX, y - mPrevTouchY);
+        float stepDist = (float) Math.sqrt((x - mPrevTouchX) * (x - mPrevTouchX) + (y - mPrevTouchY) * (y - mPrevTouchY));
         mAccumulatedDragDistance += stepDist;
         if (mAccumulatedDragDistance > 36.0f) {
             mAccumulatedDragDistance = 0f;
@@ -482,7 +502,7 @@ public class JellyMesh {
         long duration = android.os.SystemClock.uptimeMillis() - mTouchStartTime;
         float dragVecX = mTouchStartX - mTouchX;
         float dragVecY = mTouchStartY - mTouchY;
-        float totalDist = (float) Math.hypot(dragVecX, dragVecY);
+        float totalDist = (float) Math.sqrt(dragVecX * dragVecX + dragVecY * dragVecY);
 
         // Solo se activa la onda de choque si fue un tap rápido y estático (sin arrastrar el dedo)
         if (mTapShockwaveEnabled && duration < 240 && totalDist < 16.0f) {
@@ -564,7 +584,7 @@ public class JellyMesh {
                 mTouchX1 = x1;
                 mTouchY1 = y1;
 
-                float stepDist = (float) Math.hypot(x0 - mPrevTouchX, y0 - mPrevTouchY);
+                float stepDist = (float) Math.sqrt((x0 - mPrevTouchX) * (x0 - mPrevTouchX) + (y0 - mPrevTouchY) * (y0 - mPrevTouchY));
                 mAccumulatedDragDistance += stepDist;
                 if (mAccumulatedDragDistance > 36.0f) {
                     mAccumulatedDragDistance = 0f;
@@ -620,7 +640,7 @@ public class JellyMesh {
             float elasticityFactor = 0.20f + 0.80f * mDragElasticity;
             float rawDragX = (mTouchX - mTouchStartX) * elasticityFactor;
             float rawDragY = (mTouchY - mTouchStartY) * elasticityFactor;
-            float dragLen = (float) Math.hypot(rawDragX, rawDragY);
+            float dragLen = (float) Math.sqrt(rawDragX * rawDragX + rawDragY * rawDragY);
             float maxDrag = mWidth * (0.08f + 0.22f * mDragElasticity) * mMaxStretchRatio;
             if (dragLen > maxDrag && dragLen > 0.001f) {
                 float scale = maxDrag / dragLen;
@@ -636,7 +656,7 @@ public class JellyMesh {
             if (mActivePointerCount >= 2 && mMultiTouchEnabled) {
                 float rawDragX1 = (mTouchX1 - mTouchStartX1) * elasticityFactor;
                 float rawDragY1 = (mTouchY1 - mTouchStartY1) * elasticityFactor;
-                float dragLen1 = (float) Math.hypot(rawDragX1, rawDragY1);
+                float dragLen1 = (float) Math.sqrt(rawDragX1 * rawDragX1 + rawDragY1 * rawDragY1);
                 if (dragLen1 > maxDrag && dragLen1 > 0.001f) {
                     float scale1 = maxDrag / dragLen1;
                     totalDragX1 = rawDragX1 * scale1;
@@ -652,7 +672,7 @@ public class JellyMesh {
 
         float pinchDx = mTouchX1 - mTouchX;
         float pinchDy = mTouchY1 - mTouchY;
-        float pinchDist = (float) Math.hypot(pinchDx, pinchDy);
+        float pinchDist = (float) Math.sqrt(pinchDx * pinchDx + pinchDy * pinchDy);
         float unitPinchX = pinchDist > 1.0f ? pinchDx / pinchDist : 1.0f;
         float unitPinchY = pinchDist > 1.0f ? pinchDy / pinchDist : 0f;
         float perpPinchX = -unitPinchY;
@@ -728,7 +748,7 @@ public class JellyMesh {
                         }
 
                         // Tensión y deformación de pellizco / estiramiento entre ambos dedos
-                        float initPinchDist = (float) Math.hypot(mTouchStartX1 - mTouchStartX, mTouchStartY1 - mTouchStartY);
+                        float initPinchDist = (float) Math.sqrt((mTouchStartX1 - mTouchStartX) * (mTouchStartX1 - mTouchStartX) + (mTouchStartY1 - mTouchStartY) * (mTouchStartY1 - mTouchStartY));
                         if (pinchDist > 10.0f && initPinchDist > 10.0f) {
                             float relX = mRestX[idx] - mTouchX;
                             float relY = mRestY[idx] - mTouchY;
@@ -873,9 +893,20 @@ public class JellyMesh {
 
                 float baseShade = 255.0f;
                 if (mAmbientOcclusionEnabled && mAoIntensity > 0.001f) {
-                    float dispMag = (float) Math.hypot(dispX, dispY);
-                    float strainFactor = Math.min(1.0f, dispMag / maxOffset);
-                    baseShade = 255.0f - strainFactor * (45.0f * mAoIntensity);
+                    float dispMag = (float) Math.sqrt(dispX * dispX + dispY * dispY);
+                    // Detección de concavidad y pliegues (Laplaciano discreto 2D) para oclusión ambiental realista
+                    float lapX = 0f;
+                    float lapY = 0f;
+                    if (c > 0 && c < COLS) {
+                        lapX = (mPosX[i + 1] - mRestX[i + 1]) + (mPosX[i - 1] - mRestX[i - 1]) - 2.0f * dispX;
+                    }
+                    if (r > 0 && r < ROWS) {
+                        lapY = (mPosY[i + (COLS + 1)] - mRestY[i + (COLS + 1)]) + (mPosY[i - (COLS + 1)] - mRestY[i - (COLS + 1)]) - 2.0f * dispY;
+                    }
+                    // Pliegues y depresiones cóncavas donde la luz ambiental no penetra
+                    float crease = Math.max(0.0f, -(lapX + lapY) * 0.08f);
+                    float strainFactor = Math.min(1.0f, (dispMag / maxOffset) * 0.35f + crease * 0.65f);
+                    baseShade = 255.0f - strainFactor * (55.0f * mAoIntensity);
                 }
 
                 if (mLightSourceEnabled && mLightIntensity > 0.001f) {
@@ -892,14 +923,14 @@ public class JellyMesh {
                     float nx = -dX * 0.12f;
                     float ny = -dY * 0.12f;
                     float nz = 1.0f;
-                    float invN = 1.0f / (float) Math.hypot(Math.hypot(nx, ny), nz);
+                    float invN = 1.0f / (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
                     nx *= invN; ny *= invN; nz *= invN;
 
                     // Vector de rayo de luz incidente hacia este punto
                     float lx = lightX - px;
                     float ly = lightY - py;
                     float lz = 280.0f;
-                    float invL = 1.0f / (float) Math.hypot(Math.hypot(lx, ly), lz);
+                    float invL = 1.0f / (float) Math.sqrt(lx * lx + ly * ly + lz * lz);
                     lx *= invL; ly *= invL; lz *= invL;
 
                     // Iluminación difusa
@@ -909,7 +940,7 @@ public class JellyMesh {
                     float hx = lx;
                     float hy = ly;
                     float hz = lz + 1.0f; // Vista hacia cámara (0, 0, 1)
-                    float invH = 1.0f / (float) Math.hypot(Math.hypot(hx, hy), hz);
+                    float invH = 1.0f / (float) Math.sqrt(hx * hx + hy * hy + hz * hz);
                     hx *= invH; hy *= invH; hz *= invH;
 
                     float dotNH = Math.max(0.0f, nx * hx + ny * hy + nz * hz);
