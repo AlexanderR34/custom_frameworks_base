@@ -59,9 +59,9 @@ public class FreeformTaskTransitionHandler
         implements Transitions.TransitionHandler, FreeformTaskTransitionStarter {
     private static final String TAG = "FreeformTaskTransitionHandler";
     private static final int CLOSE_ANIM_DURATION = 400;
-    private static final int OPEN_ANIM_DURATION = 440;
+    private static final int OPEN_ANIM_DURATION = 380;
     private static final Interpolator OPEN_INTERPOLATOR =
-            new PathInterpolator(0.18f, 1.04f, 0.22f, 1.0f);
+            new PathInterpolator(0.16f, 1.0f, 0.3f, 1.0f);
     private final Transitions mTransitions;
     private final DisplayController mDisplayController;
     private final ShellExecutor mMainExecutor;
