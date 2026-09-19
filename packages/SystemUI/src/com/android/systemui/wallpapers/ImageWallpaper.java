@@ -128,6 +128,7 @@ public class ImageWallpaper extends WallpaperService {
     public static final String KEY_JELLY_GYRO_INERTIA_STRENGTH = "jelly_wallpaper_gyro_inertia_strength";
     public static final String KEY_JELLY_LIGHT_ENABLED = "jelly_wallpaper_light_source_enabled";
     public static final String KEY_JELLY_LIGHT_MODE = "jelly_wallpaper_light_mode";
+    public static final String KEY_JELLY_LIGHT_CUSTOM_COLOR = "jelly_wallpaper_light_custom_color";
     public static final String KEY_JELLY_LIGHT_INTENSITY = "jelly_wallpaper_light_intensity";
     public static final String KEY_JELLY_LIGHT_ANGLE = "jelly_wallpaper_light_angle";
     public static final String KEY_JELLY_LIGHT_BEAM_SPREAD = "jelly_wallpaper_light_beam_spread";
@@ -240,13 +241,14 @@ public class ImageWallpaper extends WallpaperService {
         private int mJellyRippleStrength = 80;
         private boolean mLightSourceEnabled = false;
         private int mLightMode = 2;
+        private String mLightCustomColor = "";
         private float mLightAngle = 45.0f;
         private int mLightIntensity = 75;
         private int mLightBeamSpread = 50;
         private int mLightHardness = 50;
         private int mLightShimmerSpeed = 50;
         private boolean mLightSpecularColumn = true;
-        private boolean mLightWaterWaves = true;
+        private boolean mLightWaterWaves = false;
         private int mLightWaterWavesIntensity = 75;
         private int mWaterPreset = 1;
         private int mWaterWaveSize = 50;
@@ -265,20 +267,22 @@ public class ImageWallpaper extends WallpaperService {
         private boolean mChargingWaveEnabled = true;
         private int mChargingWaveStrength = 80;
         private BroadcastReceiver mPowerReceiver = null;
+        private BroadcastReceiver mTimeReceiver = null;
+        private Bitmap mForegroundBitmap = null;
         private static final PorterDuffXfermode XFERMODE_SCREEN = new PorterDuffXfermode(PorterDuff.Mode.SCREEN);
         private static final PorterDuffXfermode XFERMODE_MULTIPLY = new PorterDuffXfermode(PorterDuff.Mode.MULTIPLY);
         private static final PorterDuffXfermode XFERMODE_DST_IN = new PorterDuffXfermode(PorterDuff.Mode.DST_IN);
         private static final PorterDuffColorFilter SHADOW_FILTER = new PorterDuffColorFilter(0x22000000, PorterDuff.Mode.SRC_IN);
         private static final PorterDuffColorFilter CONTACT_SHADOW_FILTER = new PorterDuffColorFilter(0x3B000000, PorterDuff.Mode.SRC_IN);
 
-        private static final float[] SPOT_GRAD_POS = new float[] { 0.0f, 0.22f, 0.55f, 1.0f };
-        private static final float[] LATERAL_GRAD_POS = new float[] { 0.0f, 0.20f, 0.38f, 0.50f, 0.62f, 0.80f, 1.0f };
-        private static final float[] LENGTH_GRAD_POS = new float[] { 0.0f, 0.15f, 0.65f, 1.0f };
-        private static final float[] EDGE_GRAD_POS = new float[] { 0.0f, 0.65f, 1.0f };
+        private static final float[] SPOT_GRAD_POS = new float[] { 0.0f, 0.20f, 0.55f, 1.0f };
+        private static final float[] LATERAL_GRAD_POS = new float[] { 0.0f, 0.18f, 0.38f, 0.50f, 0.62f, 0.82f, 1.0f };
+        private static final float[] LENGTH_GRAD_POS = new float[] { 0.0f, 0.12f, 0.60f, 1.0f };
+        private static final float[] EDGE_GRAD_POS = new float[] { 0.0f, 0.75f, 1.0f };
         private static final float[] SUNSET_GRAD_POS = new float[] { 0.0f, 0.5f, 1.0f };
         private static final float[] RAY_GRAD_POS = new float[] { 0.0f, 0.45f, 1.0f };
 
-        private static final int[] LENGTH_GRAD_COLORS = new int[] { 0xFFFFFFFF, 0xCCFFFFFF, 0x66FFFFFF, 0x00FFFFFF };
+        private static final int[] LENGTH_GRAD_COLORS = new int[] { 0x00FFFFFF, 0xFFFFFFFF, 0x66FFFFFF, 0x00FFFFFF };
         private static final int[] SUNSET_GRAD_COLORS = new int[] { 0x50FFA726, 0x2AFFF3E0, 0x00000000 };
 
         private final float[] mHsvBuffer = new float[3];
@@ -738,6 +742,11 @@ public class ImageWallpaper extends WallpaperService {
             );
             getDisplayContext().getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(KEY_JELLY_LIGHT_MODE),
+                    false,
+                    mSettingsObserver
+            );
+            getDisplayContext().getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(KEY_JELLY_LIGHT_CUSTOM_COLOR),
                     false,
                     mSettingsObserver
             );
@@ -1239,6 +1248,9 @@ public class ImageWallpaper extends WallpaperService {
             mLightMode = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_MODE, 2);
+            mLightCustomColor = Settings.System.getString(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_LIGHT_CUSTOM_COLOR);
             mLightIntensity = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_INTENSITY, 75);
@@ -1259,7 +1271,7 @@ public class ImageWallpaper extends WallpaperService {
                     KEY_JELLY_LIGHT_SPECULAR_COLUMN, 1) == 1;
             mLightWaterWaves = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
-                    KEY_JELLY_LIGHT_WATER_WAVES, 1) == 1;
+                    KEY_JELLY_LIGHT_WATER_WAVES, 0) == 1;
             mLightWaterWavesIntensity = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LIGHT_WATER_WAVES_INTENSITY, 75);
@@ -1831,16 +1843,44 @@ public class ImageWallpaper extends WallpaperService {
                 rgbGlitter = 0x6EE7B7;
             }
 
+            if (!mLightSolarTracking && mLightCustomColor != null && !mLightCustomColor.trim().isEmpty()) {
+                try {
+                    String hex = mLightCustomColor.trim();
+                    if (!hex.startsWith("#")) {
+                        hex = "#" + hex;
+                    }
+                    int customColor = Color.parseColor(hex);
+                    int r = Color.red(customColor);
+                    int g = Color.green(customColor);
+                    int b = Color.blue(customColor);
+
+                    int rCenter = Math.min(255, (int) (r * 0.35f + 255 * 0.65f));
+                    int gCenter = Math.min(255, (int) (g * 0.35f + 255 * 0.65f));
+                    int bCenter = Math.min(255, (int) (b * 0.35f + 255 * 0.65f));
+                    rgbCenter = (rCenter << 16) | (gCenter << 8) | bCenter;
+                    rgbMid = (r << 16) | (g << 8) | b;
+                    int rEdge = (int) (r * 0.70f);
+                    int gEdge = (int) (g * 0.70f);
+                    int bEdge = (int) (b * 0.70f);
+                    rgbEdge = (rEdge << 16) | (gEdge << 8) | bEdge;
+                    int rGlitter = Math.min(255, (int) (r * 0.65f + 255 * 0.35f));
+                    int gGlitter = Math.min(255, (int) (g * 0.65f + 255 * 0.35f));
+                    int bGlitter = Math.min(255, (int) (b * 0.65f + 255 * 0.35f));
+                    rgbGlitter = (rGlitter << 16) | (gGlitter << 8) | bGlitter;
+                } catch (Exception ignored) {
+                }
+            }
+
             // 1. Halo Solar / Destello Radial Suave y Natural (Seamless Multi-Stop Radial Flare)
-            float spotRadius = Math.max(w, h) * (0.30f + 1.10f * spreadProgress);
+            float spotRadius = Math.max(w, h) * (0.35f + 1.15f * spreadProgress);
             int alphaCenter = (int) (180 * intensity);
             int alphaBloom = (int) (85 * intensity * (1.0f - hardnessFactor * 0.35f));
-            int alphaHalo = (int) (30 * intensity * (1.0f - hardnessFactor * 0.5f));
+            int alphaHalo = (int) (25 * intensity * (1.0f - hardnessFactor * 0.5f));
 
             mSpotGradColors[0] = (alphaCenter << 24) | rgbCenter;
             mSpotGradColors[1] = (alphaBloom << 24) | rgbMid;
             mSpotGradColors[2] = (alphaHalo << 24) | rgbEdge;
-            mSpotGradColors[3] = rgbEdge & 0x00FFFFFF;
+            mSpotGradColors[3] = 0x00000000;
 
             RadialGradient spotGradient = new RadialGradient(
                     lightX, lightY, spotRadius,
@@ -1848,7 +1888,7 @@ public class ImageWallpaper extends WallpaperService {
                     SPOT_GRAD_POS,
                     Shader.TileMode.CLAMP);
             mLightPaint.setShader(spotGradient);
-            canvas.drawCircle(lightX, lightY, spotRadius, mLightPaint);
+            canvas.drawRect(0, 0, w, h, mLightPaint);
 
             // 2. Haz de Luz Volumétrico Suave con Gran Apertura y Degradado Bilateral
             float targetX = cx + (mSmoothRoll * w * 0.35f);
@@ -1872,13 +1912,13 @@ public class ImageWallpaper extends WallpaperService {
             int beamMidAlpha = (int) (65 * intensity * (1.0f - hardnessFactor * 0.3f));
 
             // Degradado lateral dinámico (Eje Y rotado): Fades suave de 0% -> Suave -> Centro -> Suave -> 0%
-            mLateralGradColors[0] = rgbMid & 0x00FFFFFF;
-            mLateralGradColors[1] = ((int)(beamMidAlpha * 0.3f) << 24) | rgbEdge;
+            mLateralGradColors[0] = 0x00000000;
+            mLateralGradColors[1] = ((int)(beamMidAlpha * 0.25f) << 24) | rgbEdge;
             mLateralGradColors[2] = (beamMidAlpha << 24) | rgbMid;
             mLateralGradColors[3] = (beamCoreAlpha << 24) | rgbCenter;
             mLateralGradColors[4] = (beamMidAlpha << 24) | rgbMid;
-            mLateralGradColors[5] = ((int)(beamMidAlpha * 0.3f) << 24) | rgbEdge;
-            mLateralGradColors[6] = rgbMid & 0x00FFFFFF;
+            mLateralGradColors[5] = ((int)(beamMidAlpha * 0.25f) << 24) | rgbEdge;
+            mLateralGradColors[6] = 0x00000000;
 
             LinearGradient lateralGrad = new LinearGradient(
                     0, -beamHalfW, 0, beamHalfW,
@@ -1911,10 +1951,10 @@ public class ImageWallpaper extends WallpaperService {
             float borderEndX = cx + cosA * (w * 0.5f);
             float borderEndY = cy + sinA * (h * 0.5f);
 
-            int alphaSheen = (int) (120 * intensity);
+            int alphaSheen = (int) (70 * intensity);
             int sheenColor = (alphaSheen << 24) | rgbEdge;
-            mEdgeGradColors[0] = rgbEdge & 0x00FFFFFF;
-            mEdgeGradColors[1] = rgbEdge & 0x00FFFFFF;
+            mEdgeGradColors[0] = 0x00000000;
+            mEdgeGradColors[1] = 0x00000000;
             mEdgeGradColors[2] = sheenColor;
 
             LinearGradient edgeGradient = new LinearGradient(
@@ -2612,6 +2652,9 @@ public class ImageWallpaper extends WallpaperService {
             if (visible) {
                 mDrawn = false;
                 drawFrame();
+                if (mJellyEnabled && isCurrentTargetActive()) {
+                    startAnimationLoopIfNeeded();
+                }
             }
         }
 

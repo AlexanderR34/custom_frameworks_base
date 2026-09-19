@@ -13211,6 +13211,16 @@ public final class Settings {
         public static final String QS_TILES = "sysui_qs_tiles";
 
         /**
+         * Control whether and where the brightness slider is shown in Quick Settings.
+         * 0 = Never
+         * 1 = Only when expanded (default)
+         * 2 = Always (in compact QQS and expanded QS)
+         * @hide
+         */
+        @Readable
+        public static final String QS_SHOW_BRIGHTNESS_SLIDER = "qs_show_brightness_slider";
+
+        /**
          * Whether this user has enabled Quick controls.
          *
          * 0 indicates disabled and 1 indicates enabled. A non existent value should be treated as
