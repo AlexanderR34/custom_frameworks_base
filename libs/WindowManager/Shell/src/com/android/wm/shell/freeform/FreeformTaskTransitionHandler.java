@@ -33,6 +33,8 @@ import android.util.ArrayMap;
 import android.util.Log;
 import android.view.SurfaceControl;
 import android.view.WindowManager;
+import android.view.animation.Interpolator;
+import android.view.animation.PathInterpolator;
 import android.window.TransitionInfo;
 import android.window.TransitionRequestInfo;
 import android.window.WindowContainerTransaction;
@@ -57,6 +59,9 @@ public class FreeformTaskTransitionHandler
         implements Transitions.TransitionHandler, FreeformTaskTransitionStarter {
     private static final String TAG = "FreeformTaskTransitionHandler";
     private static final int CLOSE_ANIM_DURATION = 400;
+    private static final int OPEN_ANIM_DURATION = 440;
+    private static final Interpolator OPEN_INTERPOLATOR =
+            new PathInterpolator(0.18f, 1.04f, 0.22f, 1.0f);
     private final Transitions mTransitions;
     private final DisplayController mDisplayController;
     private final ShellExecutor mMainExecutor;
@@ -146,6 +151,13 @@ public class FreeformTaskTransitionHandler
             }
 
             switch (change.getMode()) {
+                case WindowManager.TRANSIT_OPEN:
+                case WindowManager.TRANSIT_TO_FRONT:
+                    if (change.getTaskInfo().getWindowingMode() == WINDOWING_MODE_FREEFORM) {
+                        transitionHandled |= startOpenTransition(transition, change,
+                                startT, finishT, animations, onAnimFinish);
+                    }
+                    break;
                 case WindowManager.TRANSIT_CHANGE:
                     transitionHandled |= startChangeTransition(
                             transition, info.getType(), change);
@@ -299,10 +311,150 @@ public class FreeformTaskTransitionHandler
         return true;
     }
 
+    private boolean startOpenTransition(IBinder transition, TransitionInfo.Change change,
+            SurfaceControl.Transaction startT, SurfaceControl.Transaction finishT,
+            ArrayList<Animator> animations, Runnable onAnimFinish) {
+        if (!mPendingTransitionTokens.contains(transition)) {
+            // If transition was started by another source (e.g. sidebar or WM), still handle it smoothly
+            mPendingTransitionTokens.add(transition);
+        }
+
+        SurfaceControl sc = change.getLeash();
+        final Rect endBounds = new Rect(change.getEndAbsBounds());
+        if (endBounds.isEmpty()) {
+            return false;
+        }
+
+        final float startScale = 0.10f;
+        final float startAlpha = 0.0f;
+
+        int screenWidth = 1220;
+        int screenHeight = 2712;
+        final int displayId = change.getTaskInfo() != null ? change.getTaskInfo().displayId : 0;
+        var displayLayout = mDisplayController.getDisplayLayout(displayId);
+        final Context displayContext = mDisplayController.getDisplayContext(displayId);
+        if (displayLayout != null) {
+            screenWidth = displayLayout.width();
+            screenHeight = displayLayout.height();
+        } else if (displayContext != null) {
+            var bounds = displayContext.getResources().getConfiguration().windowConfiguration.getBounds();
+            if (bounds != null && !bounds.isEmpty()) {
+                screenWidth = bounds.width();
+                screenHeight = bounds.height();
+            }
+        }
+
+        int sidebarPosX = 1;
+        int sidebarPosY = 0;
+        boolean isPortrait = screenHeight >= screenWidth;
+        if (displayContext != null) {
+            try {
+                sidebarPosX = android.provider.Settings.System.getInt(
+                        displayContext.getContentResolver(),
+                        "sidebar_position_x",
+                        endBounds.centerX() >= screenWidth / 2 ? 1 : -1);
+                sidebarPosY = android.provider.Settings.System.getInt(
+                        displayContext.getContentResolver(),
+                        isPortrait ? "sidebar_position_y_portrait" : "sidebar_position_y_landscape",
+                        0);
+            } catch (Exception ignored) {
+                sidebarPosX = endBounds.centerX() >= screenWidth / 2 ? 1 : -1;
+            }
+        } else {
+            sidebarPosX = endBounds.centerX() >= screenWidth / 2 ? 1 : -1;
+        }
+
+        final Rect startAbsBounds = change.getStartAbsBounds();
+        final float startPosX;
+        final float startPosY;
+
+        float density = displayContext != null ? displayContext.getResources().getDisplayMetrics().density : 2.5f;
+        float edgeMargin = 20f * density;
+
+        if (startAbsBounds != null && !startAbsBounds.isEmpty()) {
+            boolean fromRightEdge = startAbsBounds.centerX() >= screenWidth / 2;
+            startPosX = fromRightEdge
+                    ? (screenWidth - (startScale * endBounds.width()) - edgeMargin)
+                    : edgeMargin;
+            startPosY = Math.max(0f, Math.min(screenHeight - (startScale * endBounds.height()),
+                    startAbsBounds.centerY() - (startScale * endBounds.height()) / 2f));
+        } else {
+            // Emerges from the lateral edge (left or right depending on sidebar/task target side)
+            boolean fromRight = (sidebarPosX >= 0) || (endBounds.centerX() >= screenWidth / 2);
+            if (sidebarPosX < 0 && endBounds.centerX() <= screenWidth / 2) {
+                fromRight = false;
+            }
+            startPosX = fromRight
+                    ? (screenWidth - (startScale * endBounds.width()) - edgeMargin)
+                    : edgeMargin;
+            if (sidebarPosY != 0) {
+                float targetY = (screenHeight / 2f + sidebarPosY) - (startScale * endBounds.height()) / 2f;
+                startPosY = Math.max(0f, Math.min(screenHeight - (startScale * endBounds.height()), targetY));
+            } else {
+                startPosY = endBounds.top + (endBounds.height() * (1f - startScale) / 2f);
+            }
+        }
+
+        final float endPosX = endBounds.left;
+        final float endPosY = endBounds.top;
+
+        // Apply initial frame setup
+        startT.setScale(sc, startScale, startScale);
+        startT.setPosition(sc, startPosX, startPosY);
+        startT.setAlpha(sc, startAlpha);
+        startT.show(sc);
+
+        // Ensure finishT resets final state
+        finishT.setScale(sc, 1.0f, 1.0f);
+        finishT.setPosition(sc, endPosX, endPosY);
+        finishT.setAlpha(sc, 1.0f);
+        finishT.show(sc);
+
+        ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+        animator.setDuration(OPEN_ANIM_DURATION);
+        animator.setInterpolator(OPEN_INTERPOLATOR);
+
+        SurfaceControl.Transaction t = new SurfaceControl.Transaction();
+        animator.addUpdateListener(animation -> {
+            final float fraction = animation.getAnimatedFraction();
+            final float scale = startScale + (1f - startScale) * fraction;
+            final float alpha = Math.min(1.0f, fraction * 2.8f);
+
+            final float posX = startPosX + (endPosX - startPosX) * fraction;
+            final float posY = startPosY + (endPosY - startPosY) * fraction;
+
+            t.setScale(sc, scale, scale);
+            t.setPosition(sc, posX, posY);
+            t.setAlpha(sc, alpha);
+            t.apply();
+        });
+
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mMainExecutor.execute(() -> {
+                    animations.remove(animator);
+                    onAnimFinish.run();
+                });
+            }
+        });
+
+        animations.add(animator);
+        return true;
+    }
+
     @Nullable
     @Override
     public WindowContainerTransaction handleRequest(@NonNull IBinder transition,
             @NonNull TransitionRequestInfo request) {
+        final ActivityManager.RunningTaskInfo taskInfo = request.getTriggerTask();
+        if (taskInfo != null && taskInfo.getWindowingMode() == WINDOWING_MODE_FREEFORM) {
+            if (request.getType() == WindowManager.TRANSIT_OPEN
+                    || request.getType() == WindowManager.TRANSIT_TO_FRONT) {
+                mPendingTransitionTokens.add(transition);
+                return new WindowContainerTransaction();
+            }
+        }
         return null;
     }
 }
