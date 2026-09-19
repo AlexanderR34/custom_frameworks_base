@@ -16,6 +16,7 @@
 
 package com.android.systemui.qs.ui.viewmodel
 
+import android.provider.Settings
 import android.view.Display
 import com.android.systemui.brightness.ui.viewmodel.BrightnessSliderViewModel
 import com.android.systemui.display.data.repository.DisplayTypeRepository
@@ -31,10 +32,12 @@ import com.android.systemui.qs.panels.ui.viewmodel.MediaInRowInLandscapeViewMode
 import com.android.systemui.qs.panels.ui.viewmodel.TileGridViewModel
 import com.android.systemui.shade.ShadeDisplayAware
 import com.android.systemui.shade.ui.viewmodel.ShadeHeaderViewModel
+import com.android.systemui.shared.settings.data.repository.SecureSettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -51,16 +54,34 @@ constructor(
     val mediaViewModelFactory: MediaViewModel.Factory,
     mediaInRowInLandscapeViewModelFactory: MediaInRowInLandscapeViewModel.Factory,
     @ShadeDisplayAware shadeDisplayTypeRepository: DisplayTypeRepository,
+    secureSettingsRepository: SecureSettingsRepository,
 ) : HydratedActivatable() {
 
+    private val brightnessSliderMode =
+        secureSettingsRepository.intSetting(
+            Settings.Secure.QS_SHOW_BRIGHTNESS_SLIDER,
+            1,
+        )
+
     val isBrightnessSliderVisible by
-        shadeDisplayTypeRepository.displayType
-            // The shade could be on an external display: in that case the slider shouldn't
-            // be visible.
-            .map { it == Display.TYPE_INTERNAL }
-            .hydratedStateOf(
-                initialValue = shadeDisplayTypeRepository.displayType.value == Display.TYPE_INTERNAL
-            )
+        combine(
+            shadeDisplayTypeRepository.displayType,
+            brightnessSliderMode,
+        ) { displayType, mode ->
+            displayType == Display.TYPE_INTERNAL && mode != 0
+        }.hydratedStateOf(
+            initialValue = shadeDisplayTypeRepository.displayType.value == Display.TYPE_INTERNAL
+        )
+
+    val isBrightnessSliderVisibleInQqs by
+        combine(
+            shadeDisplayTypeRepository.displayType,
+            brightnessSliderMode,
+        ) { displayType, mode ->
+            displayType == Display.TYPE_INTERNAL && mode == 2
+        }.hydratedStateOf(
+            initialValue = false
+        )
 
     val isEditing by editModeViewModel.isEditing.hydratedStateOf()
 

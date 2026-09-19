@@ -713,9 +713,6 @@ constructor(
                         }
                         .padding(top = { qqsPadding }, bottom = { bottomPadding })
             ) {
-                // When always compose is false, this will always be true, and we'll be
-                // listening whenever this is composed. When always compose is true, we
-                // listen if we are visible and not fully expanded
                 val isListening: () -> Boolean =
                     remember(viewModel) {
                             derivedStateOf {
@@ -725,6 +722,31 @@ constructor(
                             }
                         }
                         .let { state -> { state.value } }
+                val containerViewModel = viewModel.containerViewModel
+                val BrightnessSlider =
+                    @Composable {
+                        Box(
+                            Modifier.systemGestureExclusionInShade(
+                                enabled = {
+                                    layoutState.transitionState is TransitionState.Idle &&
+                                        viewModel.isNotTransitioning
+                                }
+                            )
+                        ) {
+                            AlwaysDarkMode {
+                                BrightnessSliderContainer(
+                                    viewModel =
+                                        containerViewModel.brightnessSliderViewModel,
+                                    containerColors =
+                                        ContainerColors(
+                                            Color.Transparent,
+                                            ContainerColors.defaultContainerColor,
+                                        ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
                 val Tiles =
                     @Composable {
                         QuickQuickSettings(
@@ -769,6 +791,12 @@ constructor(
                                 .padding(horizontal = qsHorizontalMargin())
                     ) {
                         QuickQuickSettingsLayout(
+                            brightness =
+                                if (viewModel.isBrightnessSliderVisibleInQqs) {
+                                    { BrightnessSlider() }
+                                } else {
+                                    {}
+                                },
                             tiles = Tiles,
                             media = Media,
                             mediaInRow = viewModel.qqsMediaInRow,
@@ -1419,20 +1447,28 @@ private fun ContentScope.MediaObject(
 @Composable
 @VisibleForTesting
 fun QuickQuickSettingsLayout(
+    brightness: @Composable () -> Unit = {},
     tiles: @Composable () -> Unit,
     media: @Composable () -> Unit,
     mediaInRow: Boolean,
 ) {
     if (mediaInRow) {
-        Row(
-            horizontalArrangement = spacedBy(QuickSettingsShade.Dimensions.HorizontalPadding),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            verticalArrangement = spacedBy(dimensionResource(R.dimen.qs_tile_margin_vertical)),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(modifier = Modifier.weight(1f)) { tiles() }
-            Box(modifier = Modifier.weight(1f)) { media() }
+            brightness()
+            Row(
+                horizontalArrangement = spacedBy(QuickSettingsShade.Dimensions.HorizontalPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.weight(1f)) { tiles() }
+                Box(modifier = Modifier.weight(1f)) { media() }
+            }
         }
     } else {
         Column(verticalArrangement = spacedBy(dimensionResource(R.dimen.qs_tile_margin_vertical))) {
+            brightness()
             tiles()
             media()
         }

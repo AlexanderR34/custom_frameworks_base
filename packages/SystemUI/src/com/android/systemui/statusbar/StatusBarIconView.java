@@ -26,9 +26,12 @@ import android.annotation.IntDef;
 import android.app.Notification;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrixColorFilter;
@@ -37,6 +40,9 @@ import android.graphics.Rect;
 import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Trace;
 import android.os.UserHandle;
 import android.service.notification.StatusBarNotification;
@@ -209,6 +215,39 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
         maybeUpdateIconScaleDimens();
 
         setCropToPadding(true);
+    }
+
+    private final ContentObserver mSettingsObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            if (isNotification()) {
+                updateDrawable(true);
+                updateIconColor();
+                invalidate();
+            }
+        }
+    };
+
+    @Override
+    public void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (isNotification()) {
+            try {
+                mContext.getContentResolver().registerContentObserver(
+                        android.provider.Settings.System.getUriFor("status_bar_colored_icons"),
+                        false, mSettingsObserver, UserHandle.USER_ALL);
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    @Override
+    public void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (isNotification()) {
+            try {
+                mContext.getContentResolver().unregisterContentObserver(mSettingsObserver);
+            } catch (Throwable ignored) {}
+        }
     }
 
     /** Should always be preceded by {@link #reloadDimens()} */
@@ -520,6 +559,26 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
 
     @Nullable
     private Drawable loadDrawable(Context context, StatusBarIcon statusBarIcon) {
+        if (isNotification() && isColoredIconsEnabled()) {
+            try {
+                PackageManager pm = mContext.getPackageManager();
+                String pkg = mNotification.getPackageName();
+                int userId = statusBarIcon.user.getIdentifier();
+                if (userId == UserHandle.USER_ALL) {
+                    userId = UserHandle.USER_SYSTEM;
+                }
+                ApplicationInfo ai = pm.getApplicationInfoAsUser(pkg, 0, userId);
+                if (ai != null) {
+                    Drawable appIcon = pm.getApplicationIcon(ai);
+                    if (appIcon != null) {
+                        return appIcon.mutate();
+                    }
+                }
+            } catch (Throwable t) {
+                // fallback to regular notification icon
+            }
+        }
+
         if (statusBarIcon.preloadedIcon != null) {
             Drawable.ConstantState cached = statusBarIcon.preloadedIcon.getConstantState();
             if (cached != null) {
@@ -690,6 +749,7 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     private void updateIconColor() {
         if (mShowsConversation || (isNotification() && isColoredIconsEnabled())) {
             setColorFilter(null);
+            setImageTintList(null);
             return;
         }
 
@@ -980,8 +1040,13 @@ public class StatusBarIconView extends AnimatedImageView implements StatusIconDi
     @Override
     public void onDarkChanged(ArrayList<Rect> areas, float darkIntensity, int tint) {
         int areaTint = getTint(areas, this, tint);
-        ColorStateList color = ColorStateList.valueOf(areaTint);
-        setImageTintList(color);
+        if (isNotification() && isColoredIconsEnabled()) {
+            setImageTintList(null);
+            setColorFilter(null);
+        } else {
+            ColorStateList color = ColorStateList.valueOf(areaTint);
+            setImageTintList(color);
+        }
         setDecorColor(areaTint);
     }
 
