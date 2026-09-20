@@ -542,19 +542,22 @@ public class ImageWallpaper extends WallpaperService {
             int targetW = bounds.width();
             int targetH = bounds.height();
 
-            synchronized (mSurfaceLock) {
-                if (mSurfaceHolder != null) {
-                    mSurfaceHolder.setFixedSize(targetW, targetH);
-                }
-                mJellyMesh.setSize(targetW, targetH);
-            }
-
             boolean needsReload = false;
             synchronized (mSurfaceLock) {
-                if (mBitmap == null || mBitmap.isRecycled()
-                        || mBitmap.getWidth() != targetW
-                        || mBitmap.getHeight() != targetH) {
-                    needsReload = true;
+                if (mJellyEnabled) {
+                    if (mSurfaceHolder != null) {
+                        mSurfaceHolder.setFixedSize(targetW, targetH);
+                    }
+                    mJellyMesh.setSize(targetW, targetH);
+                    if (mBitmap == null || mBitmap.isRecycled()
+                            || mBitmap.getWidth() != targetW
+                            || mBitmap.getHeight() != targetH) {
+                        needsReload = true;
+                    }
+                } else {
+                    if (mBitmap == null || mBitmap.isRecycled()) {
+                        needsReload = true;
+                    }
                 }
             }
 
@@ -1142,7 +1145,10 @@ public class ImageWallpaper extends WallpaperService {
                     getDisplayContext().getContentResolver(),
                     KEY_JELLY_LEGACY, 1);
             }
-            mJellyEnabled = (enabledVal == 1);
+            boolean newJellyEnabled = (enabledVal == 1);
+            boolean needsReload = (mJellyEnabled != newJellyEnabled);
+            mJellyEnabled = newJellyEnabled;
+
             if (!mJellyEnabled) {
                 mGyroEnabled = false;
                 mGyroInertiaEnabled = false;
@@ -1171,8 +1177,13 @@ public class ImageWallpaper extends WallpaperService {
                 updateSensorRegistration();
                 updateVisualizer();
 
-                mDrawn = false;
-                drawFrame();
+                if (needsReload) {
+                    mDrawn = false;
+                    mLongExecutor.execute(this::loadWallpaperAndDrawFrameInternal);
+                } else {
+                    mDrawn = false;
+                    drawFrame();
+                }
                 Log.i(TAG, "updateJellySetting: Jelly wallpaper disabled. Restored to clean static wallpaper.");
                 return;
             }
@@ -1345,12 +1356,16 @@ public class ImageWallpaper extends WallpaperService {
             }
             mDrawn = false;
             startAnimationLoopIfNeeded();
-            if (mBitmap != null && !mBitmap.isRecycled()) {
-                synchronized (mSurfaceLock) {
-                    drawActiveFrameOnCanvas();
+            if (needsReload) {
+                mLongExecutor.execute(this::loadWallpaperAndDrawFrameInternal);
+            } else {
+                if (mBitmap != null && !mBitmap.isRecycled()) {
+                    synchronized (mSurfaceLock) {
+                        drawActiveFrameOnCanvas();
+                    }
                 }
+                drawFrame();
             }
-            drawFrame();
         }
 
         @Override
@@ -2754,7 +2769,7 @@ public class ImageWallpaper extends WallpaperService {
                 int targetH = bounds.height();
 
                 if (mDrawn && mBitmap != null && !mBitmap.isRecycled()
-                        && mBitmap.getWidth() == targetW && mBitmap.getHeight() == targetH) {
+                        && (!mJellyEnabled || (mBitmap.getWidth() == targetW && mBitmap.getHeight() == targetH))) {
                     return;
                 }
                 mDrawn = false;
@@ -2768,7 +2783,7 @@ public class ImageWallpaper extends WallpaperService {
             int targetH = bounds.height();
 
             // load the wallpaper if not already done or if orientation/dimension mismatch
-            if (!isBitmapLoaded() || mBitmap.getWidth() != targetW || mBitmap.getHeight() != targetH) {
+            if (!isBitmapLoaded() || (mJellyEnabled && (mBitmap.getWidth() != targetW || mBitmap.getHeight() != targetH))) {
                 loadWallpaperAndDrawFrameInternal();
                 return;
             }
@@ -2916,13 +2931,20 @@ public class ImageWallpaper extends WallpaperService {
                 Rect bounds = getDisplayBounds();
                 int targetW = bounds.width();
                 int targetH = bounds.height();
-                bitmap = centerCropBitmapForDisplay(bitmap, targetW, targetH);
+                
+                if (mJellyEnabled) {
+                    bitmap = centerCropBitmapForDisplay(bitmap, targetW, targetH);
+                }
 
                 synchronized (mSurfaceLock) {
                     if (mSurfaceHolder != null) {
-                        mSurfaceHolder.setFixedSize(targetW, targetH);
+                        if (mJellyEnabled) {
+                            mSurfaceHolder.setFixedSize(targetW, targetH);
+                        } else {
+                            mSurfaceHolder.setFixedSize(bitmap.getWidth(), bitmap.getHeight());
+                        }
                     }
-                    mJellyMesh.setSize(targetW, targetH);
+                    mJellyMesh.setSize(bitmap.getWidth(), bitmap.getHeight());
 
                     // recycle the previously loaded bitmap
                     if (mBitmap != null && mBitmap != bitmap) {
