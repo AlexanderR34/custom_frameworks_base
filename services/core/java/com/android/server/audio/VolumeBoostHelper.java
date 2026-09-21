@@ -29,16 +29,27 @@ import android.provider.Settings;
 import android.util.Slog;
 
 /**
- * System server helper in AudioService for applying high-efficiency, system-wide volume boost
- * up to 200% (+10.0 dB) using Dynamic Processing APIs and in-call audio gain boost
- * without distortion, clipping, or echo.
+ * VolumeBoostHelper:
+ * Utiliza LoudnessEnhancer en Session 0 para la amplificacion de volumen limpia (+0.0 a +10.0 dB / 1000 mB)
+ * y DynamicsProcessing como Limitador Maestro en el dominio del tiempo (VARIANT_FAVOR_TIME_RESOLUTION,
+ * Attack 1.0ms, Release 50ms, Ratio 10:1, Threshold -1.0 dBFS) para prevenir saturacion y clipping
+ * sin alterar la fase ni generar distorsion.
  */
 public class VolumeBoostHelper {
     private static final String TAG = "VolumeBoostHelper";
     public static final String SETTING_CALL_GAIN_KEY = "volume_boost_call_gain";
 
+    private static final int MAX_BOOST_GAIN_MB = 1000; // +10.0 dB (1000 mB)
+    private static final int CALL_GAIN_MB = 800;        // +8.0 dB (800 mB)
+
     private final Context mContext;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private final ContentObserver mContentObserver = new ContentObserver(mHandler) {
+        @Override
+        public void onChange(boolean selfChange, Uri uri) {
+            updateVolumeBoost();
+        }
+    };
 
     private LoudnessEnhancer mLoudnessEnhancer;
     private DynamicsProcessing mDynamicsProcessing;
@@ -51,55 +62,72 @@ public class VolumeBoostHelper {
         registerObservers();
     }
 
-    private void initAudioFx() {
+    public synchronized void onAudioServerDied() {
+        Slog.i(TAG, "onAudioServerDied: reinicializando efectos de VolumeBoostHelper");
+        initAudioFx();
+    }
+
+    private synchronized void initAudioFx() {
+        releaseAudioFx();
+
         try {
-            // Audio session 0 attaches to global output mix
-            mLoudnessEnhancer = new LoudnessEnhancer(0);
+            mLoudnessEnhancer = new LoudnessEnhancer(0 /* session 0 */);
+            mLoudnessEnhancer.setTargetGain(0);
+            mLoudnessEnhancer.setEnabled(true);
         } catch (Exception e) {
-            Slog.e(TAG, "Failed to initialize system LoudnessEnhancer: " + e.getMessage());
+            Slog.e(TAG, "Fallo al inicializar LoudnessEnhancer en VolumeBoostHelper: " + e.getMessage(), e);
+            mLoudnessEnhancer = null;
         }
 
         try {
             DynamicsProcessing.Config.Builder builder = new DynamicsProcessing.Config.Builder(
-                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-                    2 /* channels */,
-                    false, 0,
-                    false, 0,
-                    false, 0,
-                    true /* limiterIn */);
+                    DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
+                    2 /* stereo channels */,
+                    false /* preEqInUse */, 0,
+                    false /* mbcInUse */, 0,
+                    false /* postEqInUse */, 0,
+                    true  /* limiterInUse */);
 
-            mDynamicsProcessing = new DynamicsProcessing(0, 0, builder.build());
+            DynamicsProcessing.Limiter limiter = new DynamicsProcessing.Limiter(
+                    true  /* inUse */,
+                    true  /* enabled */,
+                    0     /* linkGroup - stereo linked */,
+                    1.0f  /* attackTime ms */,
+                    50.0f /* releaseTime ms */,
+                    10.0f /* ratio */,
+                    -1.0f /* threshold dBFS */,
+                    0.0f  /* postGain dB */);
+
+            for (int ch = 0; ch < 2; ch++) {
+                builder.setLimiterByChannelIndex(ch, limiter);
+            }
+
+            DynamicsProcessing.Config config = builder.build();
+            mDynamicsProcessing = new DynamicsProcessing(0 /* priority */, 0 /* session 0 */, config);
+            mDynamicsProcessing.setInputGainAllChannelsTo(0.0f);
             mDynamicsProcessing.setEnabled(true);
         } catch (Exception e) {
-            Slog.w(TAG, "DynamicsProcessing native effect not directly available: " + e.getMessage());
+            Slog.e(TAG, "Fallo al inicializar DynamicsProcessing (Limiter) en VolumeBoostHelper: " + e.getMessage(), e);
+            mDynamicsProcessing = null;
         }
 
-        updateVolumeBoost();
+        mLastAppliedGainMb = -1;
+        applyGain(getCurrentTargetGainMb());
     }
 
     private void registerObservers() {
-        ContentObserver observer = new ContentObserver(mHandler) {
-            @Override
-            public void onChange(boolean selfChange, Uri uri) {
-                updateVolumeBoost();
-            }
-        };
-
         try {
             mContext.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(Settings.System.VOLUME_BOOST_LEVEL),
-                    false, observer, UserHandle.USER_ALL);
+                    false, mContentObserver, UserHandle.USER_ALL);
             mContext.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(SETTING_CALL_GAIN_KEY),
-                    false, observer, UserHandle.USER_ALL);
+                    false, mContentObserver, UserHandle.USER_ALL);
         } catch (Exception e) {
-            Slog.e(TAG, "Failed to register VolumeBoostHelper observers: " + e.getMessage());
+            Slog.e(TAG, "Fallo al registrar observers en VolumeBoostHelper: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Called by AudioService when audio mode changes (e.g. IN_CALL or IN_COMMUNICATION).
-     */
     public synchronized void onModeChanged(int newMode) {
         if (mCurrentAudioMode != newMode) {
             mCurrentAudioMode = newMode;
@@ -107,15 +135,7 @@ public class VolumeBoostHelper {
         }
     }
 
-    /**
-     * Called by AudioService when audioserver restarts.
-     */
-    public synchronized void onAudioServerDied() {
-        mLastAppliedGainMb = -1;
-        initAudioFx();
-    }
-
-    public synchronized void updateVolumeBoost() {
+    private int getCurrentTargetGainMb() {
         int level = Settings.System.getInt(mContext.getContentResolver(), Settings.System.VOLUME_BOOST_LEVEL, 0);
         int clampedLevel = Math.max(0, Math.min(100, level));
 
@@ -125,51 +145,58 @@ public class VolumeBoostHelper {
                             mCurrentAudioMode == AudioSystem.MODE_RINGTONE);
 
         int targetGainMb = 0;
-        float limiterPostGainDb = 0.0f;
 
         if (isInCall && isCallGainEnabled) {
-            // Apply dedicated vocal clarity gain (+10.0 dB / 1000 mB) during voice & VoIP calls
-            int callGainMb = 1000;
-            int mediaGainMb = Math.round((clampedLevel / 100.0f) * 1000.0f);
-            targetGainMb = Math.max(callGainMb, mediaGainMb);
-            limiterPostGainDb = (targetGainMb / 1000.0f) * 6.0f;
+            int mediaGainMb = Math.round((clampedLevel / 100.0f) * MAX_BOOST_GAIN_MB);
+            targetGainMb = Math.max(CALL_GAIN_MB, mediaGainMb);
         } else if (clampedLevel > 0) {
-            // Map 0-100% boost level to 0-1000 mB (+10.0 dB boost = 200% volume total output)
-            targetGainMb = Math.round((clampedLevel / 100.0f) * 1000.0f);
-            limiterPostGainDb = (clampedLevel / 100.0f) * 10.0f;
+            targetGainMb = Math.round((clampedLevel / 100.0f) * MAX_BOOST_GAIN_MB);
         }
 
+        return targetGainMb;
+    }
+
+    public synchronized void updateVolumeBoost() {
+        int targetGainMb = getCurrentTargetGainMb();
         if (mLastAppliedGainMb == targetGainMb) {
             return;
         }
+        applyGain(targetGainMb);
+    }
+
+    private void applyGain(int targetGainMb) {
         mLastAppliedGainMb = targetGainMb;
 
+        if (mLoudnessEnhancer == null || mDynamicsProcessing == null) {
+            initAudioFx();
+            return;
+        }
+
+        try {
+            mLoudnessEnhancer.setTargetGain(targetGainMb);
+        } catch (Exception e) {
+            Slog.e(TAG, "Error aplicando setTargetGain en LoudnessEnhancer: " + e.getMessage() + ", reinicializando...", e);
+            mLastAppliedGainMb = -1;
+            initAudioFx();
+        }
+    }
+
+    private synchronized void releaseAudioFx() {
         if (mLoudnessEnhancer != null) {
             try {
-                mLoudnessEnhancer.setTargetGain(targetGainMb);
-                mLoudnessEnhancer.setEnabled(targetGainMb > 0);
-            } catch (Exception e) {
-                Slog.e(TAG, "Error applying system LoudnessEnhancer target gain: " + e.getMessage());
-            }
+                mLoudnessEnhancer.release();
+            } catch (Exception ignored) {}
+            mLoudnessEnhancer = null;
         }
-
         if (mDynamicsProcessing != null) {
             try {
-                DynamicsProcessing.Limiter limiter = new DynamicsProcessing.Limiter(
-                        true /* inUse */,
-                        true /* enabled */,
-                        0 /* linkGroup */,
-                        0.5f /* attackTime ms - ultra fast */,
-                        60.0f /* releaseTime ms - smooth */,
-                        12.0f /* ratio */,
-                        -0.2f /* threshold dB */,
-                        limiterPostGainDb /* postGain dB */);
-
-                mDynamicsProcessing.setLimiterAllChannelsTo(limiter);
-                mDynamicsProcessing.setEnabled(targetGainMb > 0);
-            } catch (Exception e) {
-                Slog.w(TAG, "Error applying system DynamicsProcessing limiter: " + e.getMessage());
-            }
+                mDynamicsProcessing.release();
+            } catch (Exception ignored) {}
+            mDynamicsProcessing = null;
         }
+    }
+
+    public synchronized void release() {
+        releaseAudioFx();
     }
 }
