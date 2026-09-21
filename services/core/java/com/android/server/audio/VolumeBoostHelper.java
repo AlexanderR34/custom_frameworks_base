@@ -62,24 +62,18 @@ public class VolumeBoostHelper {
         registerObservers();
     }
 
+    public synchronized void onAudioServerDied() {
+        Slog.i(TAG, "onAudioServerDied: reinicializando efectos de VolumeBoostHelper");
+        initAudioFx();
+    }
+
     private synchronized void initAudioFx() {
-        if (mLoudnessEnhancer != null) {
-            try {
-                mLoudnessEnhancer.release();
-            } catch (Exception ignored) {}
-            mLoudnessEnhancer = null;
-        }
-        if (mDynamicsProcessing != null) {
-            try {
-                mDynamicsProcessing.release();
-            } catch (Exception ignored) {}
-            mDynamicsProcessing = null;
-        }
+        releaseAudioFx();
 
         try {
             mLoudnessEnhancer = new LoudnessEnhancer(0 /* session 0 */);
             mLoudnessEnhancer.setTargetGain(0);
-            mLoudnessEnhancer.setEnabled(false);
+            mLoudnessEnhancer.setEnabled(true);
         } catch (Exception e) {
             Slog.e(TAG, "Fallo al inicializar LoudnessEnhancer en VolumeBoostHelper: " + e.getMessage(), e);
             mLoudnessEnhancer = null;
@@ -111,14 +105,14 @@ public class VolumeBoostHelper {
             DynamicsProcessing.Config config = builder.build();
             mDynamicsProcessing = new DynamicsProcessing(0 /* priority */, 0 /* session 0 */, config);
             mDynamicsProcessing.setInputGainAllChannelsTo(0.0f);
-            mDynamicsProcessing.setEnabled(false);
+            mDynamicsProcessing.setEnabled(true);
         } catch (Exception e) {
             Slog.e(TAG, "Fallo al inicializar DynamicsProcessing (Limiter) en VolumeBoostHelper: " + e.getMessage(), e);
             mDynamicsProcessing = null;
         }
 
         mLastAppliedGainMb = -1;
-        updateVolumeBoost();
+        applyGain(getCurrentTargetGainMb());
     }
 
     private void registerObservers() {
@@ -141,7 +135,7 @@ public class VolumeBoostHelper {
         }
     }
 
-    public synchronized void updateVolumeBoost() {
+    private int getCurrentTargetGainMb() {
         int level = Settings.System.getInt(mContext.getContentResolver(), Settings.System.VOLUME_BOOST_LEVEL, 0);
         int clampedLevel = Math.max(0, Math.min(100, level));
 
@@ -159,50 +153,50 @@ public class VolumeBoostHelper {
             targetGainMb = Math.round((clampedLevel / 100.0f) * MAX_BOOST_GAIN_MB);
         }
 
+        return targetGainMb;
+    }
+
+    public synchronized void updateVolumeBoost() {
+        int targetGainMb = getCurrentTargetGainMb();
         if (mLastAppliedGainMb == targetGainMb) {
             return;
         }
+        applyGain(targetGainMb);
+    }
+
+    private void applyGain(int targetGainMb) {
         mLastAppliedGainMb = targetGainMb;
 
-        boolean enableFx = targetGainMb > 0;
-
-        if (mLoudnessEnhancer != null) {
-            try {
-                mLoudnessEnhancer.setTargetGain(targetGainMb);
-                if (mLoudnessEnhancer.getEnabled() != enableFx) {
-                    mLoudnessEnhancer.setEnabled(enableFx);
-                }
-            } catch (Exception e) {
-                Slog.e(TAG, "Error aplicando ganancia en LoudnessEnhancer: " + e.getMessage(), e);
-                mLastAppliedGainMb = -1;
-            }
+        if (mLoudnessEnhancer == null || mDynamicsProcessing == null) {
+            initAudioFx();
+            return;
         }
 
-        if (mDynamicsProcessing != null) {
-            try {
-                if (mDynamicsProcessing.getEnabled() != enableFx) {
-                    mDynamicsProcessing.setEnabled(enableFx);
-                }
-            } catch (Exception e) {
-                Slog.e(TAG, "Error controlando DynamicsProcessing limiter: " + e.getMessage(), e);
-            }
+        try {
+            mLoudnessEnhancer.setTargetGain(targetGainMb);
+        } catch (Exception e) {
+            Slog.e(TAG, "Error aplicando setTargetGain en LoudnessEnhancer: " + e.getMessage() + ", reinicializando...", e);
+            mLastAppliedGainMb = -1;
+            initAudioFx();
         }
     }
 
-    public synchronized void release() {
+    private synchronized void releaseAudioFx() {
         if (mLoudnessEnhancer != null) {
             try {
-                mLoudnessEnhancer.setEnabled(false);
                 mLoudnessEnhancer.release();
             } catch (Exception ignored) {}
             mLoudnessEnhancer = null;
         }
         if (mDynamicsProcessing != null) {
             try {
-                mDynamicsProcessing.setEnabled(false);
                 mDynamicsProcessing.release();
             } catch (Exception ignored) {}
             mDynamicsProcessing = null;
         }
+    }
+
+    public synchronized void release() {
+        releaseAudioFx();
     }
 }

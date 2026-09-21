@@ -2440,6 +2440,10 @@ public class AudioService extends IAudioService.Stub
 
         // Restore vibrator info
         updateVibratorInfos();
+
+        if (mVolumeBoostHelper != null) {
+            mVolumeBoostHelper.onAudioServerDied();
+        }
     }
 
     private void onRemoveAssistantServiceUids(int[] uids) {
