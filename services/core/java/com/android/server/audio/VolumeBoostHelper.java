@@ -107,6 +107,14 @@ public class VolumeBoostHelper {
         }
     }
 
+    /**
+     * Called by AudioService when audioserver restarts.
+     */
+    public synchronized void onAudioServerDied() {
+        mLastAppliedGainMb = -1;
+        initAudioFx();
+    }
+
     public synchronized void updateVolumeBoost() {
         int level = Settings.System.getInt(mContext.getContentResolver(), Settings.System.VOLUME_BOOST_LEVEL, 0);
         int clampedLevel = Math.max(0, Math.min(100, level));
