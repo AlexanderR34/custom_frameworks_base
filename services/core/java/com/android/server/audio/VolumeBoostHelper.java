@@ -19,7 +19,6 @@ package com.android.server.audio;
 import android.content.Context;
 import android.database.ContentObserver;
 import android.media.AudioSystem;
-import android.media.audiofx.DynamicsProcessing;
 import android.media.audiofx.LoudnessEnhancer;
 import android.net.Uri;
 import android.os.Handler;
@@ -30,17 +29,16 @@ import android.util.Slog;
 
 /**
  * VolumeBoostHelper:
- * Utiliza LoudnessEnhancer en Session 0 para la amplificacion de volumen limpia (+0.0 a +8.0 dB / 800 mB)
- * y DynamicsProcessing como Limitador Maestro en el dominio del tiempo (VARIANT_FAVOR_TIME_RESOLUTION,
- * Attack 1.0ms, Release 50ms, Ratio 10:1, Threshold -1.0 dBFS) para prevenir saturacion y clipping
- * sin alterar la fase ni generar efecto de fondo de piscina.
+ * Utiliza LoudnessEnhancer en Session 0 para la amplificacion de volumen limpia (+0.0 a +10.0 dB / 1000 mB).
+ * Mantiene el efecto persistentemente habilitado en AudioFlinger (gain = 0 cuando el boost esta en 0%)
+ * para garantizar cambios instantaneos en caliente sin reinicios de audioserver ni perdida de sesion.
  */
 public class VolumeBoostHelper {
     private static final String TAG = "VolumeBoostHelper";
     public static final String SETTING_CALL_GAIN_KEY = "volume_boost_call_gain";
 
-    private static final int MAX_BOOST_GAIN_MB = 800; // +8.0 dB (800 mB)
-    private static final int CALL_GAIN_MB = 600;       // +6.0 dB (600 mB)
+    private static final int MAX_BOOST_GAIN_MB = 1000; // +10.0 dB (1000 mB)
+    private static final int CALL_GAIN_MB = 800;        // +8.0 dB (800 mB)
 
     private final Context mContext;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
@@ -52,7 +50,6 @@ public class VolumeBoostHelper {
     };
 
     private LoudnessEnhancer mLoudnessEnhancer;
-    private DynamicsProcessing mDynamicsProcessing;
     private int mCurrentAudioMode = AudioSystem.MODE_NORMAL;
     private int mLastAppliedGainMb = -1;
 
@@ -77,38 +74,6 @@ public class VolumeBoostHelper {
         } catch (Exception e) {
             Slog.e(TAG, "Fallo al inicializar LoudnessEnhancer en VolumeBoostHelper: " + e.getMessage(), e);
             mLoudnessEnhancer = null;
-        }
-
-        try {
-            DynamicsProcessing.Config.Builder builder = new DynamicsProcessing.Config.Builder(
-                    DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
-                    2 /* stereo channels */,
-                    false /* preEqInUse */, 0,
-                    false /* mbcInUse */, 0,
-                    false /* postEqInUse */, 0,
-                    true  /* limiterInUse */);
-
-            DynamicsProcessing.Limiter limiter = new DynamicsProcessing.Limiter(
-                    true  /* inUse */,
-                    true  /* enabled */,
-                    0     /* linkGroup - stereo linked */,
-                    1.0f  /* attackTime ms */,
-                    50.0f /* releaseTime ms */,
-                    10.0f /* ratio */,
-                    -1.0f /* threshold dBFS */,
-                    0.0f  /* postGain dB */);
-
-            for (int ch = 0; ch < 2; ch++) {
-                builder.setLimiterByChannelIndex(ch, limiter);
-            }
-
-            DynamicsProcessing.Config config = builder.build();
-            mDynamicsProcessing = new DynamicsProcessing(0 /* priority */, 0 /* session 0 */, config);
-            mDynamicsProcessing.setInputGainAllChannelsTo(0.0f);
-            mDynamicsProcessing.setEnabled(true);
-        } catch (Exception e) {
-            Slog.e(TAG, "Fallo al inicializar DynamicsProcessing (Limiter) en VolumeBoostHelper: " + e.getMessage(), e);
-            mDynamicsProcessing = null;
         }
 
         mLastAppliedGainMb = -1;
@@ -167,7 +132,7 @@ public class VolumeBoostHelper {
     private void applyGain(int targetGainMb) {
         mLastAppliedGainMb = targetGainMb;
 
-        if (mLoudnessEnhancer == null || mDynamicsProcessing == null) {
+        if (mLoudnessEnhancer == null) {
             initAudioFx();
             return;
         }
@@ -187,12 +152,6 @@ public class VolumeBoostHelper {
                 mLoudnessEnhancer.release();
             } catch (Exception ignored) {}
             mLoudnessEnhancer = null;
-        }
-        if (mDynamicsProcessing != null) {
-            try {
-                mDynamicsProcessing.release();
-            } catch (Exception ignored) {}
-            mDynamicsProcessing = null;
         }
     }
 
