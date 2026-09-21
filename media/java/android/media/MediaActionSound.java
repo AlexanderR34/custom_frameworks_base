@@ -161,13 +161,73 @@ public class MediaActionSound {
     }
 
     private int loadSound(SoundState sound) {
-        final String soundFileName = SOUND_FILES[sound.name];
-        for (String soundDir : SOUND_DIRS) {
-            int id = mSoundPool.load(soundDir + soundFileName, 1);
-            if (id > 0) {
-                sound.state = STATE_LOADING;
-                sound.id = id;
-                return id;
+        int theme = 0;
+        try {
+            android.app.ActivityThread thread = android.app.ActivityThread.currentActivityThread();
+            if (thread != null && thread.getApplication() != null) {
+                theme = android.provider.Settings.System.getInt(
+                        thread.getApplication().getContentResolver(), "ui_sounds_theme", 0);
+            }
+        } catch (Exception ignored) {}
+
+        String subDir = "";
+        String[] candidateFiles;
+        if (theme == 1) {
+            subDir = "poco/";
+            if (sound.name == SHUTTER_CLICK) {
+                candidateFiles = new String[]{"screenshot.ogg", "camera_click.ogg"};
+            } else {
+                candidateFiles = new String[]{SOUND_FILES[sound.name]};
+            }
+        } else if (theme == 2) {
+            subDir = "samsung/";
+            if (sound.name == SHUTTER_CLICK) {
+                candidateFiles = new String[]{"Screen_Capture.ogg", "camera_click.ogg"};
+            } else if (sound.name == START_VIDEO_RECORDING) {
+                candidateFiles = new String[]{"Cam_Start.ogg", "VideoRecord.ogg"};
+            } else if (sound.name == STOP_VIDEO_RECORDING) {
+                candidateFiles = new String[]{"Cam_Stop.ogg", "VideoStop.ogg"};
+            } else {
+                candidateFiles = new String[]{SOUND_FILES[sound.name]};
+            }
+        } else if (theme == 3) {
+            subDir = "ios/";
+            if (sound.name == SHUTTER_CLICK) {
+                candidateFiles = new String[]{"photoShutter.ogg", "screenshot.ogg", "camera_click.ogg"};
+            } else {
+                candidateFiles = new String[]{SOUND_FILES[sound.name]};
+            }
+        } else {
+            candidateFiles = new String[]{SOUND_FILES[sound.name]};
+        }
+
+        if (!subDir.isEmpty()) {
+            for (String candidate : candidateFiles) {
+                for (String soundDir : SOUND_DIRS) {
+                    String themePath = soundDir + subDir + candidate;
+                    if (new java.io.File(themePath).exists()) {
+                        int id = mSoundPool.load(themePath, 1);
+                        if (id > 0) {
+                            sound.state = STATE_LOADING;
+                            sound.id = id;
+                            return id;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (String candidate : candidateFiles) {
+            for (String soundDir : SOUND_DIRS) {
+                String defaultPath = soundDir + candidate;
+                if (new java.io.File(defaultPath).exists()) {
+                    int id = mSoundPool.load(defaultPath, 1);
+                    if (id > 0) {
+                        sound.state = STATE_LOADING;
+                        sound.id = id;
+                        return id;
+                    }
+                }
             }
         }
         return 0;
