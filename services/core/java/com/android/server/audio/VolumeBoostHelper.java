@@ -39,8 +39,8 @@ public class VolumeBoostHelper {
     private static final String TAG = "VolumeBoostHelper";
     public static final String SETTING_CALL_GAIN_KEY = "volume_boost_call_gain";
 
-    private static final int MAX_BOOST_GAIN_MB = 1500; // +15.0 dB (1500 mB)
-    private static final int CALL_GAIN_MB = 1000;       // +10.0 dB (1000 mB)
+    private static final int MAX_BOOST_GAIN_MB = 1000; // +10.0 dB (1000 mB)
+    private static final int CALL_GAIN_MB = 800;        // +8.0 dB (800 mB)
 
     private final Context mContext;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
