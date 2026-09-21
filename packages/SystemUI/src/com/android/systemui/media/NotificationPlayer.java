@@ -22,7 +22,8 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnErrorListener;
-import android.media.PlayerBase;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -31,7 +32,9 @@ import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
 
+import java.io.File;
 import java.util.LinkedList;
+
 
 /**
  * @hide
@@ -68,6 +71,72 @@ public class NotificationPlayer implements OnCompletionListener, OnErrorListener
     @GuardedBy("mCompletionHandlingLock")
     private Looper mLooper;
 
+    private static final long WATER_DROP_BURST_WINDOW_MS = 4500;
+    private static long sLastWaterDropTime = 0;
+    private static int sWaterDropBurstIndex = 0;
+
+    private static synchronized Uri resolveWaterDropSequenceUri(Context context, Uri originalUri) {
+        if (originalUri == null) {
+            return null;
+        }
+        String uriString = originalUri.toString();
+        boolean isWaterDrop = uriString.contains("WaterDrop")
+                || uriString.contains("Water_Drop")
+                || isWaterDropTitle(context, originalUri);
+
+        if (!isWaterDrop) {
+            return originalUri;
+        }
+
+        long now = SystemClock.elapsedRealtime();
+        if (now - sLastWaterDropTime < WATER_DROP_BURST_WINDOW_MS) {
+            sWaterDropBurstIndex++;
+        } else {
+            sWaterDropBurstIndex = 1;
+        }
+        sLastWaterDropTime = now;
+
+        String targetFileName;
+        switch (sWaterDropBurstIndex) {
+            case 1:
+                targetFileName = "WaterDropNotificationDay1.ogg";
+                break;
+            case 2:
+                targetFileName = "WaterDropNotificationDay2.ogg";
+                break;
+            case 3:
+                targetFileName = "WaterDropNotificationDay3.ogg";
+                break;
+            default:
+                targetFileName = "WaterDropNotificationSeqAllDay1.ogg";
+                break;
+        }
+
+        java.io.File file = new java.io.File("/system/media/audio/notifications/" + targetFileName);
+        if (file.exists()) {
+            return Uri.fromFile(file);
+        }
+        return originalUri;
+    }
+
+    private static boolean isWaterDropTitle(Context context, Uri uri) {
+        if (context == null || uri == null) return false;
+        try {
+            android.media.Ringtone r = android.media.RingtoneManager.getRingtone(context, uri);
+            if (r != null) {
+                String title = r.getTitle(context);
+                if (title != null) {
+                    String lower = title.toLowerCase();
+                    if (lower.contains("water drop") || lower.contains("waterdrop") || lower.contains("gotas de agua")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
     /*
      * Besides the use of audio focus, the only implementation difference between AsyncPlayer and
      * NotificationPlayer resides in the creation of the MediaPlayer. For the completion callback,
@@ -100,12 +169,14 @@ public class NotificationPlayer implements OnCompletionListener, OnErrorListener
                                 .build();
                     }
                     player.setAudioAttributes(mCmd.attributes);
-                    player.setDataSource(mCmd.context, mCmd.uri);
+                    Uri uriToPlay = resolveWaterDropSequenceUri(mCmd.context, mCmd.uri);
+                    player.setDataSource(mCmd.context, uriToPlay != null ? uriToPlay : mCmd.uri);
                     player.setLooping(mCmd.looping);
                     player.setVolume(mCmd.volume);
                     player.setOnCompletionListener(NotificationPlayer.this);
                     player.setOnErrorListener(NotificationPlayer.this);
                     player.prepare();
+
                     if ((mCmd.uri != null) && (mCmd.uri.getEncodedPath() != null)
                             && (mCmd.uri.getEncodedPath().length() > 0)) {
                         if (!audioManager.isMusicActiveRemotely()) {

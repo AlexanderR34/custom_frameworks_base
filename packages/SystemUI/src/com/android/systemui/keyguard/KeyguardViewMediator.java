@@ -60,6 +60,9 @@ import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.database.ContentObserver;
+import java.io.File;
+
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -1827,30 +1830,26 @@ public class KeyguardViewMediator implements CoreStartable,
                                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                                 .build())
                 .build();
-        String soundPath = Settings.Global.getString(cr, Settings.Global.LOCK_SOUND);
-        if (soundPath != null) {
-            mLockSoundId = mLockSounds.load(soundPath, 1);
-        }
-        if (soundPath == null || mLockSoundId == 0) {
-            Log.w(TAG, "failed to load lock sound from " + soundPath);
-        }
-        soundPath = Settings.Global.getString(cr, Settings.Global.UNLOCK_SOUND);
-        if (soundPath != null) {
-            mUnlockSoundId = mLockSounds.load(soundPath, 1);
-        }
-        if (soundPath == null || mUnlockSoundId == 0) {
-            Log.w(TAG, "failed to load unlock sound from " + soundPath);
-        }
-        soundPath = Settings.Global.getString(cr, Settings.Global.TRUSTED_SOUND);
-        if (soundPath != null) {
-            mTrustedSoundId = mLockSounds.load(soundPath, 1);
-        }
-        if (soundPath == null || mTrustedSoundId == 0) {
-            Log.w(TAG, "failed to load trusted sound from " + soundPath);
+        loadKeyguardSoundResources();
+
+        try {
+            cr.registerContentObserver(
+                    Settings.System.getUriFor("ui_sounds_theme"),
+                    false,
+                    new ContentObserver(mHandler) {
+                        @Override
+                        public void onChange(boolean selfChange) {
+                            loadKeyguardSoundResources();
+                        }
+                    },
+                    UserHandle.USER_ALL);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to register ui_sounds_theme observer in KeyguardViewMediator", e);
         }
 
         int lockSoundDefaultAttenuation = mContext.getResources().getInteger(
                 com.android.internal.R.integer.config_lockSoundVolumeDb);
+
         mLockSoundVolume = (float)Math.pow(10, (float)lockSoundDefaultAttenuation/20);
 
         mHideAnimation = AnimationUtils.loadAnimation(mContext,
@@ -3154,6 +3153,50 @@ public class KeyguardViewMediator implements CoreStartable,
             }
         }
         Trace.endSection();
+    }
+
+    private void loadKeyguardSoundResources() {
+        final ContentResolver cr = mContext.getContentResolver();
+        int theme = Settings.System.getInt(cr, "ui_sounds_theme", 0);
+
+        String lockPath = null;
+        String unlockPath = null;
+
+        if (theme == 1) {
+            lockPath = "/system/media/audio/ui/poco/Lock.ogg";
+            unlockPath = "/system/media/audio/ui/poco/Unlock.ogg";
+        } else if (theme == 2) {
+            lockPath = "/system/media/audio/ui/samsung/Lock.ogg";
+            unlockPath = "/system/media/audio/ui/samsung/Unlock.ogg";
+        }
+
+
+        if (lockPath != null && !new File(lockPath).exists()) {
+            lockPath = null;
+        }
+        if (unlockPath != null && !new File(unlockPath).exists()) {
+            unlockPath = null;
+        }
+
+        if (lockPath == null) {
+            lockPath = Settings.Global.getString(cr, Settings.Global.LOCK_SOUND);
+        }
+        if (unlockPath == null) {
+            unlockPath = Settings.Global.getString(cr, Settings.Global.UNLOCK_SOUND);
+        }
+
+        if (mLockSounds != null) {
+            if (lockPath != null) {
+                mLockSoundId = mLockSounds.load(lockPath, 1);
+            }
+            if (unlockPath != null) {
+                mUnlockSoundId = mLockSounds.load(unlockPath, 1);
+            }
+            String soundPath = Settings.Global.getString(cr, Settings.Global.TRUSTED_SOUND);
+            if (soundPath != null) {
+                mTrustedSoundId = mLockSounds.load(soundPath, 1);
+            }
+        }
     }
 
     private void playSounds(boolean locked) {

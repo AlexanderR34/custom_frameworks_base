@@ -31,8 +31,10 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.PrintWriterPrinter;
+
 
 import com.android.internal.util.XmlUtils;
 import com.android.server.utils.EventLogger;
@@ -324,6 +326,31 @@ class SoundEffectsHelper {
     private static final int SOUND_EFFECTS_LOAD_TIMEOUT_MS = 15000;
 
     private String getResourceFilePath(Resource res) {
+        int theme = 0;
+        try {
+            theme = android.provider.Settings.System.getInt(
+                    mContext.getContentResolver(), "ui_sounds_theme", 0);
+        } catch (Exception ignored) {
+        }
+
+        String subDir = "";
+        if (theme == 1) {
+            subDir = "poco/";
+        } else if (theme == 2) {
+            subDir = "samsung/";
+        }
+
+        if (!subDir.isEmpty()) {
+            String themePath = Environment.getProductDirectory() + SOUND_EFFECTS_PATH + subDir + res.mFileName;
+            if (new File(themePath).isFile()) {
+                return themePath;
+            }
+            themePath = Environment.getRootDirectory() + SOUND_EFFECTS_PATH + subDir + res.mFileName;
+            if (new File(themePath).isFile()) {
+                return themePath;
+            }
+        }
+
         String filePath = Environment.getProductDirectory() + SOUND_EFFECTS_PATH + res.mFileName;
         if (!new File(filePath).isFile()) {
             filePath = Environment.getRootDirectory() + SOUND_EFFECTS_PATH + res.mFileName;
