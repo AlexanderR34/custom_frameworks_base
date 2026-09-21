@@ -125,6 +125,7 @@ public class Notifier {
     private static final int MSG_PROFILE_TIMED_OUT = 5;
     private static final int MSG_WIRED_CHARGING_STARTED = 6;
     private static final int MSG_SCREEN_POLICY = 7;
+    private static final int MSG_CHARGING_STOPPED = 8;
 
     private static final long[] CHARGING_VIBRATION_TIME = {
             40, 40, 40, 40, 40, 40, 40, 40, 40, // ramp-up sampling rate = 40ms
@@ -220,6 +221,7 @@ public class Notifier {
     private boolean mUserActivityPending;
 
     private final AtomicBoolean mIsPlayingChargingStartedFeedback = new AtomicBoolean(false);
+    private final AtomicBoolean mIsPlayingChargingStoppedFeedback = new AtomicBoolean(false);
 
     private final Injector mInjector;
 
@@ -1074,6 +1076,21 @@ public class Notifier {
     }
 
     /**
+     * Called when charging has stopped / disconnected - to provide user feedback
+     */
+    public void onChargingStopped(@UserIdInt int userId) {
+        if (DEBUG) {
+            Slog.d(TAG, "onChargingStopped");
+        }
+
+        mSuspendBlocker.acquire();
+        Message msg = mHandler.obtainMessage(MSG_CHARGING_STOPPED);
+        msg.setAsynchronous(true);
+        msg.arg1 = userId;
+        mHandler.sendMessage(msg);
+    }
+
+    /**
      * Called when the screen policy changes.
      */
     public void onScreenPolicyUpdate(int displayGroupId, int newPolicy) {
@@ -1315,6 +1332,64 @@ public class Notifier {
     private void showWiredChargingStarted(@UserIdInt int userId) {
         playChargingStartedFeedback(userId, false /* wireless */);
         mSuspendBlocker.release();
+    }
+
+    private void showChargingStopped(@UserIdInt int userId) {
+        playChargingStoppedFeedback(userId);
+        mSuspendBlocker.release();
+    }
+
+    private void playChargingStoppedFeedback(@UserIdInt int userId) {
+        if (!isChargingFeedbackEnabled(userId)) {
+            return;
+        }
+
+        if (!mIsPlayingChargingStoppedFeedback.compareAndSet(false, true)) {
+            return;
+        }
+
+        mBackgroundExecutor.execute(() -> {
+            try {
+                // vibrate
+                final boolean vibrate = Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                        Settings.Secure.CHARGING_VIBRATION_ENABLED, 1, userId) != 0;
+                if (vibrate) {
+                    mVibrator.vibrate(Process.SYSTEM_UID, mContext.getOpPackageName(),
+                            CHARGING_VIBRATION_EFFECT, /* reason= */ "Charging stopped",
+                            HARDWARE_FEEDBACK_VIBRATION_ATTRIBUTES);
+                }
+
+                // play sound
+                String soundPath = Settings.Global.getString(mContext.getContentResolver(),
+                        "charging_stopped_sound");
+                if (soundPath == null || soundPath.isEmpty()) {
+                    int theme = Settings.System.getIntForUser(mContext.getContentResolver(),
+                            "ui_sounds_theme", 0, userId);
+                    if (theme == 1) { // POCO / HyperOS
+                        soundPath = "/system/media/audio/ui/poco/disconnect.ogg";
+                    } else if (theme == 2) {
+                        soundPath = "/system/media/audio/ui/samsung/disconnect.ogg";
+                    }
+                }
+
+                if ("silent".equals(soundPath) || soundPath == null || soundPath.isEmpty()) {
+                    return;
+                }
+
+                if (new java.io.File(soundPath).exists()) {
+                    final Uri soundUri = Uri.parse("file://" + soundPath);
+                    if (soundUri != null) {
+                        final Ringtone sfx = RingtoneManager.getRingtone(mContext, soundUri);
+                        if (sfx != null) {
+                            sfx.setStreamType(AudioManager.STREAM_SYSTEM);
+                            sfx.play();
+                        }
+                    }
+                }
+            } finally {
+                mIsPlayingChargingStoppedFeedback.set(false);
+            }
+        });
     }
 
     private void screenPolicyChanging(int displayGroupId, int screenPolicy) {
@@ -1623,6 +1698,9 @@ public class Notifier {
                     break;
                 case MSG_SCREEN_POLICY:
                     screenPolicyChanging(msg.arg1, msg.arg2);
+                    break;
+                case MSG_CHARGING_STOPPED:
+                    showChargingStopped(msg.arg1);
                     break;
             }
         }
