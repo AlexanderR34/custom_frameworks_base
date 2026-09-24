@@ -20,10 +20,23 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.database.ContentObserver
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.UserHandle
 import android.provider.Settings
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import android.view.View
 import androidx.compose.ui.platform.LocalConfiguration
 import kotlin.math.roundToInt
@@ -322,20 +335,96 @@ private fun HyperOSVolumeVerticalLayout(
         label = "VolumeSliderProgress"
     )
 
-    val showCallSlider = remember {
-        Settings.System.getIntForUser(
-            context.contentResolver,
-            Settings.System.SHOW_CALL_VOLUME_SLIDER,
-            1,
-            UserHandle.USER_CURRENT
-        ) == 1
-    }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val telecomManager = remember { context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager }
     val isInCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
         audioManager.mode == AudioManager.MODE_IN_COMMUNICATION ||
         audioManager.mode == AudioManager.MODE_RINGTONE ||
         (telecomManager?.isInCall == true)
+
+    val isVoiceCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
+        audioManager.mode == AudioManager.MODE_IN_COMMUNICATION ||
+        sliderStateModel.label.contains("call", ignoreCase = true) ||
+        sliderStateModel.label.contains("llamada", ignoreCase = true) ||
+        sliderStateModel.label.contains("voz", ignoreCase = true) ||
+        sliderStateModel.label.contains("voice", ignoreCase = true) ||
+        sliderStateModel.label.contains("comunic", ignoreCase = true)
+
+    var isBoost200Enabled by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                "volume_boost_200_enabled",
+                0,
+                UserHandle.USER_CURRENT
+            ) == 1
+        )
+    }
+
+    var boostLevel by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                Settings.System.VOLUME_BOOST_LEVEL,
+                0,
+                UserHandle.USER_CURRENT
+            )
+        )
+    }
+
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                isBoost200Enabled = Settings.System.getIntForUser(
+                    context.contentResolver,
+                    "volume_boost_200_enabled",
+                    0,
+                    UserHandle.USER_CURRENT
+                ) == 1
+                boostLevel = Settings.System.getIntForUser(
+                    context.contentResolver,
+                    Settings.System.VOLUME_BOOST_LEVEL,
+                    0,
+                    UserHandle.USER_CURRENT
+                )
+            }
+        }
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor("volume_boost_200_enabled"),
+            false,
+            observer,
+            UserHandle.USER_CURRENT
+        )
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.VOLUME_BOOST_LEVEL),
+            false,
+            observer,
+            UserHandle.USER_CURRENT
+        )
+        onDispose {
+            context.contentResolver.unregisterContentObserver(observer)
+        }
+    }
+
+    val isBoostActive = !isVoiceCall && isBoost200Enabled && boostLevel > 0 && rawProgressFraction >= 0.99f
+
+    val boostAnimationProgress by animateFloatAsState(
+        targetValue = if (isBoostActive) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 350,
+            easing = FastOutSlowInEasing
+        ),
+        label = "HyperOS200BoostProgress"
+    )
+
+    val showCallSlider = remember {
+        Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.SHOW_CALL_VOLUME_SLIDER,
+            0,
+            UserHandle.USER_CURRENT
+        ) == 1
+    }
 
     val sliderWidth = if (isLandscape) 56.dp else 62.dp
     val sliderHeight = if (isLandscape) 165.dp else 232.dp
@@ -351,15 +440,9 @@ private fun HyperOSVolumeVerticalLayout(
             .wrapContentSize()
             .padding(vertical = if (isLandscape) 2.dp else 4.dp, horizontal = 2.dp)
     ) {
-        // Dual / Secondary Volume Slider (shown ONLY when in active call)
+        // Dual / Secondary Volume Slider (shown ONLY when in active call and enabled)
         if (showCallSlider && isInCall) {
-            val isMainVoiceCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
-                audioManager.mode == AudioManager.MODE_IN_COMMUNICATION ||
-                sliderStateModel.label.contains("call", ignoreCase = true) ||
-                sliderStateModel.label.contains("llamada", ignoreCase = true) ||
-                sliderStateModel.label.contains("voz", ignoreCase = true) ||
-                sliderStateModel.label.contains("voice", ignoreCase = true) ||
-                sliderStateModel.label.contains("comunic", ignoreCase = true)
+            val isMainVoiceCall = isVoiceCall
 
             val targetSecondaryStream = if (isMainVoiceCall) {
                 AudioManager.STREAM_MUSIC
@@ -386,7 +469,7 @@ private fun HyperOSVolumeVerticalLayout(
                     .clip(RoundedCornerShape(sliderCornerRadius))
                     .background(Color(0x8A1A1A1A))
                     .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(sliderCornerRadius))
-                    .pointerInput(min, max, range) {
+                    .pointerInput(min, max, range, isBoostActive) {
                         detectVerticalDragGestures(
                             onDragStart = {
                                 viewModel.onSliderDragStarted()
@@ -402,17 +485,33 @@ private fun HyperOSVolumeVerticalLayout(
                                 val touchY = change.position.y
                                 val heightPx = size.height.toFloat()
                                 val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                if (isBoostActive && frac < 0.99f) {
+                                    Settings.System.putIntForUser(
+                                        context.contentResolver,
+                                        Settings.System.VOLUME_BOOST_LEVEL,
+                                        0,
+                                        UserHandle.USER_CURRENT
+                                    )
+                                }
                                 val targetVal = min + frac * range
                                 overscrollViewModel.setSlider(targetVal, min, max)
                                 viewModel.setStreamVolume(targetVal, true)
                             }
                         )
                     }
-                    .pointerInput(min, max, range) {
+                    .pointerInput(min, max, range, isBoostActive) {
                         detectTapGestures { offset ->
                             val touchY = offset.y
                             val heightPx = size.height.toFloat()
                             val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                            if (isBoostActive && frac < 0.99f) {
+                                Settings.System.putIntForUser(
+                                    context.contentResolver,
+                                    Settings.System.VOLUME_BOOST_LEVEL,
+                                    0,
+                                    UserHandle.USER_CURRENT
+                                )
+                            }
                             val targetVal = min + frac * range
                             overscrollViewModel.setSlider(targetVal, min, max)
                             viewModel.setStreamVolume(targetVal, true)
@@ -427,7 +526,27 @@ private fun HyperOSVolumeVerticalLayout(
                         .fillMaxHeight(progressFraction)
                         .align(Alignment.BottomCenter)
                         .background(Color.White)
-                )
+                ) {
+                    // Fluid red gradient deploying from top down when 200% boost is active
+                    if (boostAnimationProgress > 0.001f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(boostAnimationProgress)
+                                .align(Alignment.TopCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color(0xFFE5252A).copy(alpha = boostAnimationProgress),
+                                            0.35f to Color(0xFFFF3B30).copy(alpha = boostAnimationProgress * 0.95f),
+                                            0.70f to Color(0xFFFF8E8E).copy(alpha = boostAnimationProgress * 0.5f),
+                                            1.0f to Color.White.copy(alpha = 0f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                }
 
                 // Top 3 dots ••• (Expand / Sound Settings button)
                 Row(
@@ -446,9 +565,29 @@ private fun HyperOSVolumeVerticalLayout(
                             modifier = Modifier
                                 .size(if (isLandscape) 3.5.dp else 4.5.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFB0B0B0))
+                                .background(
+                                    if (boostAnimationProgress > 0.5f) Color(0xEEFFFFFF) else Color(0xFFB0B0B0)
+                                )
                         )
                     }
+                }
+
+                // "200%" bold text display under the top dots
+                if (boostAnimationProgress > 0.001f) {
+                    Text(
+                        text = "200%",
+                        color = Color.White.copy(alpha = boostAnimationProgress),
+                        fontSize = if (isLandscape) 10.sp else 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.SansSerif,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = topPadding + (if (isLandscape) 11.dp else 15.dp))
+                            .graphicsLayer {
+                                alpha = boostAnimationProgress
+                                translationY = (1f - boostAnimationProgress) * -12f
+                            }
+                    )
                 }
 
                 val isHeadsetOrBt = remember(sliderStateModel, progressFraction) {
@@ -485,7 +624,13 @@ private fun HyperOSVolumeVerticalLayout(
                     else -> R.drawable.ic_hyperos_speaker_high
                 }
 
-                val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+                val baseIconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+                val boostedIconTint = Color(0xFFE5252A)
+                val finalIconTint = if (boostAnimationProgress > 0.001f) {
+                    androidx.compose.ui.graphics.lerp(baseIconTint, boostedIconTint, boostAnimationProgress)
+                } else {
+                    baseIconTint
+                }
 
                 Box(
                     contentAlignment = Alignment.Center,
@@ -497,7 +642,7 @@ private fun HyperOSVolumeVerticalLayout(
                     androidx.compose.material3.Icon(
                         painter = painterResource(id = currentIconRes),
                         contentDescription = sliderStateModel.label,
-                        tint = iconTint,
+                        tint = finalIconTint,
                         modifier = Modifier.size(iconSize)
                     )
                 }

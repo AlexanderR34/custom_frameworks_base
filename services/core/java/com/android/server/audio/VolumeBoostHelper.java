@@ -108,7 +108,10 @@ public class VolumeBoostHelper {
         boolean isCallGainEnabled = Settings.System.getInt(mContext.getContentResolver(), SETTING_CALL_GAIN_KEY, 1) == 1;
         boolean isInCall = (mCurrentAudioMode == AudioSystem.MODE_IN_CALL ||
                             mCurrentAudioMode == AudioSystem.MODE_IN_COMMUNICATION ||
-                            mCurrentAudioMode == AudioSystem.MODE_RINGTONE);
+                            mCurrentAudioMode == AudioSystem.MODE_RINGTONE ||
+                            mCurrentAudioMode == AudioSystem.MODE_CALL_SCREENING ||
+                            mCurrentAudioMode == AudioSystem.MODE_CALL_REDIRECT ||
+                            mCurrentAudioMode == AudioSystem.MODE_COMMUNICATION_REDIRECT);
 
         int targetGainMb = 0;
 
@@ -133,12 +136,21 @@ public class VolumeBoostHelper {
     private void applyGain(int targetGainMb) {
         mLastAppliedGainMb = targetGainMb;
 
+        // Aplica Master Volume en AudioFlinger para que juegos con AAudio MMAP (Unity/Unreal) y DirectOutput reciban el boost
+        float masterVolume = (targetGainMb > 0) ? (1.0f + (targetGainMb / 1000.0f)) : 1.0f;
+        try {
+            AudioSystem.setMasterVolume(masterVolume);
+        } catch (Exception e) {
+            Slog.e(TAG, "Error aplicando setMasterVolume: " + e.getMessage(), e);
+        }
+
         if (mLoudnessEnhancer == null) {
             initAudioFx();
             return;
         }
 
         try {
+            // Aplica la ganancia a la salida multimedia (STREAM_MUSIC / USAGE_MEDIA)
             mLoudnessEnhancer.setTargetGain(targetGainMb);
         } catch (Exception e) {
             Slog.e(TAG, "Error aplicando setTargetGain en LoudnessEnhancer: " + e.getMessage() + ", reinicializando...", e);
@@ -148,6 +160,9 @@ public class VolumeBoostHelper {
     }
 
     private synchronized void releaseAudioFx() {
+        try {
+            AudioSystem.setMasterVolume(1.0f);
+        } catch (Exception ignored) {}
         if (mLoudnessEnhancer != null) {
             try {
                 mLoudnessEnhancer.release();

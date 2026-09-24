@@ -4454,6 +4454,60 @@ public class AudioService extends IAudioService.Stub
 
         mSoundDoseHelper.invalidatePendingVolumeCommand();
 
+        if (streamTypeAlias == AudioSystem.STREAM_MUSIC) {
+            boolean isBoost200FeatureEnabled = Settings.System.getIntForUser(mContentResolver,
+                    Settings.System.VOLUME_BOOST_200_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
+            if (isBoost200FeatureEnabled) {
+                int currentBoost = Settings.System.getIntForUser(mContentResolver,
+                        Settings.System.VOLUME_BOOST_LEVEL, 0, UserHandle.USER_CURRENT);
+                int maxVolIndex = streamState.getMaxIndex();
+
+                if (direction == AudioManager.ADJUST_RAISE && aliasIndex >= maxVolIndex) {
+                    if (currentBoost == 0) {
+                        long now = android.os.SystemClock.uptimeMillis();
+                        if (now - mLastVolumeUpAtMaxTime > 650) {
+                            // Primer toque al tope (100%): registrar tiempo y esperar segundo toque
+                            mLastVolumeUpAtMaxTime = now;
+                            sendVolumeUpdate(streamType, aliasIndex, aliasIndex, flags | AudioManager.FLAG_SHOW_UI, deviceType);
+                            return;
+                        }
+                        // Segundo toque consecutivo dentro de la ventana de tiempo: activar Modo 200%
+                        mLastVolumeUpAtMaxTime = 0;
+                        final long ident = Binder.clearCallingIdentity();
+                        try {
+                            Settings.System.putIntForUser(mContentResolver,
+                                    Settings.System.VOLUME_BOOST_LEVEL, 100, UserHandle.USER_CURRENT);
+                        } finally {
+                            Binder.restoreCallingIdentity(ident);
+                        }
+                        if (mVolumeBoostHelper != null) {
+                            mVolumeBoostHelper.updateVolumeBoost();
+                        }
+                    }
+                    sendVolumeUpdate(streamType, aliasIndex, aliasIndex, flags | AudioManager.FLAG_SHOW_UI, deviceType);
+                    return;
+                } else {
+                    mLastVolumeUpAtMaxTime = 0;
+                }
+                } else if (direction == AudioManager.ADJUST_LOWER && currentBoost > 0) {
+                    // Trigger de Desactivacion (1 toque hacia abajo estando en modo 200%)
+                    final long ident = Binder.clearCallingIdentity();
+                    try {
+                        Settings.System.putIntForUser(mContentResolver,
+                                Settings.System.VOLUME_BOOST_LEVEL, 0, UserHandle.USER_CURRENT);
+                    } finally {
+                        Binder.restoreCallingIdentity(ident);
+                    }
+                    if (mVolumeBoostHelper != null) {
+                        mVolumeBoostHelper.updateVolumeBoost();
+                    }
+                    // Mantener el 100% nativo y suprimir el decremento en esta primera pulsacion
+                    sendVolumeUpdate(streamType, aliasIndex, aliasIndex, flags | AudioManager.FLAG_SHOW_UI, deviceType);
+                    return;
+                }
+            }
+        }
+
         flags &= ~AudioManager.FLAG_FIXED_VOLUME;
         if (streamTypeAlias == AudioSystem.STREAM_MUSIC && isFixedVolumeDevice(
                 deviceType)) {

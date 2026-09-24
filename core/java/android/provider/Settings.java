@@ -6859,6 +6859,13 @@ public final class Settings {
         public static final String SHOW_CALL_VOLUME_SLIDER = "show_call_volume_slider";
 
         /**
+         * Whether to enable 200% volume boost trigger in volume panel
+         * @hide
+         */
+        @Readable
+        public static final String VOLUME_BOOST_200_ENABLED = "volume_boost_200_enabled";
+
+        /**
          * Whether to show Wi-Fi standard icon (e.g. Wi-Fi 4/5/6/7)
          * @hide
          */
@@ -7457,6 +7464,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(CUSTOM_BLUR_INTENSITY);
             PRIVATE_SETTINGS.add(HYPEROS_VOLUME_PANEL_STYLE);
             PRIVATE_SETTINGS.add(SHOW_CALL_VOLUME_SLIDER);
+            PRIVATE_SETTINGS.add(VOLUME_BOOST_200_ENABLED);
             PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);
             PRIVATE_SETTINGS.add(SHOW_FOURG_ICON);
             PRIVATE_SETTINGS.add(SHOW_DATA_RAT_ICON_WITH_WIFI);
