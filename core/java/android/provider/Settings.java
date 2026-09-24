@@ -6859,6 +6859,15 @@ public final class Settings {
         public static final String SHOW_CALL_VOLUME_SLIDER = "show_call_volume_slider";
 
         /**
+         * Quick Settings / Control Center style.
+         * 0 = AOSP Stock
+         * 1 = HyperOS / Xiaomi Control Center
+         * @hide
+         */
+        @Readable
+        public static final String CONTROL_CENTER_STYLE = "control_center_style";
+
+        /**
          * Whether to enable 200% volume boost trigger in volume panel
          * @hide
          */
@@ -7463,6 +7472,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(GAMESPACE_SUPPRESS_FULLSCREEN_INTENT);
             PRIVATE_SETTINGS.add(CUSTOM_BLUR_INTENSITY);
             PRIVATE_SETTINGS.add(HYPEROS_VOLUME_PANEL_STYLE);
+            PRIVATE_SETTINGS.add(CONTROL_CENTER_STYLE);
             PRIVATE_SETTINGS.add(SHOW_CALL_VOLUME_SLIDER);
             PRIVATE_SETTINGS.add(VOLUME_BOOST_200_ENABLED);
             PRIVATE_SETTINGS.add(SHOW_WIFI_STANDARD_ICON);

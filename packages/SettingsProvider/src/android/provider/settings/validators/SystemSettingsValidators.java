@@ -348,5 +348,6 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.HYPEROS_VOLUME_PANEL_STYLE, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.SHOW_CALL_VOLUME_SLIDER, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.VOLUME_BOOST_200_ENABLED, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.CONTROL_CENTER_STYLE, new InclusiveIntegerRangeValidator(0, 4));
     }
 }
