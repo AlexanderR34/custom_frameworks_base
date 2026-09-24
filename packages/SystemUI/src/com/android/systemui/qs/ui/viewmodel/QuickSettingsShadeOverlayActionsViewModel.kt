@@ -59,6 +59,17 @@ constructor(private val editModeViewModel: EditModeViewModel) : UserActionsViewM
                                 HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
                         ),
                     )
+
+                    if (!isEditing) {
+                        put(
+                            Swipe.Right,
+                            ShowOverlay(
+                                Overlays.NotificationsShade,
+                                hideCurrentOverlays =
+                                    HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
+                            ),
+                        )
+                    }
                 }
             }
             .collect { actions -> setActions(actions) }

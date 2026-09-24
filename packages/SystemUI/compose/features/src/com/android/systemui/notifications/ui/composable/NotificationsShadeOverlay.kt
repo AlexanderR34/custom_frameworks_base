@@ -165,66 +165,192 @@ constructor(
             }
 
             val accessibilityTitle = stringResource(R.string.accessibility_desc_notification_shade)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val style = remember {
+                android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
+            }
+            val isMagicOs = style == 3
+            val isIos = style == 4
 
-            Column(
-                modifier =
-                    Modifier.focusRequester(focusRequester).focusable().semantics {
-                        paneTitle = accessibilityTitle
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier =
+                        Modifier.focusRequester(focusRequester).focusable().semantics {
+                            paneTitle = accessibilityTitle
+                        }
+                ) {
+                    if (isIos) {
+                        // Reloj y Fecha de Gran Formato estilo iOS Lockscreen
+                        androidx.compose.foundation.layout.Column(
+                            modifier = Modifier.fillMaxWidth().androidx.compose.foundation.layout.padding(top = 16.dp, bottom = 12.dp),
+                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        ) {
+                            val dateText = remember {
+                                java.text.SimpleDateFormat("EEE, MMM d", java.util.Locale.getDefault()).format(java.util.Date())
+                            }
+                            val timeText = remember {
+                                java.text.SimpleDateFormat("h:mm", java.util.Locale.getDefault()).format(java.util.Date())
+                            }
+                            androidx.compose.material3.Text(
+                                text = dateText,
+                                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f),
+                                fontSize = 17.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            )
+                            androidx.compose.material3.Text(
+                                text = timeText,
+                                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.88f),
+                                fontSize = 76.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                letterSpacing = (-2).sp,
+                            )
+                        }
+                    } else if (isFullWidth) {
+                        Box(
+                            Modifier.padding(
+                                start = notificationStackPadding,
+                                end = notificationStackPadding,
+                                bottom = 8.dp,
+                            )
+                        ) {
+                            with(lockscreenElements) {
+                                LockscreenElement(
+                                    LockscreenElementKeys.Clock.Small,
+                                    Modifier.height(88.dp),
+                                )
+                            }
+                        }
                     }
-            ) {
-                if (isFullWidth) {
+
+                    val stackScrollView = stackScrollView.get()
+                    ScrollingNotificationPanel(
+                        tag = "NotifShadeOverlay",
+                        shadeSession = shadeSession,
+                        stackScrollView = stackScrollView,
+                        viewModel = placeholderViewModel,
+                        notificationRulesParentViewModel = notificationRulesParentViewModel,
+                        jankMonitor = jankMonitor,
+                        shouldPunchHoleBehindScrim = false,
+                        isTransparencyEnabled = viewModel.isTransparencyEnabled,
+                        stackTopPadding = notificationStackPadding,
+                        stackBottomPadding = { notificationStackPadding },
+                        aboveNotifications = { modifier ->
+                            if (viewModel.showMedia) {
+                                Element(
+                                    key = Media.Elements.MediaCarousel,
+                                    modifier = modifier.padding(horizontal = notificationStackPadding),
+                                ) {
+                                    Media(
+                                        viewModelFactory = viewModel.mediaViewModelFactory,
+                                        presentationStyle = MediaPresentationStyle.Default,
+                                        behavior = viewModel.mediaUiBehavior,
+                                        onDismissed = viewModel::onMediaSwipeToDismiss,
+                                        location = Media.Location.SHADE,
+                                    )
+                                }
+                            }
+                        },
+                        shouldDrawScrimBackground = false,
+                        modifier =
+                            Modifier.fillMaxWidth().focusProperties {
+                                // The `ScrollingNotificationPanel` is a compose placeholder. Therefore,
+                                // focus on the view that actually shows notifications.
+                                onEnter = { stackScrollView.asView().requestFocus() }
+                            },
+                    )
+                }
+
+                if (isMagicOs) {
+                    // Botón flotante circular de Papelera (MagicOS)
                     Box(
-                        Modifier.padding(
-                            start = notificationStackPadding,
-                            end = notificationStackPadding,
-                            bottom = 8.dp,
-                        )
+                        modifier =
+                            Modifier
+                                .align(androidx.compose.ui.Alignment.BottomCenter)
+                                .padding(bottom = 24.dp)
+                                .androidx.compose.foundation.layout.size(54.dp)
+                                .androidx.compose.ui.draw.clip(androidx.compose.foundation.shape.CircleShape)
+                                .androidx.compose.foundation.background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                                .androidx.compose.foundation.clickable {
+                                    val stack = stackScrollView.get().asView() as? com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout
+                                    stack?.clearAllNotifications(true)
+                                },
+                        contentAlignment = androidx.compose.ui.Alignment.Center,
                     ) {
-                        with(lockscreenElements) {
-                            LockscreenElement(
-                                LockscreenElementKeys.Clock.Small,
-                                Modifier.height(88.dp),
+                        androidx.compose.material3.Icon(
+                            painter = androidx.compose.ui.res.painterResource(com.android.internal.R.drawable.ic_menu_delete),
+                            contentDescription = "Clear all notifications",
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.androidx.compose.foundation.layout.size(24.dp),
+                        )
+                    }
+                } else if (isIos) {
+                    // Accesos Rápidos Inferiores Flotantes estilo iOS (Linterna izquierda + Cámara derecha)
+                    androidx.compose.foundation.layout.Row(
+                        modifier =
+                            Modifier
+                                .align(androidx.compose.ui.Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(horizontal = 46.dp, bottom = 28.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        // Botón Linterna (Flashlight)
+                        Box(
+                            modifier =
+                                Modifier
+                                    .androidx.compose.foundation.layout.size(52.dp)
+                                    .androidx.compose.ui.draw.clip(androidx.compose.foundation.shape.CircleShape)
+                                    .androidx.compose.foundation.background(androidx.compose.ui.graphics.Color(0x40FFFFFF))
+                                    .androidx.compose.foundation.clickable {
+                                        try {
+                                            val camManager = context.getSystemService(android.hardware.camera2.CameraManager::class.java)
+                                            val cameraId = camManager?.cameraIdList?.firstOrNull()
+                                            if (cameraId != null) {
+                                                camManager.setTorchMode(cameraId, true)
+                                            }
+                                        } catch (_: Exception) {}
+                                    },
+                            contentAlignment = androidx.compose.ui.Alignment.Center,
+                        ) {
+                            androidx.compose.material3.Icon(
+                                painter = androidx.compose.ui.res.painterResource(com.android.internal.R.drawable.ic_menu_today),
+                                contentDescription = "Flashlight",
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.androidx.compose.foundation.layout.size(24.dp),
+                            )
+                        }
+
+                        // Botón Cámara (Camera)
+                        Box(
+                            modifier =
+                                Modifier
+                                    .androidx.compose.foundation.layout.size(52.dp)
+                                    .androidx.compose.ui.draw.clip(androidx.compose.foundation.shape.CircleShape)
+                                    .androidx.compose.foundation.background(androidx.compose.ui.graphics.Color(0x40FFFFFF))
+                                    .androidx.compose.foundation.clickable {
+                                        val cameraIntent = android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE).apply {
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        try {
+                                            context.startActivity(cameraIntent)
+                                        } catch (_: Exception) {
+                                            val fallback = android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
+                                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(fallback)
+                                        }
+                                    },
+                            contentAlignment = androidx.compose.ui.Alignment.Center,
+                        ) {
+                            androidx.compose.material3.Icon(
+                                painter = androidx.compose.ui.res.painterResource(com.android.internal.R.drawable.ic_menu_preferences),
+                                contentDescription = "Camera",
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.androidx.compose.foundation.layout.size(24.dp),
                             )
                         }
                     }
                 }
-
-                val stackScrollView = stackScrollView.get()
-                ScrollingNotificationPanel(
-                    tag = "NotifShadeOverlay",
-                    shadeSession = shadeSession,
-                    stackScrollView = stackScrollView,
-                    viewModel = placeholderViewModel,
-                    notificationRulesParentViewModel = notificationRulesParentViewModel,
-                    jankMonitor = jankMonitor,
-                    shouldPunchHoleBehindScrim = false,
-                    isTransparencyEnabled = viewModel.isTransparencyEnabled,
-                    stackTopPadding = notificationStackPadding,
-                    stackBottomPadding = { notificationStackPadding },
-                    aboveNotifications = { modifier ->
-                        if (viewModel.showMedia) {
-                            Element(
-                                key = Media.Elements.MediaCarousel,
-                                modifier = modifier.padding(horizontal = notificationStackPadding),
-                            ) {
-                                Media(
-                                    viewModelFactory = viewModel.mediaViewModelFactory,
-                                    presentationStyle = MediaPresentationStyle.Default,
-                                    behavior = viewModel.mediaUiBehavior,
-                                    onDismissed = viewModel::onMediaSwipeToDismiss,
-                                    location = Media.Location.SHADE,
-                                )
-                            }
-                        }
-                    },
-                    shouldDrawScrimBackground = false,
-                    modifier =
-                        Modifier.fillMaxWidth().focusProperties {
-                            // The `ScrollingNotificationPanel` is a compose placeholder. Therefore,
-                            // focus on the view that actually shows notifications.
-                            onEnter = { stackScrollView.asView().requestFocus() }
-                        },
-                )
             }
         }
     }

@@ -176,7 +176,7 @@ fun ContentScope.Tile(
             }
 
         // TODO(b/361789146): Draw the shapes instead of clipping
-        val tileShape by TileDefaults.animateTileShapeAsState(uiState)
+        val tileShape by TileDefaults.animateTileShapeAsState(uiState, iconOnly)
         val animatedColor by animateColorAsState(colors.background, label = "QSTileBackgroundColor")
         val isDualTarget = uiState.handlesToggleClick
         val hasLongClickEffect = uiState.hasLongClickEffect
@@ -391,11 +391,13 @@ fun TileContainer(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val style = android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
+    val isCustomStyle = (style == 1 || style == 2 || style == 3 || style == 4)
     Box(
         modifier =
             modifier
-                .height(TileHeight)
-                .fillMaxWidth()
+                .then(if (iconOnly && isCustomStyle) Modifier.size(TileHeight) else Modifier.height(TileHeight).fillMaxWidth())
                 .tileCombinedClickable(
                     onClick = onClick ?: {},
                     onLongClick = onLongClick,
@@ -420,7 +422,7 @@ fun SmallStaticTile(
 
     Box(
         modifier
-            .clip(TileDefaults.animateTileShapeAsState(uiState).value)
+            .clip(TileDefaults.animateTileShapeAsState(uiState, iconOnly = true).value)
             .background(colors.background)
             .size(TileHeight)
             .clickable(onClick = onClick)
@@ -444,7 +446,7 @@ fun LargeStaticTile(
 
     Box(
         modifier
-            .clip(TileDefaults.animateTileShapeAsState(uiState).value)
+            .clip(TileDefaults.animateTileShapeAsState(uiState, iconOnly = false).value)
             .background(colors.background)
             .height(TileHeight)
             .clickable(onClick = onClick)
@@ -563,14 +565,27 @@ private object TileDefaults {
 
     @Composable
     @ReadOnlyComposable
-    fun inactiveTileColors(): TileColors =
-        TileColors(
-            background = LocalAndroidColorScheme.current.surfaceEffect1,
-            iconBackground = Color.Transparent,
-            label = MaterialTheme.colorScheme.onSurface,
-            secondaryLabel = MaterialTheme.colorScheme.onSurface,
-            icon = MaterialTheme.colorScheme.onSurface,
-        )
+    fun inactiveTileColors(): TileColors {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val style = android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
+        return if (style == 1 || style == 2 || style == 3 || style == 4) {
+            TileColors(
+                background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                iconBackground = Color.Transparent,
+                label = MaterialTheme.colorScheme.onSurface,
+                secondaryLabel = MaterialTheme.colorScheme.onSurface,
+                icon = Color(0xB3FFFFFF),
+            )
+        } else {
+            TileColors(
+                background = LocalAndroidColorScheme.current.surfaceEffect1,
+                iconBackground = Color.Transparent,
+                label = MaterialTheme.colorScheme.onSurface,
+                secondaryLabel = MaterialTheme.colorScheme.onSurface,
+                icon = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
 
     @Composable
     @ReadOnlyComposable
@@ -620,7 +635,12 @@ private object TileDefaults {
     }
 
     @Composable
-    fun tileRadius(uiState: TileUiState): Dp {
+    fun tileRadius(uiState: TileUiState, iconOnly: Boolean = false): Dp {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val style = android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
+        if (iconOnly && (style == 1 || style == 2 || style == 3 || style == 4)) {
+            return 999.dp
+        }
         return when (uiState.visualState) {
             STATE_ACTIVE -> ActiveTileCornerRadius
             STATE_INACTIVE -> InactiveTileCornerRadius
@@ -637,8 +657,8 @@ private object TileDefaults {
     }
 
     @Composable
-    fun animateTileShapeAsState(uiState: TileUiState): State<RoundedCornerShape> {
-        return animateShapeAsState(targetValue = tileRadius(uiState), label = "QSTileCornerRadius")
+    fun animateTileShapeAsState(uiState: TileUiState, iconOnly: Boolean = false): State<RoundedCornerShape> {
+        return animateShapeAsState(targetValue = tileRadius(uiState, iconOnly), label = "QSTileCornerRadius")
     }
 
     @Composable
