@@ -65,23 +65,37 @@ class AccessorizedBatteryDrawable(
         set(value) {
             if (field != value) {
                 field = value
-                if (value) {
-                    if (hyperOSBatteryDrawable == null) {
-                        hyperOSBatteryDrawable = HyperOSBatteryDrawable(context, frameColor)
-                    }
-                    drawable = hyperOSBatteryDrawable
-                } else {
-                    drawable = defaultThemedDrawable
-                }
-                syncProperties()
-                updateSizes()
-                postInvalidate()
+                updateActiveDrawable()
             }
         }
 
+    var isMiuiStyle: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                updateActiveDrawable()
+            }
+        }
+
+    private fun updateActiveDrawable() {
+        if (isHyperOSStyle || isMiuiStyle) {
+            if (hyperOSBatteryDrawable == null) {
+                hyperOSBatteryDrawable = HyperOSBatteryDrawable(context, frameColor)
+            }
+            hyperOSBatteryDrawable?.miuiStyle = isMiuiStyle
+            drawable = hyperOSBatteryDrawable
+        } else {
+            drawable = defaultThemedDrawable
+        }
+        syncProperties()
+        updateSizes()
+        postInvalidate()
+    }
+
     private fun syncProperties() {
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isMiuiStyle) {
             hyperOSBatteryDrawable?.let {
+                it.miuiStyle = isMiuiStyle
                 it.setBatteryLevel(currentLevel)
                 it.charging = isCharging
                 it.powerSaveEnabled = isPowerSave
@@ -143,7 +157,7 @@ class AccessorizedBatteryDrawable(
             return
         }
 
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isMiuiStyle) {
             drawable?.setBounds(b.left, b.top, b.right, b.bottom)
             return
         }
@@ -176,7 +190,7 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicHeight(): Int {
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isMiuiStyle) {
             return hyperOSBatteryDrawable?.intrinsicHeight ?: (13 * density).toInt()
         }
         val height =
@@ -189,7 +203,7 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicWidth(): Int {
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isMiuiStyle) {
             return hyperOSBatteryDrawable?.intrinsicWidth ?: (19 * density).toInt()
         }
         val width =
@@ -202,7 +216,7 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun draw(c: Canvas) {
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isMiuiStyle) {
             drawable?.draw(c)
             return
         }

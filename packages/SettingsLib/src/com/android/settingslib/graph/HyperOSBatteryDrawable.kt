@@ -47,6 +47,17 @@ class HyperOSBatteryDrawable(
             invalidateSelf()
         }
 
+    var miuiStyle = false
+        set(value) {
+            field = value
+            invalidateSelf()
+        }
+
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+
     // Outer frame paint (always uses fillColor/status bar tint - white/dark)
     private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = frameColor
@@ -229,8 +240,15 @@ class HyperOSBatteryDrawable(
             canvas.drawRoundRect(levelRect, innerCornerRadius, innerCornerRadius, fillPaint)
         }
 
-        // 6. Draw sharp HyperOS charging bolt (black outline + white fill)
-        if (charging) {
+        // 6. Draw centered text in MIUI mode or charging bolt in HyperOS mode
+        if (miuiStyle) {
+            val isColorAccent = charging || powerSaveEnabled || batteryLevel <= 15
+            textPaint.color = if (isColorAccent) Color.WHITE else framePaint.color
+            textPaint.textSize = if (batteryLevel >= 100) 8.5f * density else 9.5f * density
+            val fm = textPaint.fontMetrics
+            val baseline = frameRect.centerY() - (fm.ascent + fm.descent) / 2f
+            canvas.drawText("$batteryLevel", frameRect.centerX(), baseline, textPaint)
+        } else if (charging) {
             canvas.drawPath(boltPath, boltStrokePaint)
             canvas.drawPath(boltPath, boltPaint)
         }
@@ -243,18 +261,21 @@ class HyperOSBatteryDrawable(
         fillPaint.alpha = alpha
         boltPaint.alpha = alpha
         boltStrokePaint.alpha = alpha
+        textPaint.alpha = alpha
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
         framePaint.colorFilter = colorFilter
         capPaint.colorFilter = colorFilter
         fillPaint.colorFilter = colorFilter
+        textPaint.colorFilter = colorFilter
     }
 
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
-    override fun getIntrinsicWidth(): Int = (19 * density).toInt()
+    override fun getIntrinsicWidth(): Int =
+        if (miuiStyle) (23.5f * density).toInt() else (19 * density).toInt()
 
     override fun getIntrinsicHeight(): Int = (11.5f * density).toInt()
 

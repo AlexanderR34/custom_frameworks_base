@@ -587,6 +587,10 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                     || mShowPercentMode == MODE_ESTIMATE;
         }
 
+        if (mDrawable != null && mDrawable.isMiuiStyle()) {
+            shouldShow = false;
+        }
+
         if (shouldShow) {
             if (!showing) {
                 addPercentView(inflatePercentView());
@@ -674,8 +678,10 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             scaleBatteryMeterViews();
         } else {
             boolean isHyperOS = (style == 1);
+            boolean isMiui = (style == 3);
             if (mDrawable != null) {
                 mDrawable.setHyperOSStyle(isHyperOS);
+                mDrawable.setMiuiStyle(isMiui);
             }
             mBatteryIconView.setImageDrawable(mDrawable);
             scaleBatteryMeterViewsLegacy();
@@ -699,13 +705,13 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         float mainBatteryWidth =
                 res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_width) * iconScaleFactor;
 
-        if (mDrawable != null && mDrawable.isHyperOSStyle()) {
+        if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle())) {
             float density = res.getDisplayMetrics().density;
-            mainBatteryWidth = 19f * density * iconScaleFactor;
+            mainBatteryWidth = (mDrawable.isMiuiStyle() ? 23.5f : 19f) * density * iconScaleFactor;
             mainBatteryHeight = 11.5f * density * iconScaleFactor;
         }
 
-        boolean displayShield = mIsBatteryDefender && (mDrawable == null || !mDrawable.isHyperOSStyle());
+        boolean displayShield = mIsBatteryDefender && (mDrawable == null || (!mDrawable.isHyperOSStyle() && !mDrawable.isMiuiStyle()));
         float fullBatteryIconHeight =
                 BatterySpecs.getFullBatteryHeight(mainBatteryHeight, displayShield);
         float fullBatteryIconWidth =
@@ -725,7 +731,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             marginTop = 0;
         }
 
-        int marginBottom = (mDrawable != null && mDrawable.isHyperOSStyle())
+        int marginBottom = (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle()))
                 ? 0
                 : res.getDimensionPixelSize(R.dimen.battery_margin_bottom);
 

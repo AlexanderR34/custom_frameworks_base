@@ -37,7 +37,10 @@ import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -324,6 +327,269 @@ fun HyperOSBattery(
 }
 
 /**
+ * MIUI style Battery Composable (Iconic horizontal pill with embedded bold percentage).
+ *
+ * Visual characteristics:
+ * - Horizontal rounded rectangle capsule frame with prominent rounded corners.
+ * - Symmetrically centered positive terminal pole protruding on the right.
+ * - Thick, uniform outer border.
+ * - Inner cavity with uniform margin/padding (separated from outer border).
+ * - Rounded inner level fill that shrinks horizontally from right to left as battery depletes.
+ * - Bold, sans-serif percentage text (0-100) exactly centered in the geometric body of the battery pill.
+ * - High contrast legibility:
+ *   - Normal: translucent fill so solid text is clearly visible over both fill and empty cavity.
+ *   - Charging: vibrant green fill (0xFF34C759) with solid white text.
+ *   - Power save: amber yellow fill (0xFFF59E0B) with solid white text.
+ *   - Low battery (<= 15%): critical red fill (0xFFEF4444) with solid white text.
+ * - Fully adaptive to system theme (dark/light mode).
+ */
+@Composable
+fun MiuiBattery(
+    level: Int,
+    isCharging: Boolean,
+    isPowerSave: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    val clampedLevel = level.coerceIn(0, 100)
+    val neutralColor = if (isDark) Color.White else Color.Black
+
+    val (activeFillColor, textColor) = when {
+        isCharging -> Color(0xFF34C759) to Color.White
+        isPowerSave -> Color(0xFFF59E0B) to Color.White
+        clampedLevel <= 15 -> Color(0xFFEF4444) to Color.White
+        else -> (if (isDark) Color(0x65FFFFFF) else Color(0x55000000)) to neutralColor
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxHeight()
+            .sysuiResTag(BatteryViewModel.TEST_TAG),
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+
+            val strokeWidth = (1.5f * (h / 12f)).coerceIn(1.3f, 2.0f)
+            val halfStroke = strokeWidth / 2f
+            val capWidth = (1.8f * (h / 12f)).coerceIn(1.5f, 2.2f)
+            val capHeight = maxOf(5.4f * (h / 12f), h * 0.48f)
+            val capCornerRadius = CornerRadius(1.2f * (h / 12f))
+            val rightMargin = capWidth + strokeWidth + 0.8f
+
+            val frameRect = ComposeRect(
+                left = halfStroke + 0.5f,
+                top = halfStroke + 0.5f,
+                right = w - rightMargin,
+                bottom = h - halfStroke - 0.5f,
+            )
+            val frameCornerRadius = CornerRadius(3.5f * (h / 12f))
+
+            // 1. Draw outer pill frame
+            drawRoundRect(
+                color = neutralColor,
+                topLeft = frameRect.topLeft,
+                size = frameRect.size,
+                cornerRadius = frameCornerRadius,
+                style = Stroke(width = strokeWidth),
+            )
+
+            // 2. Draw right terminal cap
+            val capTop = (h - capHeight) / 2f
+            drawRoundRect(
+                color = neutralColor,
+                topLeft = Offset(frameRect.right + (strokeWidth * 0.6f), capTop),
+                size = Size(capWidth, capHeight),
+                cornerRadius = capCornerRadius,
+            )
+
+            // 3. Inner cavity with uniform separation (padding)
+            val inset = strokeWidth + 1.2f * (h / 12f)
+            val innerLeft = frameRect.left + inset
+            val innerTop = frameRect.top + inset
+            val innerMaxRight = frameRect.right - inset
+            val innerBottom = frameRect.bottom - inset
+            val innerWidth = (innerMaxRight - innerLeft).coerceAtLeast(0f)
+            val innerHeight = (innerBottom - innerTop).coerceAtLeast(0f)
+
+            if (innerWidth > 0f && innerHeight > 0f) {
+                val innerCornerRadius = CornerRadius(2.2f * (h / 12f))
+
+                // 4. Soft cavity background
+                drawRoundRect(
+                    color = neutralColor.copy(alpha = 0.16f),
+                    topLeft = Offset(innerLeft, innerTop),
+                    size = Size(innerWidth, innerHeight),
+                    cornerRadius = innerCornerRadius,
+                )
+
+                // 5. Dynamic fill level (shrinks from right to left as battery drains)
+                val currentFillWidth = (innerWidth * (clampedLevel / 100f)).coerceIn(0f, innerWidth)
+                if (currentFillWidth > 0f) {
+                    drawRoundRect(
+                        color = activeFillColor,
+                        topLeft = Offset(innerLeft, innerTop),
+                        size = Size(currentFillWidth, innerHeight),
+                        cornerRadius = innerCornerRadius,
+                    )
+                }
+            }
+        }
+
+        // 6. Percentage text exactly centered inside the battery pill body
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = 2.5.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "$clampedLevel",
+                color = textColor,
+                fontSize = if (clampedLevel >= 100) 8.5.sp else 9.5.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(
+                    platformStyle = PlatformTextStyle(
+                        includeFontPadding = false,
+                    ),
+                ),
+            )
+        }
+    }
+}
+
+/**
+ * ColorOS style Battery Composable (OPPO / OnePlus / Realme):
+ *
+ * Visual characteristics:
+ * - Sin borde ni contorno visible (sin stroke, silueta limpia).
+ * - Fondo translúcido continuo (opacidad ~28%-32%) en el cuerpo y el polo derecho.
+ * - Barra de nivel interior 100% sólida/opaca que avanza de izquierda a derecha.
+ * - Efecto de máscara / clip con el contorno curvado de la píldora.
+ * - Polo derecho centrado con esquinas redondeadas, fusionado con el fondo translúcido.
+ * - Número centrado en negrita con inversión de color (dual-tone split / XOR visual):
+ *   - Lo que queda sobre la zona sólida opaca se pinta en color oscuro/contraste.
+ *   - Lo que queda sobre la zona translúcida vacía se mantiene en blanco/claro (o viceversa en tema claro).
+ */
+@Composable
+fun ColorOSBattery(
+    level: Int,
+    isCharging: Boolean,
+    isPowerSave: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    val clampedLevel = level.coerceIn(0, 100)
+    val textMeasurer = rememberTextMeasurer()
+
+    val normalTextColor = if (isDark) Color.White else Color.Black
+    val translucentBase = if (isDark) Color.White.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.25f)
+
+    val activeFillColor = when {
+        isCharging -> Color(0xFF25D366) // ColorOS charging green
+        isPowerSave -> Color(0xFFFFA000) // Amber
+        clampedLevel <= 15 -> Color(0xFFFF3B30) // Red
+        else -> if (isDark) Color.White else Color.Black
+    }
+
+    val contrastTextColor = when {
+        isCharging -> Color.White
+        isPowerSave -> Color.White
+        clampedLevel <= 15 -> Color.White
+        else -> if (isDark) Color(0xFF1E1E1E) else Color.White
+    }
+
+    val fontSize = if (clampedLevel >= 100) 8.5.sp else 9.5.sp
+    val textLayoutResult = remember(clampedLevel, fontSize, isDark) {
+        textMeasurer.measure(
+            text = "$clampedLevel",
+            style = TextStyle(
+                fontSize = fontSize,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+        )
+    }
+
+    Canvas(
+        modifier = modifier
+            .fillMaxHeight()
+            .sysuiResTag(BatteryViewModel.TEST_TAG),
+    ) {
+        val w = size.width
+        val h = size.height
+
+        val capWidth = (1.5f * (h / 12f)).coerceIn(1.2f, 2.0f)
+        val capHeight = maxOf(4.8f * (h / 12f), h * 0.42f)
+        val capCornerRadius = CornerRadius(1.2f * (h / 12f))
+        val bodyWidth = (w - capWidth - 0.8f).coerceAtLeast(0f)
+        val bodyCornerRadius = CornerRadius(3.5f * (h / 12f))
+
+        // 1. Dibujar el polo derecho translúcido
+        val capTop = (h - capHeight) / 2f
+        drawRoundRect(
+            color = translucentBase,
+            topLeft = Offset(bodyWidth + 0.8f, capTop),
+            size = Size(capWidth, capHeight),
+            cornerRadius = capCornerRadius,
+        )
+
+        // 2. Dibujar fondo translúcido del cuerpo
+        drawRoundRect(
+            color = translucentBase,
+            topLeft = Offset.Zero,
+            size = Size(bodyWidth, h),
+            cornerRadius = bodyCornerRadius,
+        )
+
+        // 3. Dibujar barra de carga sólida recortada al contorno del cuerpo
+        val fillWidth = (bodyWidth * (clampedLevel / 100f)).coerceIn(0f, bodyWidth)
+        if (fillWidth > 0f) {
+            clipRect(left = 0f, top = 0f, right = fillWidth, bottom = h) {
+                drawRoundRect(
+                    color = activeFillColor,
+                    topLeft = Offset.Zero,
+                    size = Size(bodyWidth, h),
+                    cornerRadius = bodyCornerRadius,
+                )
+            }
+        }
+
+        // 4. Dibujar texto con división de contraste (XOR / Inversión de color)
+        val textX = (bodyWidth - textLayoutResult.size.width) / 2f
+        val textY = (h - textLayoutResult.size.height) / 2f
+
+        // Parte del texto sobre el relleno sólido (0 a fillWidth)
+        if (fillWidth > 0f) {
+            clipRect(left = 0f, top = 0f, right = fillWidth, bottom = h) {
+                drawText(
+                    textLayoutResult = textLayoutResult,
+                    topLeft = Offset(textX, textY),
+                    color = contrastTextColor,
+                )
+            }
+        }
+
+        // Parte del texto sobre el fondo vacío translúcido (fillWidth a bodyWidth)
+        if (fillWidth < bodyWidth) {
+            clipRect(left = fillWidth, top = 0f, right = bodyWidth, bottom = h) {
+                drawText(
+                    textLayoutResult = textLayoutResult,
+                    topLeft = Offset(textX, textY),
+                    color = normalTextColor,
+                )
+            }
+        }
+    }
+}
+
+/**
  * Samsung One UI 7 style Battery Composable:
  * - Fondo de la cápsula con barra de progreso que avanza conforme al porcentaje.
  * - Números y rayo en color plano gris carbón uniforme de alto contraste (sin división yin-yang).
@@ -560,6 +826,42 @@ fun UnifiedBattery(
                 showPercent = showPercent,
                 isCharging = viewModel.isCharging,
                 colors = colors,
+                modifier = modifier
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    }
+                    .aspectRatio(pillAspect)
+                    .fillMaxHeight(),
+                contentDescription = contentDesc,
+            )
+        }
+        3 -> {
+            // Style 3: MIUI (Horizontal pill with embedded bold percentage)
+            val pillAspect = if ((viewModel.level ?: 0) >= 100) 25.5f / 11.5f else 23.5f / 11.5f
+            MiuiBattery(
+                level = viewModel.level ?: 100,
+                isCharging = viewModel.isCharging,
+                isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
+                isDark = isDark,
+                modifier = modifier
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    }
+                    .aspectRatio(pillAspect)
+                    .fillMaxHeight(),
+                contentDescription = contentDesc,
+            )
+        }
+        4 -> {
+            // Style 4: ColorOS (Horizontal pill with dual-tone XOR text)
+            val pillAspect = if ((viewModel.level ?: 0) >= 100) 25.5f / 11.5f else 23.5f / 11.5f
+            ColorOSBattery(
+                level = viewModel.level ?: 100,
+                isCharging = viewModel.isCharging,
+                isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
+                isDark = isDark,
                 modifier = modifier
                     .sysuiResTag(BatteryViewModel.TEST_TAG)
                     .onLayoutRectChanged { relativeLayoutBounds ->
