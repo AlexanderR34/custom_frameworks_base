@@ -152,7 +152,7 @@ constructor(
                         viewModel = headerViewModel,
                         notificationsHighlight = ChipHighlightModel.Strong,
                         quickSettingsHighlight = headerViewModel.inactiveChipHighlight,
-                        showClock = !isFullWidth,
+                        showClock = true,
                         modifier = Modifier.element(NotificationsShade.Elements.StatusBar),
                     )
                 }
