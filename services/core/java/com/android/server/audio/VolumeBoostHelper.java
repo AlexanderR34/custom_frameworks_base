@@ -19,7 +19,6 @@ package com.android.server.audio;
 import android.content.Context;
 import android.database.ContentObserver;
 import android.media.AudioSystem;
-import android.media.audiofx.LoudnessEnhancer;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -29,9 +28,8 @@ import android.util.Slog;
 
 /**
  * VolumeBoostHelper:
- * Amplificador de volumen 200% para Android / Mediatek / Poco X7 Pro.
- * Utiliza LoudnessEnhancer en Session 0 (Global Mix) y AudioSystem.setMasterVolume
- * para amplificar tanto audio estándar como juegos con DirectOutput / AAudio MMAP.
+ * Manages 200% (+12 dB) Volume Boost mode across Android media, games, and voice calls.
+ * Communicates with AudioFlinger via AudioSystem.setMasterVolume and persistent system properties.
  */
 public class VolumeBoostHelper {
     private static final String TAG = "VolumeBoostHelper";
@@ -49,35 +47,19 @@ public class VolumeBoostHelper {
         }
     };
 
-    private LoudnessEnhancer mLoudnessEnhancer;
     private int mCurrentAudioMode = AudioSystem.MODE_NORMAL;
     private int mLastAppliedGainMb = -1;
 
     public VolumeBoostHelper(Context context) {
         mContext = context;
-        initAudioFx();
         registerObservers();
+        updateVolumeBoost();
     }
 
     public synchronized void onAudioServerDied() {
-        Slog.i(TAG, "onAudioServerDied: reinicializando efectos de VolumeBoostHelper");
-        initAudioFx();
-    }
-
-    private synchronized void initAudioFx() {
-        releaseAudioFx();
-
-        try {
-            mLoudnessEnhancer = new LoudnessEnhancer(0 /* session 0 = global mix */);
-            mLoudnessEnhancer.setTargetGain(0);
-            mLoudnessEnhancer.setEnabled(true);
-        } catch (Exception e) {
-            Slog.e(TAG, "Fallo al inicializar LoudnessEnhancer en VolumeBoostHelper: " + e.getMessage(), e);
-            mLoudnessEnhancer = null;
-        }
-
+        Slog.i(TAG, "onAudioServerDied: refreshing VolumeBoostHelper configuration");
         mLastAppliedGainMb = -1;
-        applyGain(getCurrentTargetGainMb());
+        updateVolumeBoost();
     }
 
     private void registerObservers() {
@@ -92,7 +74,7 @@ public class VolumeBoostHelper {
                     Settings.System.getUriFor(SETTING_CALL_GAIN_KEY),
                     false, mContentObserver, UserHandle.USER_ALL);
         } catch (Exception e) {
-            Slog.e(TAG, "Fallo al registrar observers en VolumeBoostHelper: " + e.getMessage(), e);
+            Slog.e(TAG, "Failed to register observers in VolumeBoostHelper: " + e.getMessage(), e);
         }
     }
 
@@ -104,17 +86,17 @@ public class VolumeBoostHelper {
     }
 
     private int getCurrentTargetGainMb() {
-        boolean is200Enabled = Settings.System.getIntForUser(
+        int is200Enabled = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
-                Settings.System.VOLUME_BOOST_200_ENABLED, 0, UserHandle.USER_CURRENT) == 1;
-
-        if (!is200Enabled) {
-            return 0;
-        }
+                Settings.System.VOLUME_BOOST_200_ENABLED, 1, UserHandle.USER_CURRENT);
 
         int level = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
                 Settings.System.VOLUME_BOOST_LEVEL, 0, UserHandle.USER_CURRENT);
+
+        if (is200Enabled == 0 && level <= 0) {
+            return 0;
+        }
 
         int clampedLevel = Math.max(0, Math.min(100, level));
 
@@ -152,7 +134,7 @@ public class VolumeBoostHelper {
     private synchronized void applyGain(int targetGainMb) {
         mLastAppliedGainMb = targetGainMb;
 
-        // Multiplicador acústico basado en la escala decibélica real (+12.0 dB = 3.981x ~ 4.0x)
+        // Multiplicador acústico basado en escala decibélica (+12.0 dB = 3.981x ~ 4.0x)
         float boostMultiplier = (targetGainMb > 0) ? (float) Math.pow(10.0, targetGainMb / 2000.0) : 1.0f;
         try {
             android.os.SystemProperties.set("persist.sys.volume_boost_gain", String.format(java.util.Locale.US, "%.3f", boostMultiplier));
@@ -161,34 +143,17 @@ public class VolumeBoostHelper {
             Slog.e(TAG, "Error setting system property volume_boost_gain: " + e.getMessage(), e);
         }
 
-        // Aplica Master Volume en AudioFlinger / ALSA para que juegos y DirectOutput reciban el boost
-        float masterVolume = boostMultiplier;
+        // Aplica el Master Volume en AudioFlinger para que VolumeBoostController reciba la ganancia inmediatamente
         try {
-            AudioSystem.setMasterVolume(masterVolume);
+            AudioSystem.setMasterVolume(boostMultiplier);
         } catch (Exception e) {
             Slog.e(TAG, "Error aplicando setMasterVolume: " + e.getMessage(), e);
-        }
-
-        if (mLoudnessEnhancer != null) {
-            try {
-                mLoudnessEnhancer.setEnabled(false);
-            } catch (Exception ignored) {}
-        }
-    }
-
-    private synchronized void releaseAudioFx() {
-        try {
-            AudioSystem.setMasterVolume(1.0f);
-        } catch (Exception ignored) {}
-        if (mLoudnessEnhancer != null) {
-            try {
-                mLoudnessEnhancer.release();
-            } catch (Exception ignored) {}
-            mLoudnessEnhancer = null;
         }
     }
 
     public synchronized void release() {
-        releaseAudioFx();
+        try {
+            AudioSystem.setMasterVolume(1.0f);
+        } catch (Exception ignored) {}
     }
 }
