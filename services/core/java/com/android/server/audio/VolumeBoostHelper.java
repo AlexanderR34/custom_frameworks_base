@@ -169,21 +169,10 @@ public class VolumeBoostHelper {
             Slog.e(TAG, "Error aplicando setMasterVolume: " + e.getMessage(), e);
         }
 
-        if (mLoudnessEnhancer == null) {
-            initAudioFx();
-            return;
-        }
-
-        try {
-            // Aplica ganancia DSP al mix global de salida
-            mLoudnessEnhancer.setTargetGain(targetGainMb);
-            if (targetGainMb > 0) {
-                mLoudnessEnhancer.setEnabled(true);
-            }
-        } catch (Exception e) {
-            Slog.e(TAG, "Error aplicando setTargetGain en LoudnessEnhancer: " + e.getMessage() + ", reinicializando...", e);
-            mLastAppliedGainMb = -1;
-            initAudioFx();
+        if (mLoudnessEnhancer != null) {
+            try {
+                mLoudnessEnhancer.setEnabled(false);
+            } catch (Exception ignored) {}
         }
     }
 
