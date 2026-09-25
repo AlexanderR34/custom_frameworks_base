@@ -53,6 +53,12 @@ class HyperOSBatteryDrawable(
             invalidateSelf()
         }
 
+    var showPercent = true
+        set(value) {
+            field = value
+            invalidateSelf()
+        }
+
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
         textAlign = Paint.Align.CENTER
@@ -240,8 +246,8 @@ class HyperOSBatteryDrawable(
             canvas.drawRoundRect(levelRect, innerCornerRadius, innerCornerRadius, fillPaint)
         }
 
-        // 6. Draw centered text in MIUI mode or charging bolt in HyperOS mode
-        if (miuiStyle) {
+        // 6. Draw centered text in MIUI mode (if showPercent) or charging bolt in HyperOS mode
+        if (miuiStyle && showPercent) {
             val isColorAccent = charging || powerSaveEnabled || batteryLevel <= 15
             textPaint.color = if (isColorAccent) Color.WHITE else framePaint.color
             textPaint.textSize = if (batteryLevel >= 100) 8.5f * density else 9.5f * density
@@ -275,7 +281,7 @@ class HyperOSBatteryDrawable(
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
     override fun getIntrinsicWidth(): Int =
-        if (miuiStyle) (23.5f * density).toInt() else (19 * density).toInt()
+        if (miuiStyle && showPercent) (23.5f * density).toInt() else (19 * density).toInt()
 
     override fun getIntrinsicHeight(): Int = (11.5f * density).toInt()
 

@@ -158,13 +158,33 @@ private fun VolumeDialogSlider(
         },
 ) {
     val context = LocalContext.current
-    val isHyperOS = remember {
-        Settings.System.getIntForUser(
-            context.contentResolver,
-            Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
-            0,
-            UserHandle.USER_CURRENT
-        ) == 1
+    var isHyperOS by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+                1,
+                UserHandle.USER_CURRENT
+            ) == 1
+        )
+    }
+
+    DisposableEffect(context) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                isHyperOS = Settings.System.getIntForUser(
+                    context.contentResolver,
+                    Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+                    1,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            }
+        }
+        val uri = Settings.System.getUriFor(Settings.System.HYPEROS_VOLUME_PANEL_STYLE)
+        context.contentResolver.registerContentObserver(uri, false, observer, UserHandle.USER_CURRENT)
+        onDispose {
+            context.contentResolver.unregisterContentObserver(observer)
+        }
     }
 
     val collectedSliderStateModel by viewModel.state.collectAsStateWithLifecycle(null)

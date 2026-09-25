@@ -377,6 +377,7 @@ public class AudioService extends IAudioService.Stub
 
     private final MusicFxHelper mMusicFxHelper;
     private VolumeBoostHelper mVolumeBoostHelper;
+    private long mLastVolumeUpAtMaxTime = 0;
 
     /** Debug audio mode */
     protected static final boolean DEBUG_MODE = Log.isLoggable(TAG + ".Mode", Log.DEBUG);
@@ -4486,10 +4487,8 @@ public class AudioService extends IAudioService.Stub
                     }
                     sendVolumeUpdate(streamType, aliasIndex, aliasIndex, flags | AudioManager.FLAG_SHOW_UI, deviceType);
                     return;
-                } else {
-                    mLastVolumeUpAtMaxTime = 0;
-                }
                 } else if (direction == AudioManager.ADJUST_LOWER && currentBoost > 0) {
+                    mLastVolumeUpAtMaxTime = 0;
                     // Trigger de Desactivacion (1 toque hacia abajo estando en modo 200%)
                     final long ident = Binder.clearCallingIdentity();
                     try {
@@ -4504,6 +4503,8 @@ public class AudioService extends IAudioService.Stub
                     // Mantener el 100% nativo y suprimir el decremento en esta primera pulsacion
                     sendVolumeUpdate(streamType, aliasIndex, aliasIndex, flags | AudioManager.FLAG_SHOW_UI, deviceType);
                     return;
+                } else {
+                    mLastVolumeUpAtMaxTime = 0;
                 }
             }
         }

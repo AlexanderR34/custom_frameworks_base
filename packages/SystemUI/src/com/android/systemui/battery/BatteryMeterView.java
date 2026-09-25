@@ -588,6 +588,10 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         }
 
         if (mDrawable != null && mDrawable.isMiuiStyle()) {
+            boolean showInnerPercent = (systemSetting && mShowPercentMode != MODE_OFF && !mBatteryStateUnknown)
+                    || mShowPercentMode == MODE_ON;
+            mDrawable.setShowPercent(showInnerPercent);
+            scaleBatteryMeterViewsLegacy();
             shouldShow = false;
         }
 
@@ -707,7 +711,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
         if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle())) {
             float density = res.getDisplayMetrics().density;
-            mainBatteryWidth = (mDrawable.isMiuiStyle() ? 23.5f : 19f) * density * iconScaleFactor;
+            mainBatteryWidth = (mDrawable.isMiuiStyle() && mDrawable.getShowPercent() ? 23.5f : 19f) * density * iconScaleFactor;
             mainBatteryHeight = 11.5f * density * iconScaleFactor;
         }
 

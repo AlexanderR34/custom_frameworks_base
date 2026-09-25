@@ -77,12 +77,23 @@ class AccessorizedBatteryDrawable(
             }
         }
 
+    var showPercent: Boolean = true
+        set(value) {
+            if (field != value) {
+                field = value
+                syncProperties()
+                updateSizes()
+                postInvalidate()
+            }
+        }
+
     private fun updateActiveDrawable() {
         if (isHyperOSStyle || isMiuiStyle) {
             if (hyperOSBatteryDrawable == null) {
                 hyperOSBatteryDrawable = HyperOSBatteryDrawable(context, frameColor)
             }
             hyperOSBatteryDrawable?.miuiStyle = isMiuiStyle
+            hyperOSBatteryDrawable?.showPercent = showPercent
             drawable = hyperOSBatteryDrawable
         } else {
             drawable = defaultThemedDrawable
@@ -96,6 +107,7 @@ class AccessorizedBatteryDrawable(
         if (isHyperOSStyle || isMiuiStyle) {
             hyperOSBatteryDrawable?.let {
                 it.miuiStyle = isMiuiStyle
+                it.showPercent = showPercent
                 it.setBatteryLevel(currentLevel)
                 it.charging = isCharging
                 it.powerSaveEnabled = isPowerSave

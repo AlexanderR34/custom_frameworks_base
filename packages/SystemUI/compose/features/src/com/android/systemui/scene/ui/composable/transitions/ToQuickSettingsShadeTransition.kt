@@ -17,10 +17,12 @@
 package com.android.systemui.scene.ui.composable.transitions
 
 import androidx.compose.animation.core.tween
+import com.android.compose.animation.scene.Edge
 import com.android.compose.animation.scene.TransitionBuilder
 import com.android.compose.animation.scene.reveal.ContainerRevealHaptics
 import com.android.compose.animation.scene.reveal.verticalContainerReveal
 import com.android.mechanics.behavior.VerticalExpandContainerSpec
+import com.android.systemui.notifications.ui.composable.NotificationsShade
 import com.android.systemui.qs.ui.composable.QuickSettingsShade
 import com.android.systemui.shade.ui.composable.OverlayShade
 import kotlin.time.Duration.Companion.milliseconds
@@ -43,6 +45,33 @@ fun TransitionBuilder.toQuickSettingsShadeTransition(
     fractionRange(start = .5f) {
         fade(QuickSettingsShade.Elements.StatusBar)
         fade(QuickSettingsShade.Elements.Header)
+    }
+}
+
+fun TransitionBuilder.notificationsShadeToQuickSettingsShadeTransition(
+    durationScale: Double = 1.0,
+) {
+    spec = tween(durationMillis = (DefaultDuration * durationScale).inWholeMilliseconds.toInt())
+
+    // Slide notifications panel out to the left
+    translate(NotificationsShade.Elements.Panel, Edge.Start)
+
+    // Slide quick settings panel in from the right
+    translate(QuickSettingsShade.Elements.Panel, Edge.End)
+
+    fractionRange(end = 0.5f) {
+        fade(NotificationsShade.Elements.Panel)
+    }
+    fractionRange(start = 0.3f) {
+        fade(QuickSettingsShade.Elements.Panel)
+    }
+}
+
+fun TransitionBuilder.quickSettingsShadeToNotificationsShadeTransition(
+    durationScale: Double = 1.0,
+) {
+    reversed {
+        notificationsShadeToQuickSettingsShadeTransition(durationScale)
     }
 }
 

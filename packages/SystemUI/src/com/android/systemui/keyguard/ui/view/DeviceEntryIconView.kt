@@ -18,11 +18,24 @@ package com.android.systemui.keyguard.ui.view
 
 import android.companion.virtualdevice.flags.Flags
 import android.content.Context
+import android.database.ContentObserver
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.AnimatedStateListDrawable
 import android.graphics.drawable.AnimatedVectorDrawable
+import android.graphics.drawable.AnimationDrawable
+import android.graphics.drawable.Animatable
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.AttributeSet
 import android.util.StateSet
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -35,6 +48,7 @@ import com.airbnb.lottie.LottieDrawable
 import com.android.systemui.common.ui.view.TouchHandlingView
 import com.android.systemui.log.TouchHandlingViewLogger
 import com.android.systemui.res.R
+import java.io.File
 
 class DeviceEntryIconView
 @JvmOverloads
@@ -127,7 +141,7 @@ constructor(
         // FINGERPRINT
         animatedIconDrawable.addState(
             getIconState(IconType.FINGERPRINT, false),
-            context.getDrawable(R.drawable.ic_fingerprint)!!,
+            getCurrentFingerprintDrawable(),
             R.id.locked_fp,
         )
 
@@ -246,7 +260,7 @@ constructor(
     }
 
     private fun addIconImageView() {
-        iconView.scaleType = ImageView.ScaleType.CENTER_CROP
+        iconView.scaleType = ImageView.ScaleType.FIT_CENTER
         iconView.setImageDrawable(animatedIconDrawable)
         addView(iconView)
         val lp = iconView.layoutParams as LayoutParams
@@ -280,6 +294,155 @@ constructor(
             lockIconState[1] = -android.R.attr.state_single
         }
         return lockIconState
+    }
+
+    private var currentAnimatable: Animatable? = null
+    var customFingerprintDrawable: Drawable? = null
+        private set
+
+    private fun getCurrentFingerprintDrawable(): Drawable {
+        currentAnimatable = null
+        val style = Settings.System.getInt(context.contentResolver, "udfps_icon_style", 0)
+        val d: Drawable = when (style) {
+            4 -> {
+                val customPath = Settings.System.getString(context.contentResolver, "udfps_custom_icon_path")
+                val file = if (!customPath.isNullOrEmpty()) File(customPath) else File("/data/system/udfps_custom_icon.webp")
+                val actualFile = if (file.exists()) file else File("/data/system/udfps_custom_icon.png")
+                val bmp = if (actualFile.exists()) BitmapFactory.decodeFile(actualFile.absolutePath) else null
+                if (bmp != null) BitmapDrawable(resources, bmp)
+                else context.getDrawable(R.drawable.ic_fingerprint)!!
+            }
+            else -> context.getDrawable(R.drawable.ic_fingerprint)!!
+        }
+
+        customFingerprintDrawable = if (style != 0) d else null
+        startAnimationIfNeeded()
+        return d
+    }
+
+    fun applyIconForState(type: IconType, useAodVariant: Boolean) {
+        val style = Settings.System.getInt(context.contentResolver, "udfps_icon_style", 0)
+        if (type == IconType.FINGERPRINT && style != 0) {
+            val d = getCurrentFingerprintDrawable()
+            if (iconView.drawable != d) {
+                iconView.setImageDrawable(d)
+            }
+            iconView.imageTintList = null
+            iconView.alpha = if (useAodVariant) 0.9f else 1.0f
+            startAnimationIfNeeded()
+        } else {
+            iconView.alpha = 1.0f
+            if (iconView.drawable != animatedIconDrawable) {
+                iconView.setImageDrawable(animatedIconDrawable)
+            }
+            iconView.setImageState(getIconState(type, useAodVariant), false)
+        }
+    }
+
+    fun startAnimationIfNeeded() {
+        val animOnlyOnTouch = Settings.System.getInt(context.contentResolver, "udfps_anim_only_on_touch", 1) == 1
+        if (!animOnlyOnTouch) {
+            startRecognizingAnimation()
+        } else {
+            stopRecognizingAnimation()
+        }
+    }
+
+    fun onTouchDown() {
+        startRecognizingAnimation()
+    }
+
+    fun onTouchUp() {
+        val animOnlyOnTouch = Settings.System.getInt(context.contentResolver, "udfps_anim_only_on_touch", 1) == 1
+        if (animOnlyOnTouch) {
+            stopRecognizingAnimation()
+        }
+    }
+
+    fun startRecognizingAnimation() {
+        post {
+            val anim = currentAnimatable ?: ((iconView.drawable as? Animatable) ?: (animatedIconDrawable.current as? Animatable))
+            if (anim is AnimationDrawable) {
+                anim.stop()
+                anim.setVisible(true, true)
+                anim.start()
+            } else if (anim != null) {
+                anim.start()
+            }
+        }
+    }
+
+    fun stopRecognizingAnimation() {
+        post {
+            val anim = currentAnimatable ?: ((iconView.drawable as? Animatable) ?: (animatedIconDrawable.current as? Animatable))
+            if (anim is AnimationDrawable) {
+                anim.stop()
+                anim.setVisible(true, true)
+            } else if (anim != null) {
+                anim.stop()
+            }
+        }
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        if (isVisible) {
+            startAnimationIfNeeded()
+        } else {
+            stopRecognizingAnimation()
+        }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> onTouchDown()
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> onTouchUp()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private val settingsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            reloadIconStates()
+        }
+    }
+
+    private fun reloadIconStates() {
+        val style = Settings.System.getInt(context.contentResolver, "udfps_icon_style", 0)
+        if (style != 0) {
+            bgView.visibility = View.GONE
+            bgView.alpha = 0f
+        }
+        animatedIconDrawable = AnimatedStateListDrawable()
+        setupIconStates()
+        setupIconTransitions()
+        getCurrentFingerprintDrawable()
+        if (style != 0 && customFingerprintDrawable != null) {
+            iconView.setImageDrawable(customFingerprintDrawable)
+        } else {
+            iconView.setImageDrawable(animatedIconDrawable)
+        }
+        startAnimationIfNeeded()
+        invalidate()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor("udfps_icon_style"),
+            false,
+            settingsObserver
+        )
+        context.contentResolver.registerContentObserver(
+            Settings.System.getUriFor("udfps_custom_icon_path"),
+            false,
+            settingsObserver
+        )
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        context.contentResolver.unregisterContentObserver(settingsObserver)
     }
 
     enum class IconType(val contentDescriptionResId: Int) {

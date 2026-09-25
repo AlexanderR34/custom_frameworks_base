@@ -51,6 +51,8 @@ import com.android.systemui.scene.ui.composable.transitions.lockscreenToQuickSet
 import com.android.systemui.scene.ui.composable.transitions.lockscreenToQuickSettingsSceneTransition
 import com.android.systemui.scene.ui.composable.transitions.lockscreenToSingleShadeTransition
 import com.android.systemui.scene.ui.composable.transitions.lockscreenToSplitShadeTransition
+import com.android.systemui.scene.ui.composable.transitions.notificationsShadeToQuickSettingsShadeTransition
+import com.android.systemui.scene.ui.composable.transitions.quickSettingsShadeToNotificationsShadeTransition
 import com.android.systemui.scene.ui.composable.transitions.quickSettingsToAlwaysOnDisplayTransition
 import com.android.systemui.scene.ui.composable.transitions.quickSettingsToShadeTransition
 import com.android.systemui.scene.ui.composable.transitions.shadeToAlwaysOnDisplayTransition
@@ -639,6 +641,19 @@ class SceneContainerTransitions : SceneContainerTransitionsBuilder {
                     revealHaptics = revealHaptics,
                 )
             }
+            from(
+                Overlays.NotificationsShade,
+                to = Overlays.QuickSettingsShade,
+            ) {
+                notificationsShadeToQuickSettingsShadeTransition()
+            }
+            from(
+                Overlays.QuickSettingsShade,
+                to = Overlays.NotificationsShade,
+            ) {
+                quickSettingsShadeToNotificationsShadeTransition()
+            }
+
             from(
                 Overlays.NotificationsShade,
                 to = Scenes.Lockscreen,

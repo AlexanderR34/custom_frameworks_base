@@ -20,7 +20,11 @@ import static android.app.WallpaperManager.FLAG_LOCK;
 import static android.app.WallpaperManager.FLAG_SYSTEM;
 import static android.app.WallpaperManager.SetWallpaperFlags;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.annotation.Nullable;
+import android.view.animation.DecelerateInterpolator;
 import android.app.KeyguardManager;
 import android.app.WallpaperColors;
 import android.app.WallpaperManager;
@@ -29,11 +33,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
+import android.graphics.Camera;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ComposeShader;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.os.UserHandle;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -269,6 +276,16 @@ public class ImageWallpaper extends WallpaperService {
         private BroadcastReceiver mPowerReceiver = null;
         private BroadcastReceiver mTimeReceiver = null;
         private Bitmap mForegroundBitmap = null;
+        private Bitmap mPreviousBitmap = null;
+        private float mTransitionProgress = 1.0f;
+        private ValueAnimator mTransitionAnimator = null;
+        private final Paint mTransitionPaintOld = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        private final Paint mTransitionPaintNew = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        private final Matrix mTransitionMatrixOld = new Matrix();
+        private final Matrix mTransitionMatrixNew = new Matrix();
+        private final Path mTransitionClipPath = new Path();
+        private final Camera mTransitionCamera = new Camera();
+        private BroadcastReceiver mWallpaperChangeReceiver = null;
         private static final PorterDuffXfermode XFERMODE_SCREEN = new PorterDuffXfermode(PorterDuff.Mode.SCREEN);
         private static final PorterDuffXfermode XFERMODE_MULTIPLY = new PorterDuffXfermode(PorterDuff.Mode.MULTIPLY);
         private static final PorterDuffXfermode XFERMODE_DST_IN = new PorterDuffXfermode(PorterDuff.Mode.DST_IN);
@@ -937,6 +954,23 @@ public class ImageWallpaper extends WallpaperService {
                     getDisplayContext().registerReceiver(mTimeReceiver, timeFilter, Context.RECEIVER_EXPORTED);
                 } catch (Exception ignored) {}
             }
+
+            mWallpaperChangeReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (Intent.ACTION_WALLPAPER_CHANGED.equals(intent.getAction())) {
+                        mLongExecutor.execute(CanvasEngine.this::loadWallpaperAndDrawFrameInternal);
+                    }
+                }
+            };
+            IntentFilter wpFilter = new IntentFilter(Intent.ACTION_WALLPAPER_CHANGED);
+            try {
+                ImageWallpaper.this.registerReceiver(mWallpaperChangeReceiver, wpFilter, Context.RECEIVER_EXPORTED);
+            } catch (Exception e) {
+                try {
+                    getDisplayContext().registerReceiver(mWallpaperChangeReceiver, wpFilter, Context.RECEIVER_EXPORTED);
+                } catch (Exception ignored) {}
+            }
             updateJellySetting();
 
             getDisplayContext().getSystemService(DisplayManager.class)
@@ -1371,6 +1405,10 @@ public class ImageWallpaper extends WallpaperService {
         @Override
         public Bundle onCommand(String action, int x, int y, int z, Bundle extras,
                 boolean resultRequested) {
+            if (WallpaperManager.COMMAND_REAPPLY.equals(action) || "android.wallpaper.reapply".equals(action)) {
+                mLongExecutor.execute(this::loadWallpaperAndDrawFrameInternal);
+                return null;
+            }
             if (!mJellyEnabled) {
                 return super.onCommand(action, x, y, z, extras, resultRequested);
             }
@@ -2711,6 +2749,22 @@ public class ImageWallpaper extends WallpaperService {
                 }
                 mTimeReceiver = null;
             }
+            if (mWallpaperChangeReceiver != null) {
+                try {
+                    ImageWallpaper.this.unregisterReceiver(mWallpaperChangeReceiver);
+                } catch (Exception e) {
+                    try {
+                        getDisplayContext().unregisterReceiver(mWallpaperChangeReceiver);
+                    } catch (Exception ignored) {}
+                }
+                mWallpaperChangeReceiver = null;
+            }
+            if (mTransitionAnimator != null) {
+                try {
+                    mTransitionAnimator.cancel();
+                } catch (Exception ignored) {}
+                mTransitionAnimator = null;
+            }
             mColorExtractor.cleanUp();
         }
 
@@ -2857,6 +2911,15 @@ public class ImageWallpaper extends WallpaperService {
         }
 
         private void unloadBitmapIfNotUsedInternal() {
+            boolean dynEnabled = Settings.System.getIntForUser(
+                    getDisplayContext().getContentResolver(),
+                    "dynamic_wallpaper_enabled", 0, UserHandle.USER_CURRENT) == 1;
+            boolean cinemaAnim = Settings.System.getIntForUser(
+                    getDisplayContext().getContentResolver(),
+                    "dynamic_wallpaper_cinema_anim", 1, UserHandle.USER_CURRENT) == 1;
+            if (dynEnabled || cinemaAnim) {
+                return;
+            }
             mBitmapUsages -= 1;
             if (mBitmapUsages <= 0) {
                 mBitmapUsages = 0;
@@ -2866,6 +2929,11 @@ public class ImageWallpaper extends WallpaperService {
 
         private void unloadBitmapInternal() {
             Trace.beginSection("ImageWallpaper.CanvasEngine#unloadBitmap");
+            mWallpaperManager.forgetLoadedWallpaper();
+            if (mPreviousBitmap != null) {
+                mPreviousBitmap.recycle();
+                mPreviousBitmap = null;
+            }
             if (mBitmap != null) {
                 mBitmap.recycle();
             }
@@ -2877,7 +2945,6 @@ public class ImageWallpaper extends WallpaperService {
             synchronized (mSurfaceLock) {
                 if (mSurfaceHolder != null) mSurfaceHolder.getSurface().hwuiDestroy();
             }
-            mWallpaperManager.forgetLoadedWallpaper();
             Trace.endSection();
         }
 
@@ -2887,6 +2954,7 @@ public class ImageWallpaper extends WallpaperService {
             Bitmap bitmap;
             try {
                 Trace.beginSection("WPMS.getBitmapAsUser");
+                mWallpaperManager.forgetLoadedWallpaper();
                 bitmap = mWallpaperManager.getBitmapAsUser(
                         mUserTracker.getUserId(), false, getSourceFlag(), true);
                 if (bitmap != null
@@ -2952,11 +3020,16 @@ public class ImageWallpaper extends WallpaperService {
                         mBitmap.recycle();
                         Trace.endSection();
                     }
+                    if (mPreviousBitmap != null) {
+                        mPreviousBitmap.recycle();
+                        mPreviousBitmap = null;
+                    }
+                    mBitmap = bitmap;
+
                     if (mForegroundBitmap != null) {
                         mForegroundBitmap.recycle();
                         mForegroundBitmap = null;
                     }
-                    mBitmap = bitmap;
                 }
                 if (mDepthEffectEnabled) {
                     asyncExtractForeground();
@@ -2970,6 +3043,7 @@ public class ImageWallpaper extends WallpaperService {
                 Trace.beginSection("WPMS.recomputeColorExtractorMiniBitmap");
                 recomputeColorExtractorMiniBitmap();
                 Trace.endSection();
+
                 Trace.beginSection("WPMS.drawFrameInternal");
                 drawFrameInternal();
                 Trace.endSection();
@@ -2980,8 +3054,13 @@ public class ImageWallpaper extends WallpaperService {
                  *   - the mini bitmap from color extractor is recomputed
                  *   - the DELAY_UNLOAD_BITMAP has passed
                  */
-                mLongExecutor.executeDelayed(
-                        this::unloadBitmapIfNotUsedSynchronized, DELAY_UNLOAD_BITMAP);
+                boolean dynEnabled = Settings.System.getIntForUser(
+                        getDisplayContext().getContentResolver(),
+                        "dynamic_wallpaper_enabled", 0, UserHandle.USER_CURRENT) == 1;
+                if (!dynEnabled) {
+                    mLongExecutor.executeDelayed(
+                            this::unloadBitmapIfNotUsedSynchronized, DELAY_UNLOAD_BITMAP);
+                }
             }
             // even if the bitmap cannot be loaded, call reportEngineShown
             if (!loadSuccess) reportEngineShown(false);

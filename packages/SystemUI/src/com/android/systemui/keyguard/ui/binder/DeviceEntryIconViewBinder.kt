@@ -101,6 +101,13 @@ object DeviceEntryIconViewBinder {
                     }
                 }
             }
+        touchHandlingView.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> view.onTouchDown()
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> view.onTouchUp()
+            }
+            false
+        }
         val layoutChangeListener =
             View.OnLayoutChangeListener {
                 v,
@@ -132,7 +139,12 @@ object DeviceEntryIconViewBinder {
                 repeatOnLifecycle(Lifecycle.State.CREATED) {
                     launch("$TAG#viewModel.useBackgroundProtection") {
                         viewModel.useBackgroundProtection.collect { useBackgroundProtection ->
-                            if (useBackgroundProtection) {
+                            val activeStyle = android.provider.Settings.System.getInt(
+                                view.context.contentResolver,
+                                "udfps_icon_style",
+                                0
+                            )
+                            if (useBackgroundProtection && activeStyle == 0) {
                                 bgView.visibility = View.VISIBLE
                             } else {
                                 bgView.visibility = View.GONE
@@ -253,20 +265,39 @@ object DeviceEntryIconViewBinder {
                                         viewModel.type.contentDescriptionResId
                                     )
                             }
-                            fgIconView.imageTintList =
-                                ColorStateList.valueOf(overrideColor?.toArgb() ?: viewModel.tint)
-                            fgIconView.setPadding(
-                                viewModel.padding,
-                                viewModel.padding,
-                                viewModel.padding,
-                                viewModel.padding,
+                            val activeStyle = android.provider.Settings.System.getInt(
+                                fgIconView.context.contentResolver,
+                                "udfps_icon_style",
+                                0
                             )
+                            if (viewModel.type == DeviceEntryIconView.IconType.FINGERPRINT) {
+                                if (activeStyle == 4 || activeStyle == 5) {
+                                    fgIconView.imageTintList = null
+                                    fgIconView.setPadding(0, 0, 0, 0)
+                                } else if (activeStyle == 6) {
+                                    fgIconView.imageTintList = null
+                                    val romPadding = (fgIconView.resources.displayMetrics.density * 4).toInt()
+                                    fgIconView.setPadding(romPadding, romPadding, romPadding, romPadding)
+                                } else {
+                                    fgIconView.imageTintList =
+                                        ColorStateList.valueOf(overrideColor?.toArgb() ?: viewModel.tint)
+                                    val maxPadding = (fgIconView.resources.displayMetrics.density * 8).toInt()
+                                    val clampedPadding = min(viewModel.padding, maxPadding)
+                                    fgIconView.setPadding(clampedPadding, clampedPadding, clampedPadding, clampedPadding)
+                                }
+                            } else {
+                                fgIconView.imageTintList =
+                                    ColorStateList.valueOf(overrideColor?.toArgb() ?: viewModel.tint)
+                                fgIconView.setPadding(
+                                    viewModel.padding,
+                                    viewModel.padding,
+                                    viewModel.padding,
+                                    viewModel.padding,
+                                )
+                            }
                             // Set image state at the end after updating other view state. This
                             // method forces the ImageView to recompute the bounds of the drawable.
-                            fgIconView.setImageState(
-                                view.getIconState(viewModel.type, viewModel.useAodVariant),
-                                /* merge */ false,
-                            )
+                            view.applyIconForState(viewModel.type, viewModel.useAodVariant)
                             // Invalidate, just in case the padding changes just after icon changes
                             fgIconView.invalidate()
                         }
@@ -302,9 +333,19 @@ object DeviceEntryIconViewBinder {
 
                     launch("$TAG#bgViewModel.alpha") {
                         bgViewModel.alpha.collect { alpha ->
-                            bgView.alpha = alpha
-                            if (enableLockscreenBlur()) {
-                                bgView.background?.alpha = (255 * alpha).toInt()
+                            val activeStyle = android.provider.Settings.System.getInt(
+                                bgView.context.contentResolver,
+                                "udfps_icon_style",
+                                0
+                            )
+                            if (activeStyle != 0) {
+                                bgView.alpha = 0f
+                                bgView.visibility = View.GONE
+                            } else {
+                                bgView.alpha = alpha
+                                if (enableLockscreenBlur()) {
+                                    bgView.background?.alpha = (255 * alpha).toInt()
+                                }
                             }
                         }
                     }

@@ -67,6 +67,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.trace
 import com.android.app.tracing.coroutines.launchTraced as launch
 import com.android.compose.animation.Expandable

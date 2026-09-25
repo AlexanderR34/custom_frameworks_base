@@ -30,10 +30,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
@@ -384,65 +387,19 @@ private fun ContentScope.QuickSettingsLayout(
         val toolbarViewModel =
             rememberViewModel("QuickSettingsLayout") { toolbarViewModelFactory.create() }
 
-        val controlCenterStyle = rememberControlCenterStyle()
-        val isHyperOs = controlCenterStyle == 1
-        val isOneUi = controlCenterStyle == 2
-        val isMagicOs = controlCenterStyle == 3
-        val isIos = controlCenterStyle == 4
+        Toolbar(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .requiredHeight(QuickSettingsShade.Dimensions.ToolbarHeight)
+                    .sysuiResTag("quick_settings_toolbar"),
+            viewModel = toolbarViewModel,
+            isFullyVisible = { layoutState.isIdle(contentKey) },
+        )
 
-        if (!isOneUi && !isMagicOs && !isIos) {
-            Toolbar(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .requiredHeight(QuickSettingsShade.Dimensions.ToolbarHeight)
-                        .sysuiResTag("quick_settings_toolbar"),
-                viewModel = toolbarViewModel,
-                isFullyVisible = { layoutState.isIdle(contentKey) },
-            )
-
-            VerticalSeparator(QuickSettingsShade.Dimensions.ToolbarBottomPadding)
-        }
+        VerticalSeparator(QuickSettingsShade.Dimensions.ToolbarBottomPadding)
 
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-            if (isIos) {
-                // ==================== DISEÑO APPLE IOS 18 ====================
-                IOSControlCenter(
-                    qsContainerViewModel = qsContainerViewModel,
-                    toolbarViewModel = toolbarViewModel,
-                    volumeSliderViewModel = volumeSliderViewModel,
-                    audioDetailsViewModelFactory = audioDetailsViewModelFactory,
-                    isTransparencyEnabled = isTransparencyEnabled,
-                )
-            } else if (isMagicOs) {
-                // ==================== DISEÑO HONOR MAGICOS ====================
-                MagicOSControlCenter(
-                    qsContainerViewModel = qsContainerViewModel,
-                    toolbarViewModel = toolbarViewModel,
-                    volumeSliderViewModel = volumeSliderViewModel,
-                    audioDetailsViewModelFactory = audioDetailsViewModelFactory,
-                    isTransparencyEnabled = isTransparencyEnabled,
-                )
-            } else if (isOneUi) {
-                // ==================== DISEÑO SAMSUNG ONE UI ====================
-                OneUIControlCenter(
-                    qsContainerViewModel = qsContainerViewModel,
-                    toolbarViewModel = toolbarViewModel,
-                    volumeSliderViewModel = volumeSliderViewModel,
-                    audioDetailsViewModelFactory = audioDetailsViewModelFactory,
-                    isTransparencyEnabled = isTransparencyEnabled,
-                )
-            } else if (isHyperOs) {
-                // ==================== DISEÑO HYPEROS (XIAOMI) ====================
-                HyperOSControlCenter(
-                    qsContainerViewModel = qsContainerViewModel,
-                    toolbarViewModel = toolbarViewModel,
-                    volumeSliderViewModel = volumeSliderViewModel,
-                    audioDetailsViewModelFactory = audioDetailsViewModelFactory,
-                    isTransparencyEnabled = isTransparencyEnabled,
-                )
-            } else {
-                // ==================== DISEÑO STOCK AOSP ====================
-                Media(
+            Media(
                     viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
                     presentationStyle = MediaPresentationStyle.Compact,
                     behavior = QuickSettingsContainerViewModel.mediaUiBehavior,
@@ -530,15 +487,14 @@ private fun ContentScope.QuickSettingsLayout(
                     }
                 }
 
-                VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
+            VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
 
-                GridAnchor()
-                TileGrid(
-                    viewModel = qsContainerViewModel.tileGridViewModel,
-                    modifier = Modifier.fillMaxWidth(),
-                    enableRevealEffect = TileRevealFlag.isEnabled,
-                )
-            }
+            GridAnchor()
+            TileGrid(
+                viewModel = qsContainerViewModel.tileGridViewModel,
+                modifier = Modifier.fillMaxWidth(),
+                enableRevealEffect = TileRevealFlag.isEnabled,
+            )
 
             val buildNumberViewModel =
                 rememberViewModel("QuickSettingsShadeOverlay.BuildNumber") {
@@ -555,34 +511,10 @@ private fun ContentScope.QuickSettingsLayout(
                 )
             }
 
-            VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
+            val navBarBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding + navBarBottomPadding)
         }
     }
-}
-
-@Composable
-private fun rememberControlCenterStyle(): Int {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val resolver = context.contentResolver
-    var style by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableIntStateOf(
-            android.provider.Settings.System.getInt(resolver, "control_center_style", 1)
-        )
-    }
-
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        val uri = android.provider.Settings.System.getUriFor("control_center_style")
-        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                style = android.provider.Settings.System.getInt(resolver, "control_center_style", 1)
-            }
-        }
-        resolver.registerContentObserver(uri, false, observer)
-        onDispose {
-            resolver.unregisterContentObserver(observer)
-        }
-    }
-    return style
 }
 
 @Composable

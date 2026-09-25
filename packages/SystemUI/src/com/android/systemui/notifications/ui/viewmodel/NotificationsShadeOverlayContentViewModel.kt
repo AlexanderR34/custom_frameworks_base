@@ -104,7 +104,7 @@ constructor(
         shadeStatusBarComponentsInteractor.disableFlags
             .flatMapLatestConflated {
                 if (it.isQuickSettingsEnabled()) {
-                    mediaCarouselInteractor.hasActiveMedia
+                    mediaCarouselInteractor.hasAnyMedia
                 } else {
                     flowOf(false)
                 }
@@ -112,7 +112,7 @@ constructor(
             .hydratedStateOf(
                 initialValue =
                     shadeStatusBarComponentsInteractor.disableFlags.value
-                        .isQuickSettingsEnabled() && mediaCarouselInteractor.hasActiveMedia.value
+                        .isQuickSettingsEnabled() && mediaCarouselInteractor.hasAnyMedia.value
             )
 
     /**
@@ -160,7 +160,7 @@ constructor(
     val mediaUiBehavior =
         MediaUiBehavior(
             isCarouselDismissible = true,
-            carouselVisibility = MediaCarouselVisibility.WhenAnyCardIsActive,
+            carouselVisibility = MediaCarouselVisibility.WhenNotEmpty,
         )
 
     fun onMediaSwipeToDismiss() = mediaCarouselInteractor.onSwipeToDismiss()

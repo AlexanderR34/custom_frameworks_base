@@ -41,6 +41,7 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.os.Handler;
 import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.Slog;
 import android.view.InflateException;
 import android.view.SurfaceControl;

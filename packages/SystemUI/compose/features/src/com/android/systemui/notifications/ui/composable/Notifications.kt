@@ -91,6 +91,7 @@ import com.android.compose.animation.scene.ContentScope
 import com.android.compose.animation.scene.ElementKey
 import com.android.compose.animation.scene.HeadsUpContentPicker
 import com.android.compose.animation.scene.SceneTransitionLayoutState
+import com.android.compose.gesture.NestedScrollableBound
 import com.android.compose.gesture.effect.OffsetOverscrollEffect
 import com.android.compose.gesture.effect.rememberOffsetOverscrollEffect
 import com.android.compose.modifiers.onUnplaced
@@ -528,7 +529,7 @@ fun ContentScope.NestedScrollingNotificationPanel(
                                 layoutCoordinates = null
                             }
                             .debugBackground(viewModel, DEBUG_BOX_COLOR)
-                            .disableSwipesWhenScrolling() // prevents scene changes
+                            .disableSwipesWhenScrolling(NestedScrollableBound.Start) // allows swipe up to collapse shade
                             .thenIf(!NsslTouchDispatchFix.isEnabled) {
                                 Modifier.nestedScroll(swipeToExpandNotificationScrollConnection)
                             }
@@ -542,16 +543,6 @@ fun ContentScope.NestedScrollingNotificationPanel(
                                 // Disable visuals; The effect applies to the scrim.
                                 overscrollEffect =
                                     scrollingContentOverscrollEffect.withoutVisualEffect(),
-                            )
-                            // Workaround: Separate scrollable to enable overscroll on short
-                            // content that fits in the vertical bounds (b/295810376).
-                            .scrollable(
-                                rememberScrollableState { 0f },
-                                orientation = Orientation.Vertical,
-                                // This node doesn't apply visuals; No wrapper needed.
-                                overscrollEffect = shortContentOverscrollEffect,
-                                // Active only when the content is non-scrollable.
-                                enabled = !isScrollable,
                             )
                             .thenIf(NsslTouchDispatchFix.isEnabled) {
                                 Modifier.swipeToExpandNotification(

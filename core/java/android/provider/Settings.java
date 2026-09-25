@@ -6217,6 +6217,7 @@ public final class Settings {
         @Readable
         public static final String ACCELEROMETER_ROTATION = "accelerometer_rotation";
 
+
         /**
          * Control the type of rotation which can be performed using the accelerometer
          * if ACCELEROMETER_ROTATION is enabled.
