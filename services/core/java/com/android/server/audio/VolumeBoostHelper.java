@@ -88,14 +88,14 @@ public class VolumeBoostHelper {
     private int getCurrentTargetGainMb() {
         int is200Enabled = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
-                Settings.System.VOLUME_BOOST_200_ENABLED, 1, UserHandle.USER_CURRENT);
+                Settings.System.VOLUME_BOOST_200_ENABLED, 0, UserHandle.USER_CURRENT);
 
         int level = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
                 Settings.System.VOLUME_BOOST_LEVEL, 0, UserHandle.USER_CURRENT);
 
-        if (is200Enabled == 0 && level <= 0) {
-            return 0;
+        if (is200Enabled == 0) {
+            level = 0;
         }
 
         int clampedLevel = Math.max(0, Math.min(100, level));
