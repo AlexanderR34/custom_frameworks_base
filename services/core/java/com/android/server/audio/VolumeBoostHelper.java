@@ -152,8 +152,8 @@ public class VolumeBoostHelper {
     private synchronized void applyGain(int targetGainMb) {
         mLastAppliedGainMb = targetGainMb;
 
-        // Multiplicador lineal (1.0f = 100%, 2.0f = 200% a +12 dB)
-        float boostMultiplier = (targetGainMb > 0) ? (1.0f + (targetGainMb / 1200.0f) * 1.0f) : 1.0f;
+        // Multiplicador acústico basado en la escala decibélica real (+12.0 dB = 3.981x ~ 4.0x)
+        float boostMultiplier = (targetGainMb > 0) ? (float) Math.pow(10.0, targetGainMb / 2000.0) : 1.0f;
         try {
             android.os.SystemProperties.set("persist.sys.volume_boost_gain", String.format(java.util.Locale.US, "%.3f", boostMultiplier));
             android.os.SystemProperties.set("sys.volume_boost_gain", String.format(java.util.Locale.US, "%.3f", boostMultiplier));

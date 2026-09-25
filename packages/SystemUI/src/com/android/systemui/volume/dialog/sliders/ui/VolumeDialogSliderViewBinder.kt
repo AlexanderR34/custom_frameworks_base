@@ -505,7 +505,14 @@ private fun HyperOSVolumeVerticalLayout(
                                 val touchY = change.position.y
                                 val heightPx = size.height.toFloat()
                                 val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                                if (isBoostActive && frac < 0.99f) {
+                                if (isBoost200Enabled && !isVoiceCall && (touchY <= 25f || frac >= 0.98f)) {
+                                    Settings.System.putIntForUser(
+                                        context.contentResolver,
+                                        Settings.System.VOLUME_BOOST_LEVEL,
+                                        100,
+                                        UserHandle.USER_CURRENT
+                                    )
+                                } else if (isBoostActive && frac < 0.95f) {
                                     Settings.System.putIntForUser(
                                         context.contentResolver,
                                         Settings.System.VOLUME_BOOST_LEVEL,
@@ -524,7 +531,14 @@ private fun HyperOSVolumeVerticalLayout(
                             val touchY = offset.y
                             val heightPx = size.height.toFloat()
                             val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                            if (isBoostActive && frac < 0.99f) {
+                            if (isBoost200Enabled && !isVoiceCall && (touchY <= 25f || frac >= 0.98f)) {
+                                Settings.System.putIntForUser(
+                                    context.contentResolver,
+                                    Settings.System.VOLUME_BOOST_LEVEL,
+                                    100,
+                                    UserHandle.USER_CURRENT
+                                )
+                            } else if (isBoostActive && frac < 0.95f) {
                                 Settings.System.putIntForUser(
                                     context.contentResolver,
                                     Settings.System.VOLUME_BOOST_LEVEL,
