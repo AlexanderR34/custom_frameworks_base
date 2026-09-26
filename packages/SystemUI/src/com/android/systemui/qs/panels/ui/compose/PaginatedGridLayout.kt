@@ -49,10 +49,8 @@ import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.qs.panels.dagger.PaginatedBaseLayoutType
 import com.android.systemui.qs.panels.ui.compose.Dimensions.FooterHeight
 import com.android.systemui.qs.panels.ui.compose.Dimensions.InterPageSpacing
-import com.android.systemui.qs.panels.ui.compose.toolbar.EditModeButton
 import com.android.systemui.qs.panels.ui.viewmodel.PaginatedGridViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.TileViewModel
-import com.android.systemui.qs.panels.ui.viewmodel.toolbar.EditModeButtonViewModel
 import com.android.systemui.res.R
 import javax.inject.Inject
 
@@ -152,8 +150,6 @@ constructor(
                 buildNumberViewModelFactory = viewModel.buildNumberViewModelFactory,
                 pagerState = pagerState,
                 showArrowsInPager = viewModel.showArrowsInPagerDots,
-                editButtonViewModelFactory = viewModel.editModeButtonViewModelFactory,
-                isVisible = { listening() && layoutState.isIdle() },
             )
         }
     }
@@ -169,22 +165,15 @@ private fun FooterBar(
     buildNumberViewModelFactory: BuildNumberViewModel.Factory,
     pagerState: PagerState,
     showArrowsInPager: Boolean,
-    editButtonViewModelFactory: EditModeButtonViewModel.Factory,
-    isVisible: () -> Boolean = { true },
 ) {
-    val editButtonViewModel =
-        rememberViewModel(traceName = "PaginatedGridLayout-editButtonViewModel") {
-            editButtonViewModelFactory.create()
-        }
-
     // Use requiredHeight so it won't be squished if the view doesn't quite fit. As this is
     // expected to be inside a scrollable container, this should not be an issue.
     // Also, we construct the layout this way to do the following:
     // * PagerDots is centered in the row, taking as much space as it needs.
     // * On the start side, we place the BuildNumber, taking as much space as it needs, but
     //   constrained by the available space left over after PagerDots.
-    // * On the end side, we place the edit mode button, with the same constraints as for
-    //   BuildNumber (but it will usually fit, as it's just a square button).
+    // * On the end side, we place a Spacer with the same weight as the start side,
+    //   so PagerDots remains centered.
     Row(
         modifier = Modifier.requiredHeight(FooterHeight).fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -202,9 +191,6 @@ private fun FooterBar(
             showArrows = showArrowsInPager,
             clickToCyclePages = !showArrowsInPager,
         )
-        Row(Modifier.weight(1f)) {
-            Spacer(modifier = Modifier.weight(1f))
-            EditModeButton(viewModel = editButtonViewModel, isVisible = isVisible())
-        }
+        Spacer(modifier = Modifier.weight(1f))
     }
 }

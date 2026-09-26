@@ -44,10 +44,10 @@ class GridLayoutTypeRepositoryTest : SysuiTestCase() {
         }
 
     @Test
-    fun dualShadeType_infinite() =
+    fun dualShadeType_paginated() =
         kosmos.runTest {
             val type by collectLastValue(underTest.dualShadeLayoutType)
 
-            assertThat(type).isEqualTo(InfiniteGridLayoutType)
+            assertThat(type).isEqualTo(PaginatedGridLayoutType)
         }
 }

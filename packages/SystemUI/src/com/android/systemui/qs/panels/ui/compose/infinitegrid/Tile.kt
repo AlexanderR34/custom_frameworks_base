@@ -234,7 +234,7 @@ fun ContentScope.Tile(
                             tileShape.topEnd,
                         )
                         .sysuiResTag("tile_expandable")
-                        .then(if (iconOnly) Modifier.size(TileHeight) else Modifier.fillMaxWidth())
+                        .fillMaxWidth()
                         .bounceable(
                             currentBounceableInfo.bounceable,
                             currentBounceableInfo.previousTile,
@@ -392,11 +392,11 @@ fun TileContainer(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     Box(
         modifier =
             modifier
-                .then(if (iconOnly) Modifier.size(TileHeight) else Modifier.height(TileHeight).fillMaxWidth())
+                .height(TileHeight)
+                .fillMaxWidth()
                 .tileCombinedClickable(
                     onClick = onClick ?: {},
                     onLongClick = onLongClick,
@@ -635,9 +635,6 @@ private object TileDefaults {
 
     @Composable
     fun tileRadius(uiState: TileUiState, iconOnly: Boolean = false): Dp {
-        if (iconOnly) {
-            return 999.dp
-        }
         return when (uiState.visualState) {
             STATE_ACTIVE -> ActiveTileCornerRadius
             STATE_INACTIVE -> InactiveTileCornerRadius

@@ -61,14 +61,14 @@ class GridLayoutTypeInteractorTest : SysuiTestCase() {
 
     @Test
     @EnableFlags(FLAG_DUAL_SHADE)
-    fun dualShade_gridAlwaysInfinite() =
+    fun dualShade_gridAlwaysPaginated() =
         kosmos.runTest {
             val type by collectLastValue(underTest.layout)
 
             enableDualShade(wideLayout = false)
-            assertThat(type).isEqualTo(InfiniteGridLayoutType)
+            assertThat(type).isEqualTo(PaginatedGridLayoutType)
 
             enableDualShade(wideLayout = true)
-            assertThat(type).isEqualTo(InfiniteGridLayoutType)
+            assertThat(type).isEqualTo(PaginatedGridLayoutType)
         }
 }
