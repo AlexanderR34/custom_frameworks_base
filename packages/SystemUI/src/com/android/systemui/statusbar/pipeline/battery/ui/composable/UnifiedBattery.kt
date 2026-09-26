@@ -327,6 +327,143 @@ fun HyperOSBattery(
 }
 
 /**
+ * Windows 11 style Battery Composable.
+ *
+ * Visual characteristics:
+ * - Horizontal rounded rectangle capsule frame with smooth rounded corners.
+ * - Solid centered positive terminal cap protruding on the right.
+ * - Uniform transparent gap/inset between the outer frame and the inner rounded fill.
+ * - Dynamic color fill matching Windows 11 Fluent Design palette:
+ *   - Critical / Low (<= 20%): Windows 11 Red (0xFFE81123)
+ *   - Medium / Power Save (21% - 49% or isPowerSave): Windows 11 Yellow/Amber (0xFFFFB900)
+ *   - Normal / High (>= 50%): Windows 11 Green (0xFF107C41)
+ *   - Charging: Windows 11 Green (0xFF107C41) fill with a bold, sharp white lightning bolt
+ *     outlined in solid black for crisp contrast, centered across the battery body.
+ * - Percentage text placed outside on the right side.
+ */
+@Composable
+fun Windows11Battery(
+    level: Int,
+    isCharging: Boolean,
+    isPowerSave: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    val clampedLevel = level.coerceIn(0, 100)
+    val neutralColor = if (isDark) Color.White else Color.Black
+
+    Canvas(
+        modifier = modifier.fillMaxSize().sysuiResTag(BatteryViewModel.TEST_TAG),
+        contentDescription = contentDescription,
+    ) {
+        val w = size.width
+        val h = size.height
+
+        val strokeWidth = (1.5f * (h / 12f)).coerceIn(1.3f, 1.9f)
+        val halfStroke = strokeWidth / 2f
+        val capWidth = (1.6f * (h / 12f)).coerceIn(1.3f, 2.0f)
+        val capHeight = maxOf(5.0f * (h / 12f), h * 0.44f)
+        val capCornerRadius = CornerRadius(1.2f * (h / 12f))
+        val rightMargin = capWidth + strokeWidth + 0.8f
+
+        val frameRect = ComposeRect(
+            left = halfStroke + 0.5f,
+            top = halfStroke + 0.5f,
+            right = w - rightMargin,
+            bottom = h - halfStroke - 0.5f,
+        )
+        val frameCornerRadius = CornerRadius(3.2f * (h / 12f))
+
+        // 1. Draw outer battery frame
+        drawRoundRect(
+            color = neutralColor,
+            topLeft = frameRect.topLeft,
+            size = frameRect.size,
+            cornerRadius = frameCornerRadius,
+            style = Stroke(width = strokeWidth),
+        )
+
+        // 2. Draw positive terminal cap on right
+        val capTop = (h - capHeight) / 2f
+        drawRoundRect(
+            color = neutralColor,
+            topLeft = Offset(frameRect.right + (strokeWidth * 0.6f), capTop),
+            size = Size(capWidth, capHeight),
+            cornerRadius = capCornerRadius,
+        )
+
+        // 3. Inner cavity dimensions with uniform gap
+        val inset = strokeWidth + 1.2f * (h / 12f)
+        val innerLeft = frameRect.left + inset
+        val innerTop = frameRect.top + inset
+        val innerMaxRight = frameRect.right - inset
+        val innerBottom = frameRect.bottom - inset
+        val innerWidth = (innerMaxRight - innerLeft).coerceAtLeast(0f)
+        val innerHeight = (innerBottom - innerTop).coerceAtLeast(0f)
+
+        if (innerWidth > 0f && innerHeight > 0f) {
+            val innerCornerRadius = CornerRadius(2.0f * (h / 12f))
+
+            // 4. Determine fill color matching Windows 11 Fluent Design:
+            // Critical/Low (<= 20%): Red, Medium/PowerSave (< 50%): Amber, Normal/Charging: Green
+            val activeFillColor = when {
+                isCharging -> Color(0xFF107C41)
+                clampedLevel <= 20 -> Color(0xFFE81123)
+                isPowerSave || clampedLevel < 50 -> Color(0xFFFFB900)
+                else -> Color(0xFF107C41)
+            }
+
+            // 5. Draw dynamic level progress fill
+            val currentFillWidth = (innerWidth * (clampedLevel / 100f)).coerceIn(0f, innerWidth)
+            if (currentFillWidth > 0f) {
+                drawRoundRect(
+                    color = activeFillColor,
+                    topLeft = Offset(innerLeft, innerTop),
+                    size = Size(currentFillWidth, innerHeight),
+                    cornerRadius = innerCornerRadius,
+                )
+            }
+
+            // 6. Draw Windows 11 charging lightning bolt (pure white bolt with black outline)
+            if (isCharging) {
+                val centerX = frameRect.left + (frameRect.width / 2f)
+                val centerY = h / 2f
+                val boltH = h * 1.15f
+                val boltW = h * 0.52f
+
+                val boltPath = Path().apply {
+                    val topX = centerX + boltW * 0.16f
+                    val topY = centerY - boltH * 0.50f
+                    val midLeftX = centerX - boltW * 0.50f
+                    val midLeftY = centerY + boltH * 0.05f
+                    val notchLeftX = centerX - boltW * 0.05f
+                    val notchLeftY = centerY + boltH * 0.05f
+                    val botX = centerX - boltW * 0.18f
+                    val botY = centerY + boltH * 0.50f
+                    val midRightX = centerX + boltW * 0.50f
+                    val midRightY = centerY - boltH * 0.05f
+                    val notchRightX = centerX + boltW * 0.05f
+                    val notchRightY = centerY - boltH * 0.05f
+
+                    moveTo(topX, topY)
+                    lineTo(midLeftX, midLeftY)
+                    lineTo(notchLeftX, notchLeftY)
+                    lineTo(botX, botY)
+                    lineTo(midRightX, midRightY)
+                    lineTo(notchRightX, notchRightY)
+                    close()
+                }
+                // Solid black outline for crisp contrast over green fill and frame
+                drawPath(boltPath, Color.Black, style = Stroke(width = 1.8f * (h / 12f)))
+                // Pure white interior
+                drawPath(boltPath, Color.White)
+            }
+        }
+    }
+}
+
+/**
  * MIUI style Battery Composable (Iconic horizontal pill with embedded bold percentage).
  *
  * Visual characteristics:
@@ -848,6 +985,49 @@ fun UnifiedBattery(
                     .fillMaxHeight(),
                 contentDescription = contentDesc,
             )
+        }
+        5 -> {
+            // Style 5: Windows 11 (Fluent battery icon with right-side percentage)
+            val showPercent = showPercentSetting || viewModel.glyphList.isNotEmpty()
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = modifier
+                    .wrapContentWidth()
+                    .sysuiResTag(BatteryViewModel.TEST_TAG)
+                    .onLayoutRectChanged { relativeLayoutBounds ->
+                        bounds = with(relativeLayoutBounds.boundsInScreen) { Rect(left, top, right, bottom) }
+                    },
+            ) {
+                Windows11Battery(
+                    level = viewModel.level ?: 100,
+                    isCharging = viewModel.isCharging,
+                    isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
+                    isDark = isDark,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .aspectRatio(21f / 11.5f)
+                        .fillMaxHeight(),
+                    contentDescription = contentDesc,
+                )
+                if (showPercent && viewModel.level != null) {
+                    Text(
+                        text = "${viewModel.level}%",
+                        color = neutralColor,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        style = TextStyle(
+                            platformStyle = PlatformTextStyle(
+                                includeFontPadding = false,
+                            ),
+                        ),
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                }
+            }
         }
         else -> {
             // Style 0 (or default): Stock AOSP unified battery

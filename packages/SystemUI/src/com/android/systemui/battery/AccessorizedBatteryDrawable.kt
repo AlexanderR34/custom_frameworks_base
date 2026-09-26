@@ -77,6 +77,14 @@ class AccessorizedBatteryDrawable(
             }
         }
 
+    var isWindows11Style: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                updateActiveDrawable()
+            }
+        }
+
     var showPercent: Boolean = true
         set(value) {
             if (field != value) {
@@ -88,11 +96,12 @@ class AccessorizedBatteryDrawable(
         }
 
     private fun updateActiveDrawable() {
-        if (isHyperOSStyle || isMiuiStyle) {
+        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
             if (hyperOSBatteryDrawable == null) {
                 hyperOSBatteryDrawable = HyperOSBatteryDrawable(context, frameColor)
             }
             hyperOSBatteryDrawable?.miuiStyle = isMiuiStyle
+            hyperOSBatteryDrawable?.windows11Style = isWindows11Style
             hyperOSBatteryDrawable?.showPercent = showPercent
             drawable = hyperOSBatteryDrawable
         } else {
@@ -104,9 +113,10 @@ class AccessorizedBatteryDrawable(
     }
 
     private fun syncProperties() {
-        if (isHyperOSStyle || isMiuiStyle) {
+        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
             hyperOSBatteryDrawable?.let {
                 it.miuiStyle = isMiuiStyle
+                it.windows11Style = isWindows11Style
                 it.showPercent = showPercent
                 it.setBatteryLevel(currentLevel)
                 it.charging = isCharging
@@ -202,7 +212,7 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicHeight(): Int {
-        if (isHyperOSStyle || isMiuiStyle) {
+        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
             return hyperOSBatteryDrawable?.intrinsicHeight ?: (13 * density).toInt()
         }
         val height =
@@ -215,7 +225,7 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicWidth(): Int {
-        if (isHyperOSStyle || isMiuiStyle) {
+        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
             return hyperOSBatteryDrawable?.intrinsicWidth ?: (19 * density).toInt()
         }
         val width =

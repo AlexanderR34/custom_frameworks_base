@@ -491,7 +491,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mBatteryPercentView != null) {
             mEstimateText = null;
             String percentText = NumberFormat.getPercentInstance().format(mLevel / 100f);
-            if (mDrawable != null && mDrawable.isHyperOSStyle()) {
+            if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isWindows11Style())) {
                 percentText = mLevel + "%";
             }
             // Setting text actually triggers a layout pass (because the text view is set to
@@ -581,7 +581,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                 || mShowPercentMode == MODE_ESTIMATE;
         shouldShow = shouldShow && !mBatteryStateUnknown;
 
-        if (mDrawable != null && mDrawable.isHyperOSStyle()) {
+        if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isWindows11Style())) {
             shouldShow = (systemSetting && mShowPercentMode != MODE_OFF && !mBatteryStateUnknown)
                     || mShowPercentMode == MODE_ON
                     || mShowPercentMode == MODE_ESTIMATE;
@@ -683,9 +683,11 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         } else {
             boolean isHyperOS = (style == 1);
             boolean isMiui = (style == 3);
+            boolean isWindows11 = (style == 5);
             if (mDrawable != null) {
                 mDrawable.setHyperOSStyle(isHyperOS);
                 mDrawable.setMiuiStyle(isMiui);
+                mDrawable.setWindows11Style(isWindows11);
             }
             mBatteryIconView.setImageDrawable(mDrawable);
             scaleBatteryMeterViewsLegacy();
@@ -709,13 +711,13 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         float mainBatteryWidth =
                 res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_width) * iconScaleFactor;
 
-        if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle())) {
+        if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle() || mDrawable.isWindows11Style())) {
             float density = res.getDisplayMetrics().density;
             mainBatteryWidth = (mDrawable.isMiuiStyle() && mDrawable.getShowPercent() ? 23.5f : 19f) * density * iconScaleFactor;
             mainBatteryHeight = 11.5f * density * iconScaleFactor;
         }
 
-        boolean displayShield = mIsBatteryDefender && (mDrawable == null || (!mDrawable.isHyperOSStyle() && !mDrawable.isMiuiStyle()));
+        boolean displayShield = mIsBatteryDefender && (mDrawable == null || (!mDrawable.isHyperOSStyle() && !mDrawable.isMiuiStyle() && !mDrawable.isWindows11Style()));
         float fullBatteryIconHeight =
                 BatterySpecs.getFullBatteryHeight(mainBatteryHeight, displayShield);
         float fullBatteryIconWidth =
@@ -735,7 +737,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             marginTop = 0;
         }
 
-        int marginBottom = (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle()))
+        int marginBottom = (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle() || mDrawable.isWindows11Style()))
                 ? 0
                 : res.getDimensionPixelSize(R.dimen.battery_margin_bottom);
 

@@ -53,6 +53,12 @@ class HyperOSBatteryDrawable(
             invalidateSelf()
         }
 
+    var windows11Style = false
+        set(value) {
+            field = value
+            invalidateSelf()
+        }
+
     var showPercent = true
         set(value) {
             field = value
@@ -225,6 +231,12 @@ class HyperOSBatteryDrawable(
 
         // 4. Determine inner fill color based on state
         val activeFillColor = when {
+            windows11Style -> when {
+                charging -> COLOR_WIN11_GREEN
+                batteryLevel <= 20 -> COLOR_WIN11_RED
+                powerSaveEnabled || batteryLevel < 50 -> COLOR_WIN11_YELLOW
+                else -> COLOR_WIN11_GREEN
+            }
             charging -> COLOR_CHARGING_GREEN
             powerSaveEnabled -> COLOR_POWERSAVE_YELLOW
             batteryLevel <= 15 -> COLOR_CRITICAL_RED
@@ -246,7 +258,7 @@ class HyperOSBatteryDrawable(
             canvas.drawRoundRect(levelRect, innerCornerRadius, innerCornerRadius, fillPaint)
         }
 
-        // 6. Draw centered text in MIUI mode (if showPercent) or charging bolt in HyperOS mode
+        // 6. Draw centered text in MIUI mode (if showPercent) or charging bolt in HyperOS/Windows11 mode
         if (miuiStyle && showPercent) {
             val isColorAccent = charging || powerSaveEnabled || batteryLevel <= 15
             textPaint.color = if (isColorAccent) Color.WHITE else framePaint.color
@@ -281,7 +293,7 @@ class HyperOSBatteryDrawable(
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
     override fun getIntrinsicWidth(): Int =
-        if (miuiStyle && showPercent) (23.5f * density).toInt() else (19 * density).toInt()
+        if (miuiStyle && showPercent) (23.5f * density).toInt() else if (windows11Style) (21 * density).toInt() else (19 * density).toInt()
 
     override fun getIntrinsicHeight(): Int = (11.5f * density).toInt()
 
@@ -289,5 +301,8 @@ class HyperOSBatteryDrawable(
         const val COLOR_CHARGING_GREEN = 0xFF34C759.toInt()
         const val COLOR_POWERSAVE_YELLOW = 0xFFF59E0B.toInt()
         const val COLOR_CRITICAL_RED = 0xFFEF4444.toInt()
+        const val COLOR_WIN11_GREEN = 0xFF107C41.toInt()
+        const val COLOR_WIN11_YELLOW = 0xFFFFB900.toInt()
+        const val COLOR_WIN11_RED = 0xFFE81123.toInt()
     }
 }
