@@ -21,6 +21,7 @@ import com.android.compose.animation.scene.Swipe
 import com.android.compose.animation.scene.UserAction
 import com.android.compose.animation.scene.UserActionResult
 import com.android.compose.animation.scene.UserActionResult.HideOverlay
+import com.android.compose.animation.scene.UserActionResult.ReplaceByOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
 import com.android.systemui.scene.shared.model.Overlays
@@ -43,11 +44,7 @@ class NotificationsShadeOverlayActionsViewModel @AssistedInject constructor() :
                         Overlays.QuickSettingsShade,
                         hideCurrentOverlays = HideCurrentOverlays.Some(Overlays.NotificationsShade),
                     ),
-                Swipe.Left to
-                    ShowOverlay(
-                        Overlays.QuickSettingsShade,
-                        hideCurrentOverlays = HideCurrentOverlays.Some(Overlays.NotificationsShade),
-                    ),
+                Swipe.Left to ReplaceByOverlay(Overlays.QuickSettingsShade),
             )
         )
     }

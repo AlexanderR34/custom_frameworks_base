@@ -17,6 +17,7 @@
 package com.android.systemui.scene.ui.composable.transitions
 
 import androidx.compose.animation.core.tween
+import com.android.compose.animation.Easings
 import com.android.compose.animation.scene.Edge
 import com.android.compose.animation.scene.TransitionBuilder
 import com.android.compose.animation.scene.reveal.ContainerRevealHaptics
@@ -51,19 +52,28 @@ fun TransitionBuilder.toQuickSettingsShadeTransition(
 fun TransitionBuilder.notificationsShadeToQuickSettingsShadeTransition(
     durationScale: Double = 1.0,
 ) {
-    spec = tween(durationMillis = (DefaultDuration * durationScale).inWholeMilliseconds.toInt())
+    spec =
+        tween(
+            durationMillis = (SwitchShadesDuration * durationScale).inWholeMilliseconds.toInt(),
+            easing = Easings.Emphasized,
+        )
 
     // Slide notifications panel out to the left
     translate(NotificationsShade.Elements.Panel, Edge.Start)
+    translate(NotificationsShade.Elements.StatusBar, Edge.Start)
 
     // Slide quick settings panel in from the right
     translate(QuickSettingsShade.Elements.Panel, Edge.End)
+    translate(QuickSettingsShade.Elements.StatusBar, Edge.End)
 
-    fractionRange(end = 0.5f) {
+    // Silky smooth cross-fade with graceful overlap
+    fractionRange(end = 0.55f, easing = Easings.StandardAccelerate) {
         fade(NotificationsShade.Elements.Panel)
+        fade(NotificationsShade.Elements.StatusBar)
     }
-    fractionRange(start = 0.3f) {
+    fractionRange(start = 0.25f, easing = Easings.StandardDecelerate) {
         fade(QuickSettingsShade.Elements.Panel)
+        fade(QuickSettingsShade.Elements.StatusBar)
     }
 }
 
@@ -76,3 +86,4 @@ fun TransitionBuilder.quickSettingsShadeToNotificationsShadeTransition(
 }
 
 private val DefaultDuration = 300.milliseconds
+private val SwitchShadesDuration = 380.milliseconds

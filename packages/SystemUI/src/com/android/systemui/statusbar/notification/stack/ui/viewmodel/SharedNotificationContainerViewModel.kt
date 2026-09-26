@@ -309,18 +309,12 @@ constructor(
                                 }
                             )
 
+                        val isRtl =
+                            configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+                        // All inset types combined, except the IME.
                         val (insetStart, insetEnd) =
-                            if (shadeMode is Dual && !isFullWidthShade) {
-                                // No need to add insets in the "floating" shade design, since
-                                // they are already applied to the shade panel (container).
-                                0 to 0
-                            } else {
-                                val isRtl =
-                                    configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
-                                // All inset types combined, except the IME.
-                                with(getInsetsOf(context, defaultVisible())) {
-                                    if (isRtl) right to left else left to right
-                                }
+                            with(getInsetsOf(context, defaultVisible())) {
+                                if (isRtl) right to left else left to right
                             }
 
                         val (marginStart, marginEnd) =

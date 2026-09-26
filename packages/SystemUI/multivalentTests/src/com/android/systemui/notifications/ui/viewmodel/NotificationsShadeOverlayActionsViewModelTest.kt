@@ -23,6 +23,7 @@ import androidx.test.filters.SmallTest
 import com.android.compose.animation.scene.Back
 import com.android.compose.animation.scene.Swipe
 import com.android.compose.animation.scene.UserActionResult.HideOverlay
+import com.android.compose.animation.scene.UserActionResult.ReplaceByOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
 import com.android.systemui.Flags.FLAG_DUAL_SHADE
@@ -113,5 +114,12 @@ class NotificationsShadeOverlayActionsViewModelTest : SysuiTestCase() {
             assertThat((action as ShowOverlay).overlay).isEqualTo(Overlays.QuickSettingsShade)
             assertThat((action.hideCurrentOverlays as HideCurrentOverlays.Some).overlays)
                 .containsExactly(Overlays.NotificationsShade)
+        }
+
+    @Test
+    fun swipeLeft_switchesToQuickSettingsShade() =
+        kosmos.runTest {
+            val action = actions?.get(Swipe.Left)
+            assertThat((action as ReplaceByOverlay).overlay).isEqualTo(Overlays.QuickSettingsShade)
         }
 }

@@ -21,6 +21,7 @@ import com.android.compose.animation.scene.Swipe
 import com.android.compose.animation.scene.UserAction
 import com.android.compose.animation.scene.UserActionResult
 import com.android.compose.animation.scene.UserActionResult.HideOverlay
+import com.android.compose.animation.scene.UserActionResult.ReplaceByOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay
 import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurrentOverlays
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
@@ -63,11 +64,7 @@ constructor(private val editModeViewModel: EditModeViewModel) : UserActionsViewM
                     if (!isEditing) {
                         put(
                             Swipe.Right,
-                            ShowOverlay(
-                                Overlays.NotificationsShade,
-                                hideCurrentOverlays =
-                                    HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
-                            ),
+                            ReplaceByOverlay(Overlays.NotificationsShade),
                         )
                     }
                 }

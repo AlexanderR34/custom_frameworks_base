@@ -124,6 +124,8 @@ open class DefaultClockFaceLayout(val view: View) : ClockFaceLayout {
                 },
                 update = { parent ->
                     view?.let {
+                        it.visibility = View.VISIBLE
+                        it.alpha = 1f
                         parent.removeAllViews()
                         (view.parent as? ViewGroup)?.removeView(view)
                         parent.addView(view)
