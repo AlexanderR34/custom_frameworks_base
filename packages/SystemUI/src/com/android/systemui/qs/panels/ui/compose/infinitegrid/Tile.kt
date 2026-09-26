@@ -234,7 +234,7 @@ fun ContentScope.Tile(
                             tileShape.topEnd,
                         )
                         .sysuiResTag("tile_expandable")
-                        .fillMaxWidth()
+                        .then(if (iconOnly) Modifier.size(TileHeight) else Modifier.fillMaxWidth())
                         .bounceable(
                             currentBounceableInfo.bounceable,
                             currentBounceableInfo.previousTile,
@@ -393,12 +393,10 @@ fun TileContainer(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val style = android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
-    val isCustomStyle = (style == 1 || style == 2 || style == 3 || style == 4)
     Box(
         modifier =
             modifier
-                .then(if (iconOnly && isCustomStyle) Modifier.size(TileHeight) else Modifier.height(TileHeight).fillMaxWidth())
+                .then(if (iconOnly) Modifier.size(TileHeight) else Modifier.height(TileHeight).fillMaxWidth())
                 .tileCombinedClickable(
                     onClick = onClick ?: {},
                     onLongClick = onLongClick,
@@ -637,9 +635,7 @@ private object TileDefaults {
 
     @Composable
     fun tileRadius(uiState: TileUiState, iconOnly: Boolean = false): Dp {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val style = android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
-        if (iconOnly && (style == 1 || style == 2 || style == 3 || style == 4)) {
+        if (iconOnly) {
             return 999.dp
         }
         return when (uiState.visualState) {
