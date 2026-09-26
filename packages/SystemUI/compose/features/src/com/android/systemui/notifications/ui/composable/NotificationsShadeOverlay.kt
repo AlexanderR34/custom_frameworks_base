@@ -194,9 +194,8 @@ constructor(
 
                 if (viewModel.showMedia) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(
+                        modifier =
+                            Modifier.fillMaxWidth().padding(
                                 start = notificationStackPadding,
                                 end = notificationStackPadding,
                                 bottom = 8.dp,

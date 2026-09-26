@@ -65,4 +65,7 @@ interface MediaCardViewModel {
     val contentDescription: String
 
     val onLongClick: () -> Unit
+
+    /** Whether this card can be dismissed by swiping. */
+    val canBeDismissed: Boolean
 }

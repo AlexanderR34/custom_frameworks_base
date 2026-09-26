@@ -377,6 +377,11 @@ constructor(
                         )
                         interactor.setIsGutsVisible(true)
                     }
+                    override val canBeDismissed: Boolean
+                        get() =
+                            session.canBeHidden &&
+                                session.state != MediaSessionState.Playing &&
+                                session.state != MediaSessionState.Buffering
                 }
             }
             .let {

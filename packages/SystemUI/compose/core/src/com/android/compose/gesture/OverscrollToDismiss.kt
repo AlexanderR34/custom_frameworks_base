@@ -63,25 +63,28 @@ import kotlinx.coroutines.launch
 fun Modifier.overscrollToDismiss(
     orientation: Orientation = Orientation.Horizontal,
     enabled: Boolean = true,
+    canBeDismissed: Boolean = true,
     onDismissed: () -> Unit,
-) = this.then(OverscrollToDismissElement(orientation, enabled, onDismissed))
+) = this.then(OverscrollToDismissElement(orientation, enabled, canBeDismissed, onDismissed))
 
 private data class OverscrollToDismissElement(
     val orientation: Orientation,
     val enabled: Boolean,
+    val canBeDismissed: Boolean,
     val onDismissed: () -> Unit,
 ) : ModifierNodeElement<OverscrollToDismissNode>() {
     override fun create(): OverscrollToDismissNode {
-        return OverscrollToDismissNode(orientation, enabled, onDismissed)
+        return OverscrollToDismissNode(orientation, enabled, canBeDismissed, onDismissed)
     }
 
     override fun update(node: OverscrollToDismissNode) {
-        node.update(orientation, enabled, onDismissed)
+        node.update(orientation, enabled, canBeDismissed, onDismissed)
     }
 
     override fun InspectorInfo.inspectableProperties() {
         name = "overscrollToDismiss"
         properties["enabled"] = enabled
+        properties["canBeDismissed"] = canBeDismissed
         properties["orientation"] = orientation
     }
 }
@@ -89,6 +92,7 @@ private data class OverscrollToDismissElement(
 private class OverscrollToDismissNode(
     orientation: Orientation,
     enabled: Boolean,
+    var canBeDismissed: Boolean,
     var onDismissed: () -> Unit,
 ) :
     DelegatingNode(),
@@ -118,7 +122,13 @@ private class OverscrollToDismissNode(
     private var delegateNode =
         delegate(NestedDraggableRootNode(this, orientation, null, enabled, true))
 
-    fun update(orientation: Orientation, enabled: Boolean, onDismissed: () -> Unit) {
+    fun update(
+        orientation: Orientation,
+        enabled: Boolean,
+        canBeDismissed: Boolean,
+        onDismissed: () -> Unit,
+    ) {
+        this.canBeDismissed = canBeDismissed
         this.onDismissed = onDismissed
         delegateNode.update(this, orientation, null, enabled, true)
     }
@@ -228,9 +238,16 @@ private class OverscrollToDismissNode(
                 currentState == MagneticDetach.State.Attached ||
                     (currentState == MagneticDetach.State.Detached && isFlingInOppositeDirection)
 
+            val minDismissDistance = contentBoxWidth * 0.35f
+            val hasMinDismissDistanceOrFling =
+                abs(motionValue.output) >= minDismissDistance ||
+                    abs(velocity) > 600.dp.toPx()
+
+            val shouldDismiss = canBeDismissed && !settleAttached && hasMinDismissDistanceOrFling
+
             dragState =
-                if (settleAttached) DragState.Idle
-                else DragState.Dismissed(contentBoxWidth * outputSign)
+                if (shouldDismiss) DragState.Dismissed(contentBoxWidth * outputSign)
+                else DragState.Idle
         }
         return velocity
     }

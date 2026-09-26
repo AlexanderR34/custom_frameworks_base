@@ -374,30 +374,20 @@ private fun CardCarouselContent(
             }
         }
 
-        if (behavior.isCarouselDismissible) {
-            Box(
-                modifier =
-                    Modifier.overscrollToDismiss(
-                        orientation = Orientation.Horizontal,
-                        enabled = isSwipingEnabled,
-                        onDismissed = onDismissed,
-                    )
-            ) {
-                PagerContent()
-            }
-        } else {
-            val overscrollEffect = rememberOffsetOverscrollEffect()
-            SwipeToReveal(
-                foregroundContent = { PagerContent() },
-                foregroundContentEffect = overscrollEffect,
-                revealedContent = { revealAmount ->
-                    RevealedContent(
-                        viewModel = viewModel.settingsButtonViewModel,
-                        revealAmount = revealAmount,
-                    )
-                },
-                isSwipingEnabled = isSwipingEnabled,
-            )
+        val currentCard = viewModel.cards.getOrNull(carouselState.currentItem)
+        val canCurrentCardBeDismissed =
+            behavior.isCarouselDismissible && (currentCard?.canBeDismissed ?: false)
+
+        Box(
+            modifier =
+                Modifier.overscrollToDismiss(
+                    orientation = Orientation.Horizontal,
+                    enabled = isSwipingEnabled,
+                    canBeDismissed = canCurrentCardBeDismissed,
+                    onDismissed = onDismissed,
+                )
+        ) {
+            PagerContent()
         }
     }
 
