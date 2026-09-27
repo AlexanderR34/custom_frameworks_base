@@ -216,7 +216,7 @@ public class ThemeOverlayController implements CoreStartable, Dumpable {
             if (Settings.System.getIntForUser(
                     mContext.getContentResolver(),
                     "dynamic_wallpaper_freeze_monet",
-                    1,
+                    0,
                     userId) == 1) {
                 Log.d(TAG, "Skipping onColorsChanged: Monet theme colors are pinned by dynamic wallpaper setting");
                 return;
