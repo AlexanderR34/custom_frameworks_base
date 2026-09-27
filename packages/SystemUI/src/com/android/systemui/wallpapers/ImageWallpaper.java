@@ -221,7 +221,7 @@ public class ImageWallpaper extends WallpaperService {
 
         // Jelly Wallpaper Elastic Mesh Simulation
         private final JellyMesh mJellyMesh = new JellyMesh();
-        private boolean mJellyEnabled = true;
+        private boolean mJellyEnabled = false;
         private boolean mIsLoopRunning = false;
         private long mLastFrameTimeNanos = 0;
 
@@ -1173,11 +1173,11 @@ public class ImageWallpaper extends WallpaperService {
         private void updateJellySetting() {
             int enabledVal = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
-                    KEY_JELLY_WALLPAPER, 1);
+                    KEY_JELLY_WALLPAPER, 0);
             if (enabledVal == -1) {
                 enabledVal = Settings.System.getInt(
                     getDisplayContext().getContentResolver(),
-                    KEY_JELLY_LEGACY, 1);
+                    KEY_JELLY_LEGACY, 0);
             }
             boolean newJellyEnabled = (enabledVal == 1);
             boolean needsReload = (mJellyEnabled != newJellyEnabled);
