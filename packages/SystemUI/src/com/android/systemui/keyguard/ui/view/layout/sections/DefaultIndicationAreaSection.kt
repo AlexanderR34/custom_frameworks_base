@@ -95,15 +95,15 @@ constructor(
                 ConstraintSet.END
             )
 
-            // 2. Lyrics View: ARRIBA DE LA HUELLA DIGITAL (Bottom constrained to device_entry_icon_view top)
+            // 2. Lyrics View: ARRIBA DEL ÁREA DE INDICACIÓN Y HUELLA DIGITAL
             constrainWidth(lyricsViewId, ViewGroup.LayoutParams.MATCH_PARENT)
             constrainHeight(lyricsViewId, ViewGroup.LayoutParams.WRAP_CONTENT)
             connect(
                 lyricsViewId,
                 ConstraintSet.BOTTOM,
-                R.id.device_entry_icon_view,
+                indicationAreaViewId,
                 ConstraintSet.TOP,
-                dpToPx(6f)
+                dpToPx(76f)
             )
             connect(
                 lyricsViewId,

@@ -385,11 +385,10 @@
 
     <string name="screenrecord_resolution_label">Resolution</string>
     <string name="screenrecord_resolution_auto">Native / Original</string>
-    <string name="screenrecord_resolution_1440p">1440p (2K / QHD)</string>
-    <string name="screenrecord_resolution_1220p">1220p (1.5K)</string>
-    <string name="screenrecord_resolution_1080p">1080p (FHD)</string>
-    <string name="screenrecord_resolution_720p">720p (HD)</string>
-    <string name="screenrecord_resolution_480p">480p (SD)</string>
+    <string name="screenrecord_resolution_1220p">1220x2712 (1.5K)</string>
+    <string name="screenrecord_resolution_1080p">1080x2400 (FHD)</string>
+    <string name="screenrecord_resolution_720p">720x1600 (HD)</string>
+    <string name="screenrecord_resolution_480p">480x1066 (SD)</string>
 
     <string name="screenrecord_framerate_label">Frame rate</string>
     <string name="screenrecord_framerate_auto">Auto / Max</string>

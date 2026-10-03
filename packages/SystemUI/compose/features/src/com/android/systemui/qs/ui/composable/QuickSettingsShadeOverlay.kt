@@ -335,15 +335,43 @@ private fun ContentScope.QuickSettingsContainer(
             }
 
             ShadeBodyState.Default -> {
-                QuickSettingsLayout(
-                    qsContainerViewModel = containerViewModel,
-                    toolbarViewModelFactory = contentViewModel.toolbarViewModelFactory,
-                    buildNumberViewModelFactory = contentViewModel.buildNumberViewModelFactory,
-                    isTransparencyEnabled = contentViewModel.isTransparencyEnabled,
-                    volumeSliderViewModel = contentViewModel.volumeSliderViewModel,
-                    audioDetailsViewModelFactory = contentViewModel.audioDetailsViewModelFactory,
-                    modifier = modifier.sysuiResTag("quick_settings_panel"),
-                )
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val isDualShade = remember(context) {
+                    android.provider.Settings.Secure.getInt(
+                        context.contentResolver,
+                        android.provider.Settings.Secure.DUAL_SHADE,
+                        1
+                    ) == 1
+                }
+                val controlCenterStyle = remember(context) {
+                    android.provider.Settings.System.getInt(
+                        context.contentResolver,
+                        "control_center_style",
+                        1
+                    )
+                }
+
+                if (isDualShade || controlCenterStyle == 1) {
+                    HyperOSQuickSettingsLayout(
+                        qsContainerViewModel = containerViewModel,
+                        toolbarViewModelFactory = contentViewModel.toolbarViewModelFactory,
+                        buildNumberViewModelFactory = contentViewModel.buildNumberViewModelFactory,
+                        isTransparencyEnabled = contentViewModel.isTransparencyEnabled,
+                        volumeSliderViewModel = contentViewModel.volumeSliderViewModel,
+                        audioDetailsViewModelFactory = contentViewModel.audioDetailsViewModelFactory,
+                        modifier = modifier.sysuiResTag("quick_settings_panel"),
+                    )
+                } else {
+                    QuickSettingsLayout(
+                        qsContainerViewModel = containerViewModel,
+                        toolbarViewModelFactory = contentViewModel.toolbarViewModelFactory,
+                        buildNumberViewModelFactory = contentViewModel.buildNumberViewModelFactory,
+                        isTransparencyEnabled = contentViewModel.isTransparencyEnabled,
+                        volumeSliderViewModel = contentViewModel.volumeSliderViewModel,
+                        audioDetailsViewModelFactory = contentViewModel.audioDetailsViewModelFactory,
+                        modifier = modifier.sysuiResTag("quick_settings_panel"),
+                    )
+                }
             }
         }
     }
@@ -509,6 +537,285 @@ private fun ContentScope.QuickSettingsLayout(
             }
 
             VerticalSeparator(QuickSettingsShade.Dimensions.ShortPadding)
+        }
+    }
+}
+
+@Composable
+private fun ContentScope.HyperOSQuickSettingsLayout(
+    qsContainerViewModel: QuickSettingsContainerViewModel,
+    toolbarViewModelFactory: ToolbarViewModel.Factory,
+    buildNumberViewModelFactory: BuildNumberViewModel.Factory,
+    isTransparencyEnabled: Boolean,
+    volumeSliderViewModel: AudioStreamSliderViewModel?,
+    audioDetailsViewModelFactory: AudioDetailsViewModel.Factory,
+    modifier: Modifier = Modifier,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(horizontal = 14.dp),
+    ) {
+        VerticalSeparator(10.dp)
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val allTiles = qsContainerViewModel.tileGridViewModel.tileViewModels
+            val internetTile = allTiles.find { it.spec.spec == "internet" || it.spec.spec == "wifi" }
+            val cellTile = allTiles.find { it.spec.spec == "cell" }
+
+            // 1. Top Dual Connectivity Cards (Wi-Fi and Mobile Data)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (internetTile != null) {
+                    val tileState by internetTile.tile.state.collectAsStateWithLifecycle()
+                    val isActive = tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE
+                    HyperOSConnectivityCard(
+                        title = "Wi-Fi",
+                        subtitle = if (isActive) (tileState.secondaryLabel?.toString() ?: "Activado") else "Desactivado",
+                        icon = tileState.icon,
+                        fallbackIconRes = R.drawable.ic_wifi_signal_4,
+                        isActive = isActive,
+                        onClick = { internetTile.toggleClick() },
+                        onLongClick = { internetTile.settingsClick(com.android.systemui.animation.Expandable.fromView(null)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (cellTile != null) {
+                    val tileState by cellTile.tile.state.collectAsStateWithLifecycle()
+                    val isActive = tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE
+                    HyperOSConnectivityCard(
+                        title = tileState.label?.toString() ?: "Datos",
+                        subtitle = if (isActive) (tileState.secondaryLabel?.toString() ?: "Activado") else "Desactivado",
+                        icon = tileState.icon,
+                        fallbackIconRes = R.drawable.ic_swap_vert,
+                        isActive = isActive,
+                        onClick = { cellTile.toggleClick() },
+                        onLongClick = { cellTile.settingsClick(com.android.systemui.animation.Expandable.fromView(null)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            VerticalSeparator(10.dp)
+
+            // 2. Middle Row: Media Card (2x2) + Vertical Brightness Slider + Vertical Volume Slider
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(138.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Media widget (compact card)
+                Box(
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                ) {
+                    Media(
+                        viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
+                        presentationStyle = MediaPresentationStyle.Compact,
+                        behavior = QuickSettingsContainerViewModel.mediaUiBehavior,
+                        onDismissed = qsContainerViewModel::onMediaSwipeToDismiss,
+                        modifier = Modifier.fillMaxSize(),
+                        location = Media.Location.QS,
+                    )
+                }
+
+                // Vertical Brightness Slider
+                if (qsContainerViewModel.isBrightnessSliderVisible) {
+                    Box(
+                        modifier = Modifier
+                            .weight(0.9f)
+                            .fillMaxHeight()
+                    ) {
+                        BrightnessSliderContainer(
+                            viewModel = qsContainerViewModel.brightnessSliderViewModel,
+                            containerColors = ContainerColors(
+                                idleColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                mirrorColor = OverlayShade.Colors.panelBackground(isTransparencyEnabled),
+                            ),
+                            modifier = Modifier.fillMaxSize(),
+                            dimensions = QuickSettingsShade.Dimensions.brightnessSliderDimensions,
+                        )
+                    }
+                }
+
+                // Vertical Volume Slider
+                if (volumeSliderViewModel != null) {
+                    val volumeSliderState by volumeSliderViewModel.slider.collectAsStateWithLifecycle()
+                    Box(
+                        modifier = Modifier
+                            .weight(0.9f)
+                            .fillMaxHeight()
+                    ) {
+                        VolumeSlider(
+                            modifier = Modifier.fillMaxSize(),
+                            showLabel = false,
+                            state = volumeSliderState,
+                            onValueChange = { newValue: Float ->
+                                volumeSliderViewModel.onValueChanged(volumeSliderState, newValue)
+                            },
+                            onValueChangeFinished = {
+                                volumeSliderViewModel.onValueChangeFinished()
+                            },
+                            onIconTapped = { volumeSliderViewModel.toggleMuted(volumeSliderState) },
+                            sliderColors = PlatformSliderDefaults.defaultPlatformSliderColors(),
+                            hapticsViewModelFactory = volumeSliderViewModel.getSliderHapticsViewModelFactory(),
+                            dimensions = QuickSettingsShade.Dimensions.VolumeSliderDimensions,
+                        )
+                    }
+                }
+            }
+
+            VerticalSeparator(14.dp)
+
+            // 3. Circular Quick Settings Tiles Grid
+            GridAnchor()
+            TileGrid(
+                viewModel = qsContainerViewModel.tileGridViewModel,
+                modifier = Modifier.fillMaxWidth(),
+                enableRevealEffect = TileRevealFlag.isEnabled,
+            )
+
+            VerticalSeparator(14.dp)
+
+            // 4. Centered "Editar" Pill Button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                        .clickable {
+                            qsContainerViewModel.editModeViewModel.startEditing()
+                        }
+                        .padding(horizontal = 28.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Editar",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            fontSize = 13.androidx.compose.ui.unit.sp
+                        )
+                    )
+                }
+            }
+
+            val buildNumberViewModel = rememberViewModel("QuickSettingsShadeOverlay.BuildNumber") {
+                buildNumberViewModelFactory.create()
+            }
+            if (buildNumberViewModel.buildNumber != null) {
+                VerticalSeparator(QuickSettingsShade.Dimensions.ShortPadding)
+                BuildNumber(
+                    viewModel = buildNumberViewModel,
+                    modifier = Modifier.align(Alignment.Start).padding(start = 14.dp),
+                )
+            }
+
+            VerticalSeparator(16.dp)
+        }
+    }
+}
+
+@Composable
+private fun HyperOSConnectivityCard(
+    title: String,
+    subtitle: String,
+    icon: com.android.systemui.plugins.qs.QSTile.Icon?,
+    fallbackIconRes: Int,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val targetBackgroundColor = if (isActive) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    }
+    val targetContentColor = if (isActive) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val targetSubColor = if (isActive) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val animatedBackgroundColor by animateColorAsState(targetBackgroundColor, label = "CardBgColor")
+    val animatedContentColor by animateColorAsState(targetContentColor, label = "CardContentColor")
+    val animatedSubColor by animateColorAsState(targetSubColor, label = "CardSubColor")
+
+    val drawable = remember(icon, context) {
+        icon?.getDrawable(context)
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .height(72.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(animatedBackgroundColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp)
+    ) {
+        if (drawable != null) {
+            val bitmap = remember(drawable) {
+                androidx.core.graphics.drawable.toBitmap(drawable, 56, 56)
+            }
+            androidx.compose.foundation.Image(
+                bitmap = androidx.compose.ui.graphics.asImageBitmap(bitmap),
+                contentDescription = title,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(animatedContentColor),
+                modifier = Modifier.size(28.dp)
+            )
+        } else {
+            Icon(
+                painter = painterResource(id = fallbackIconRes),
+                contentDescription = title,
+                tint = animatedContentColor,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(verticalArrangement = Arrangement.Center) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    fontSize = 14.androidx.compose.ui.unit.sp,
+                    color = animatedContentColor
+                ),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 12.androidx.compose.ui.unit.sp,
+                    color = animatedSubColor
+                ),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
         }
     }
 }

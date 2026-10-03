@@ -84,14 +84,42 @@ constructor(
                 textFeedbackContentViewModelFactory.create(context)
             }
 
-        val columns = viewModel.columnsWithMediaViewModel.columns
+        val isDualShade = remember(context) {
+            android.provider.Settings.Secure.getInt(
+                context.contentResolver,
+                android.provider.Settings.Secure.DUAL_SHADE,
+                1
+            ) == 1
+        }
+        val controlCenterStyle = remember(context) {
+            android.provider.Settings.System.getInt(
+                context.contentResolver,
+                "control_center_style",
+                1
+            )
+        }
+        val isHyperOS = isDualShade || controlCenterStyle == 1
+
+        val effectiveTiles = remember(tiles, isHyperOS) {
+            if (isHyperOS) {
+                tiles.filterNot { it.spec.spec == "internet" || it.spec.spec == "wifi" || it.spec.spec == "cell" }
+            } else {
+                tiles
+            }
+        }
+
+        val columns = if (isHyperOS) 4 else viewModel.columnsWithMediaViewModel.columns
         val largeTilesSpan = viewModel.columnsWithMediaViewModel.largeSpan
         val largeTiles by viewModel.iconTilesViewModel.largeTilesState
         // Tiles or largeTiles may be updated while this is composed, so listen to any changes
         val sizedTiles =
-            remember(tiles, largeTiles, largeTilesSpan) {
-                tiles.map {
-                    SizedTileImpl(it, if (largeTiles.contains(it.spec)) largeTilesSpan else 1)
+            remember(effectiveTiles, largeTiles, largeTilesSpan, isHyperOS) {
+                if (isHyperOS) {
+                    effectiveTiles.map { SizedTileImpl(it, 1) }
+                } else {
+                    effectiveTiles.map {
+                        SizedTileImpl(it, if (largeTiles.contains(it.spec)) largeTilesSpan else 1)
+                    }
                 }
             }
         val squishiness by viewModel.squishinessViewModel.squishiness.collectAsStateWithLifecycle()
@@ -102,8 +130,8 @@ constructor(
         val spans by remember(sizedTiles) { derivedStateOf { sizedTiles.fastMap { it.width } } }
         VerticalSpannedGrid(
             columns = columns,
-            columnSpacing = dimensionResource(R.dimen.qs_tile_margin_horizontal),
-            rowSpacing = dimensionResource(R.dimen.qs_tile_margin_vertical),
+            columnSpacing = if (isHyperOS) 10.androidx.compose.ui.unit.dp else dimensionResource(R.dimen.qs_tile_margin_horizontal),
+            rowSpacing = if (isHyperOS) 14.androidx.compose.ui.unit.dp else dimensionResource(R.dimen.qs_tile_margin_vertical),
             spans = spans,
             keys = { sizedTiles[it].tile.spec },
             modifier = modifier,
@@ -113,7 +141,7 @@ constructor(
             Element(it.tile.spec.toElementKey(), Modifier) {
                 Tile(
                     tile = it.tile,
-                    iconOnly = iconTilesViewModel.isIconTile(it.tile.spec),
+                    iconOnly = if (isHyperOS) true else iconTilesViewModel.isIconTile(it.tile.spec),
                     squishiness = { squishiness },
                     tileHapticsViewModelFactory = tileHapticsViewModelFactory,
                     coroutineScope = scope,
@@ -134,7 +162,7 @@ constructor(
             }
         }
 
-        TileListener(tiles, listening)
+        TileListener(effectiveTiles, listening)
     }
 
     @Composable
