@@ -16,6 +16,8 @@
 
 package com.android.systemui.custom
 
+import com.android.systemui.CoreStartable
+import com.android.systemui.gestures.ShakeGestureController
 import com.android.systemui.qs.QsEventLogger
 import com.android.systemui.qs.pipeline.shared.TileSpec
 import com.android.systemui.qs.shared.model.TileCategory
@@ -26,6 +28,7 @@ import com.android.systemui.qs.tiles.AutoBrightnessTile
 import com.android.systemui.qs.tiles.CaffeineTile
 import com.android.systemui.qs.tiles.DataSwitchTile
 import com.android.systemui.qs.tiles.HeadsUpTile
+import com.android.systemui.qs.tiles.InternalAudioMicTile
 import com.android.systemui.qs.tiles.PowerShareTile
 import com.android.systemui.qs.tiles.ReadingModeTile
 import com.android.systemui.qs.tiles.SyncTile
@@ -38,6 +41,7 @@ import com.android.systemui.res.R
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
+import dagger.multibindings.ClassKey
 import dagger.multibindings.IntoMap
 import dagger.multibindings.StringKey
 
@@ -79,6 +83,12 @@ interface CustomModule {
     @StringKey(HeadsUpTile.TILE_SPEC)
     fun bindHeadsUpTile(headsUpTile: HeadsUpTile): QSTileImpl<*>
 
+    /** Inject InternalAudioMicTile into tileMap in QSModule */
+    @Binds
+    @IntoMap
+    @StringKey(InternalAudioMicTile.TILE_SPEC)
+    fun bindInternalAudioMicTile(internalAudioMicTile: InternalAudioMicTile): QSTileImpl<*>
+
     /** Inject PowerShareTile into tileMap in QSModule */
     @Binds
     @IntoMap
@@ -109,6 +119,12 @@ interface CustomModule {
     @StringKey(VpnTile.TILE_SPEC)
     fun bindVpnTile(vpnTile: VpnTile): QSTileImpl<*>
 
+    /** Start ShakeGestureController */
+    @Binds
+    @IntoMap
+    @ClassKey(ShakeGestureController::class)
+    fun bindShakeGestureController(shakeGestureController: ShakeGestureController): CoreStartable
+
     companion object {
         const val AMBIENT_DISPLAY_TILE_SPEC = "ambient_display"
         const val AOD_TILE_SPEC = "aod"
@@ -116,6 +132,7 @@ interface CustomModule {
         const val CAFFEINE_TILE_SPEC = "caffeine"
         const val DATA_SWITCH_TILE_SPEC = "data_switch"
         const val HEADS_UP_TILE_SPEC = "heads_up"
+        const val INTERNAL_AUDIO_MIC_TILE_SPEC = "internal_audio_mic"
         const val POWERSHARE_TILE_SPEC = "powershare"
         const val READING_MODE_TILE_SPEC = "reading_mode"
         const val SYNC_TILE_SPEC = "sync"
@@ -210,6 +227,21 @@ interface CustomModule {
                     ),
                 instanceId = uiEventLogger.getNewInstanceId(),
                 category = TileCategory.ACCESSIBILITY,
+            )
+
+        @Provides
+        @IntoMap
+        @StringKey(INTERNAL_AUDIO_MIC_TILE_SPEC)
+        fun provideInternalAudioMicTileConfig(uiEventLogger: QsEventLogger): QSTileConfig =
+            QSTileConfig(
+                tileSpec = TileSpec.create(INTERNAL_AUDIO_MIC_TILE_SPEC),
+                uiConfig =
+                    QSTileUIConfig.Resource(
+                        iconRes = R.drawable.ic_qs_internal_audio_mic,
+                        labelRes = R.string.quick_settings_internal_audio_mic_label
+                    ),
+                instanceId = uiEventLogger.getNewInstanceId(),
+                category = TileCategory.UTILITIES,
             )
 
         @Provides
