@@ -255,10 +255,10 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                         displayId,
                         this
                 );
-                setLowQuality(mLowQuality);
-                setLongerDuration(mLongerDuration);
-                setHEVC(mHEVC);
                 if (mRecorder != null) {
+                    mRecorder.setLowQuality(mLowQuality);
+                    mRecorder.setLongerDuration(mLongerDuration);
+                    mRecorder.setHEVC(mHEVC);
                     mRecorder.setVideoQuality(intent.getIntExtra(EXTRA_VIDEO_QUALITY, 0));
                     mRecorder.setResolution(intent.getIntExtra(EXTRA_RESOLUTION, 0));
                     mRecorder.setFrameRate(intent.getIntExtra(EXTRA_FRAME_RATE, 0));

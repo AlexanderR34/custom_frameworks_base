@@ -197,7 +197,6 @@ class ScreenRecordPermissionContentManager(
             android.R.layout.simple_spinner_dropdown_item,
             listOf(
                 containerView.context.getString(R.string.screenrecord_resolution_auto),
-                containerView.context.getString(R.string.screenrecord_resolution_1440p),
                 containerView.context.getString(R.string.screenrecord_resolution_1220p),
                 containerView.context.getString(R.string.screenrecord_resolution_1080p),
                 containerView.context.getString(R.string.screenrecord_resolution_720p),
@@ -225,11 +224,11 @@ class ScreenRecordPermissionContentManager(
             containerView.context,
             android.R.layout.simple_spinner_dropdown_item,
             listOf(
-                containerView.context.getString(R.string.screenrecord_framerate_auto),
+                containerView.context.getString(R.string.screenrecord_framerate_120),
+                containerView.context.getString(R.string.screenrecord_framerate_90),
                 containerView.context.getString(R.string.screenrecord_framerate_60),
                 containerView.context.getString(R.string.screenrecord_framerate_30),
-                containerView.context.getString(R.string.screenrecord_framerate_90),
-                containerView.context.getString(R.string.screenrecord_framerate_120),
+                containerView.context.getString(R.string.screenrecord_framerate_auto),
             )
         )
         fpsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)

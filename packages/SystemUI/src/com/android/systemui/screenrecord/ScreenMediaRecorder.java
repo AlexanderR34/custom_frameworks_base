@@ -235,74 +235,61 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
         int reqWidth = nativeWidth;
         int reqHeight = nativeHeight;
 
-        if (mResolution == 1) { // 1440p (2K / QHD)
-            int shortSide = 1440;
-            int longSide = Math.round(shortSide / aspectRatio);
-            reqWidth = isPortrait ? shortSide : longSide;
-            reqHeight = isPortrait ? longSide : shortSide;
-        } else if (mResolution == 2) { // 1220p (1.5K)
-            int shortSide = 1220;
-            int longSide = Math.round(shortSide / aspectRatio);
-            reqWidth = isPortrait ? shortSide : longSide;
-            reqHeight = isPortrait ? longSide : shortSide;
-        } else if (mResolution == 3) { // 1080p (FHD)
-            int shortSide = 1080;
-            int longSide = Math.round(shortSide / aspectRatio);
-            reqWidth = isPortrait ? shortSide : longSide;
-            reqHeight = isPortrait ? longSide : shortSide;
-        } else if (mResolution == 4) { // 720p (HD)
-            int shortSide = 720;
-            int longSide = Math.round(shortSide / aspectRatio);
-            reqWidth = isPortrait ? shortSide : longSide;
-            reqHeight = isPortrait ? longSide : shortSide;
-        } else if (mResolution == 5) { // 480p (SD)
-            int shortSide = 480;
-            int longSide = Math.round(shortSide / aspectRatio);
-            reqWidth = isPortrait ? shortSide : longSide;
-            reqHeight = isPortrait ? longSide : shortSide;
+        if (mResolution == 1) { // 1220x2712 (1.5K)
+            reqWidth = isPortrait ? 1220 : 2712;
+            reqHeight = isPortrait ? 2712 : 1220;
+        } else if (mResolution == 2) { // 1080x2400 (FHD)
+            reqWidth = isPortrait ? 1080 : 2400;
+            reqHeight = isPortrait ? 2400 : 1080;
+        } else if (mResolution == 3) { // 720x1600 (HD)
+            reqWidth = isPortrait ? 720 : 1600;
+            reqHeight = isPortrait ? 1600 : 720;
+        } else if (mResolution == 4) { // 480x1066 (SD)
+            reqWidth = isPortrait ? 480 : 1066;
+            reqHeight = isPortrait ? 1066 : 480;
         }
 
-        // Enforce 16-pixel block alignment required by hardware video encoders
-        reqWidth = (reqWidth / 16) * 16;
-        reqHeight = (reqHeight / 16) * 16;
+        // Ensure even dimensions required by hardware video encoders
+        reqWidth = (reqWidth / 2) * 2;
+        reqHeight = (reqHeight / 2) * 2;
 
         int refreshRate;
-        if (mFrameRate == 1) { // 60 FPS
-            refreshRate = 60;
-        } else if (mFrameRate == 2) { // 30 FPS
-            refreshRate = 30;
-        } else if (mFrameRate == 3) { // 90 FPS
-            refreshRate = 90;
-        } else if (mFrameRate == 4) { // 120 FPS
+        if (mFrameRate == 0) { // 120 FPS (Default)
             refreshRate = 120;
-        } else { // 0: Auto / Default 60 FPS
-            refreshRate = mLowQuality ? LOW_VIDEO_FRAME_RATE : Math.min(60, (int) display.getRefreshRate());
+        } else if (mFrameRate == 1) { // 90 FPS
+            refreshRate = 90;
+        } else if (mFrameRate == 2) { // 60 FPS
+            refreshRate = 60;
+        } else if (mFrameRate == 3) { // 30 FPS
+            refreshRate = 30;
+        } else if (mFrameRate == 4) { // Auto / Max
+            refreshRate = mLowQuality ? LOW_VIDEO_FRAME_RATE : (int) display.getRefreshRate();
             if (mMaxRefreshRate != 0 && refreshRate > mMaxRefreshRate) refreshRate = mMaxRefreshRate;
+        } else {
+            refreshRate = 120;
         }
 
         int[] dimens = getSupportedSize(reqWidth, reqHeight, refreshRate);
         int width = dimens[0];
         int height = dimens[1];
-        if (mFrameRate == 0) {
-            refreshRate = dimens[2];
-        }
+        refreshRate = dimens[2];
 
         int vidBitRate;
         if (mHEVC) {
             if (mVideoQuality == 1) { // Medium
-                vidBitRate = 5000000; // 5 Mbps (~110 MB for 3 mins)
+                vidBitRate = 6000000; // 6 Mbps
             } else if (mVideoQuality == 2) { // Low
-                vidBitRate = 2500000; // 2.5 Mbps (~55 MB for 3 mins)
+                vidBitRate = 3000000; // 3 Mbps
             } else { // High / Default (0)
-                vidBitRate = mLowQuality ? 3500000 : 10000000; // 10 Mbps (~220 MB for 3 mins)
+                vidBitRate = mLowQuality ? 4000000 : 12000000; // 12 Mbps
             }
         } else {
             if (mVideoQuality == 1) { // Medium
-                vidBitRate = 8000000; // 8 Mbps (~170 MB for 3 mins)
+                vidBitRate = 9000000; // 9 Mbps
             } else if (mVideoQuality == 2) { // Low
-                vidBitRate = 4000000; // 4 Mbps (~85 MB for 3 mins)
+                vidBitRate = 5000000; // 5 Mbps
             } else { // High / Default (0)
-                vidBitRate = mLowQuality ? 5000000 : 14000000; // 14 Mbps (~300 MB for 3 mins)
+                vidBitRate = mLowQuality ? 6000000 : 16000000; // 16 Mbps
             }
         }
 
@@ -338,17 +325,27 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
             try {
                 mMediaRecorder.setVideoEncodingProfileLevel(
-                        MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
-                        mLowQuality ? MediaCodecInfo.CodecProfileLevel.AVCLevel32
-                        : MediaCodecInfo.CodecProfileLevel.AVCLevel51);
-            } catch (Exception ignored) {}
+                        MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
+                        MediaCodecInfo.CodecProfileLevel.AVCLevel4);
+            } catch (Exception e1) {
+                try {
+                    mMediaRecorder.setVideoEncodingProfileLevel(
+                            MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
+                            MediaCodecInfo.CodecProfileLevel.AVCLevel4);
+                } catch (Exception e2) {
+                    try {
+                        mMediaRecorder.setVideoEncodingProfileLevel(
+                                MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline,
+                                MediaCodecInfo.CodecProfileLevel.AVCLevel4);
+                    } catch (Exception ignored) {}
+                }
+            }
         } else {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.HEVC);
             try {
                 mMediaRecorder.setVideoEncodingProfileLevel(
                         MediaCodecInfo.CodecProfileLevel.HEVCProfileMain,
-                        mLowQuality ? MediaCodecInfo.CodecProfileLevel.HEVCHighTierLevel31
-                        : MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51);
+                        MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51);
             } catch (Exception ignored) {}
         }
         mMediaRecorder.setVideoSize(width, height);

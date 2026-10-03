@@ -44,6 +44,11 @@
     <string name="accessibility_quick_settings_heads_up_off">Heads up off.</string>
     <string name="accessibility_quick_settings_heads_up_on">Heads up on.</string>
 
+    <!-- Internal audio mic injection QS tile -->
+    <string name="quick_settings_internal_audio_mic_label">Internal audio to mic</string>
+    <string name="accessibility_quick_settings_internal_audio_mic_on">Internal audio to mic on.</string>
+    <string name="accessibility_quick_settings_internal_audio_mic_off">Internal audio to mic off.</string>
+
     <!-- PowerShare QS tile -->
     <string name="quick_settings_powershare_label">Wireless PowerShare</string>
     <string name="quick_settings_powershare_off_powersave_label">Wireless PowerShare off\nBattery saver</string>

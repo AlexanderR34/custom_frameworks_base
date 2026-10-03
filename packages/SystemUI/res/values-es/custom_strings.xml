@@ -32,9 +32,15 @@
     <string name="accessibility_quick_settings_caffeine_off">Cafeína desactivada.</string>
     <string name="accessibility_quick_settings_caffeine_on">Cafeína activada.</string>
 
+    <!-- Heads up QS tile -->
     <string name="quick_settings_heads_up_label">Notificaciones flotantes</string>
     <string name="accessibility_quick_settings_heads_up_off">Notificaciones flotantes desactivadas.</string>
     <string name="accessibility_quick_settings_heads_up_on">Notificaciones flotantes activadas.</string>
+
+    <!-- Internal audio mic injection QS tile -->
+    <string name="quick_settings_internal_audio_mic_label">Audio interno a micrófono</string>
+    <string name="accessibility_quick_settings_internal_audio_mic_on">Audio interno a micrófono activado.</string>
+    <string name="accessibility_quick_settings_internal_audio_mic_off">Audio interno a micrófono desactivado.</string>
 
     <string name="quick_settings_powershare_label">PowerShare inalámbrico</string>
     <string name="quick_settings_powershare_off_powersave_label">PowerShare inalámbrico desactivado\nAhorro de batería</string>
