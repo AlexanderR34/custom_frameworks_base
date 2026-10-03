@@ -54,9 +54,25 @@ class LyricsRepository @Inject constructor() {
             return@withContext it
         }
 
-        var lyrics = queryLrclibGet(cleanTrack, cleanArtist, durationSeconds)
+        var lyrics = if (durationSeconds > 0) {
+            queryLrclibGet(cleanTrack, cleanArtist, durationSeconds)
+        } else {
+            null
+        }
+
         if (lyrics == null) {
+            // Fallback 1: Query without duration to avoid 404 on minor duration discrepancies
+            lyrics = queryLrclibGet(cleanTrack, cleanArtist, 0L)
+        }
+
+        if (lyrics == null) {
+            // Fallback 2: Search with track and artist
             lyrics = queryLrclibSearch("$cleanTrack $cleanArtist")
+        }
+
+        if (lyrics == null && cleanTrack.isNotBlank()) {
+            // Fallback 3: Search with clean track name only
+            lyrics = queryLrclibSearch(cleanTrack)
         }
 
         if (lyrics != null) {
@@ -70,6 +86,7 @@ class LyricsRepository @Inject constructor() {
         artist: String,
         durationSeconds: Long
     ): LyricsData? {
+        if (track.isBlank()) return null
         try {
             val queryBuilder = StringBuilder("$BASE_URL/get?")
             queryBuilder.append("track_name=").append(URLEncoder.encode(track, "UTF-8"))
@@ -93,6 +110,7 @@ class LyricsRepository @Inject constructor() {
     }
 
     private fun queryLrclibSearch(query: String): LyricsData? {
+        if (query.isBlank()) return null
         try {
             val url = "$BASE_URL/search?q=" + URLEncoder.encode(query, "UTF-8")
             val response = executeHttpRequest(url) ?: return null
@@ -159,6 +177,8 @@ class LyricsRepository @Inject constructor() {
             .replace(Regex("(?i)\\s*\\(official.*?\\)"), "")
             .replace(Regex("(?i)\\s*\\[official.*?\\]"), "")
             .replace(Regex("(?i)\\s*-\\s*remaster.*?$"), "")
+            .replace(Regex("(?i)\\s*-\\s*bonus track.*$"), "")
+            .replace(Regex("(?i)\\s*\\(with .*?\\)"), "")
             .trim()
     }
 
@@ -166,6 +186,7 @@ class LyricsRepository @Inject constructor() {
         return artist
             .replace(Regex("(?i)\\s*feat\\..*?$"), "")
             .replace(Regex("(?i)\\s*ft\\..*?$"), "")
+            .split(",", "/", "&")[0]
             .trim()
     }
 }

@@ -24,6 +24,7 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.UserHandle
 import android.util.Log
 import android.view.View
 import com.android.systemui.dagger.SysUISingleton
@@ -56,6 +57,7 @@ class LockscreenLyricsController @Inject constructor(
     private var currentTrackName: String? = null
     private var currentArtistName: String? = null
     private var currentLyrics: LyricsData? = null
+    private var isMediaPlaying: Boolean = false
 
     private var fetchJob: Job? = null
     private var isTicking = false
@@ -67,6 +69,38 @@ class LockscreenLyricsController @Inject constructor(
             if (!isTicking) return
             updateProgress()
             mainHandler.postDelayed(this, TICK_INTERVAL_MS)
+        }
+    }
+
+    private val mediaControllerCallback = object : MediaController.Callback() {
+        override fun onPlaybackStateChanged(state: PlaybackState?) {
+            mainHandler.post {
+                val playing = state?.state == PlaybackState.STATE_PLAYING
+                if (isMediaPlaying != playing) {
+                    isMediaPlaying = playing
+                    evaluateTickerState()
+                    updateLyricsDisplay()
+                } else {
+                    updateProgress()
+                }
+            }
+        }
+
+        override fun onMetadataChanged(metadata: MediaMetadata?) {
+            mainHandler.post {
+                val song = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim()
+                val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)?.trim() ?: ""
+                val durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+                if (!song.isNullOrEmpty() && (song != currentTrackName || artist != currentArtistName)) {
+                    loadLyrics(song, artist, durationMs)
+                }
+            }
+        }
+
+        override fun onSessionDestroyed() {
+            mainHandler.post {
+                clearMedia()
+            }
         }
     }
 
@@ -88,42 +122,69 @@ class LockscreenLyricsController @Inject constructor(
         isDozing = statusBarStateController.isDozing
 
         val resolver = context.contentResolver
-        resolver.registerContentObserver(
-            android.provider.Settings.System.getUriFor("lockscreen_lyrics_enabled"),
-            false,
-            settingsObserver
-        )
-        resolver.registerContentObserver(
-            android.provider.Settings.System.getUriFor("lockscreen_lyrics_display_target"),
-            false,
-            settingsObserver
-        )
-        resolver.registerContentObserver(
-            android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_lockscreen"),
-            false,
-            settingsObserver
-        )
-        resolver.registerContentObserver(
-            android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_aod"),
-            false,
-            settingsObserver
-        )
+        try {
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_enabled"),
+                false,
+                settingsObserver,
+                UserHandle.USER_ALL
+            )
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_display_target"),
+                false,
+                settingsObserver,
+                UserHandle.USER_ALL
+            )
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_lockscreen"),
+                false,
+                settingsObserver,
+                UserHandle.USER_ALL
+            )
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_aod"),
+                false,
+                settingsObserver,
+                UserHandle.USER_ALL
+            )
+        } catch (e: Exception) {
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_enabled"),
+                false,
+                settingsObserver
+            )
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_display_target"),
+                false,
+                settingsObserver
+            )
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_lockscreen"),
+                false,
+                settingsObserver
+            )
+            resolver.registerContentObserver(
+                android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_aod"),
+                false,
+                settingsObserver
+            )
+        }
         updateSettings()
     }
 
     private fun updateSettings() {
         val resolver = context.contentResolver
-        isEnabled = android.provider.Settings.System.getInt(
-            resolver, "lockscreen_lyrics_enabled", 1
+        isEnabled = android.provider.Settings.System.getIntForUser(
+            resolver, "lockscreen_lyrics_enabled", 1, UserHandle.USER_CURRENT
         ) != 0
-        displayTarget = android.provider.Settings.System.getInt(
-            resolver, "lockscreen_lyrics_display_target", 2
+        displayTarget = android.provider.Settings.System.getIntForUser(
+            resolver, "lockscreen_lyrics_display_target", 2, UserHandle.USER_CURRENT
         )
-        linesLockscreen = android.provider.Settings.System.getInt(
-            resolver, "lockscreen_lyrics_lines_lockscreen", 5
+        linesLockscreen = android.provider.Settings.System.getIntForUser(
+            resolver, "lockscreen_lyrics_lines_lockscreen", 5, UserHandle.USER_CURRENT
         )
-        linesAod = android.provider.Settings.System.getInt(
-            resolver, "lockscreen_lyrics_lines_aod", 1
+        linesAod = android.provider.Settings.System.getIntForUser(
+            resolver, "lockscreen_lyrics_lines_aod", 1, UserHandle.USER_CURRENT
         )
         lyricsView?.setLineCounts(linesLockscreen, linesAod)
         updateLyricsDisplay()
@@ -143,6 +204,7 @@ class LockscreenLyricsController @Inject constructor(
     fun attachView(view: LockscreenLyricsView) {
         lyricsView = view
         lyricsView?.setLineCounts(linesLockscreen, linesAod)
+        lyricsView?.setDozing(isDozing)
         updateLyricsDisplay()
         evaluateTickerState()
     }
@@ -178,6 +240,7 @@ class LockscreenLyricsController @Inject constructor(
     override fun onStateChanged(newState: Int) {
         isKeyguardShowing = (newState == StatusBarState.KEYGUARD)
         evaluateTickerState()
+        updateLyricsDisplay()
     }
 
     override fun onDozingChanged(dozing: Boolean) {
@@ -198,20 +261,32 @@ class LockscreenLyricsController @Inject constructor(
 
         val token = data.token
         if (token != null && (activeController == null || activeController?.sessionToken != token)) {
-            activeController = MediaController(context, token)
+            try {
+                activeController?.unregisterCallback(mediaControllerCallback)
+            } catch (_: Exception) {}
+            activeController = MediaController(context, token).apply {
+                registerCallback(mediaControllerCallback, mainHandler)
+            }
         }
+
+        isMediaPlaying = data.isPlaying || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
 
         if (song == currentTrackName && artist == currentArtistName) {
             evaluateTickerState()
+            updateLyricsDisplay()
             return
         }
 
+        val durationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        loadLyrics(song, artist, durationMs)
+    }
+
+    private fun loadLyrics(song: String, artist: String, durationMs: Long) {
         currentTrackName = song
         currentArtistName = artist
         currentLyrics = null
         updateLyricsDisplay()
 
-        val durationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val durationSec = if (durationMs > 0) durationMs / 1000L else 0L
 
         fetchJob?.cancel()
@@ -229,16 +304,20 @@ class LockscreenLyricsController @Inject constructor(
 
     private fun clearMedia() {
         fetchJob?.cancel()
+        try {
+            activeController?.unregisterCallback(mediaControllerCallback)
+        } catch (_: Exception) {}
         currentTrackName = null
         currentArtistName = null
         currentLyrics = null
         activeController = null
+        isMediaPlaying = false
         updateLyricsDisplay()
         evaluateTickerState()
     }
 
     private fun evaluateTickerState() {
-        val isPlaying = activeController?.playbackState?.state == PlaybackState.STATE_PLAYING
+        val isPlaying = isMediaPlaying || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
         val shouldTick = shouldShowForCurrentState() && isPlaying && (currentLyrics != null) && (lyricsView != null)
 
         if (shouldTick && !isTicking) {
@@ -265,15 +344,15 @@ class LockscreenLyricsController @Inject constructor(
             position += (timeDelta * playbackState.playbackSpeed).toLong()
         }
 
-        val syncPosition = position
-
+        val syncPosition = maxOf(0L, position)
         val index = lyrics.findCurrentIndex(syncPosition)
         lyricsView?.updateLyrics(lyrics, index, syncPosition)
     }
 
     private fun updateLyricsDisplay() {
         val lyrics = currentLyrics
-        if (lyrics != null && shouldShowForCurrentState()) {
+        val isPlaying = isMediaPlaying || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
+        if (lyrics != null && shouldShowForCurrentState() && isPlaying) {
             lyricsView?.setDozing(isDozing)
             updateProgress()
         } else {
