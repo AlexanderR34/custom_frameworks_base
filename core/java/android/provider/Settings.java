@@ -6277,6 +6277,56 @@ public final class Settings {
         public static final String VIBRATE_WHEN_RINGING = "vibrate_when_ringing";
 
         /**
+         * Whether HyperOS style is enabled for the volume panel.
+         * 0 = default AOSP style
+         * 1 = HyperOS style
+         * @hide
+         */
+        @Readable
+        public static final String HYPEROS_VOLUME_PANEL_STYLE = "hyperos_volume_panel_style";
+
+        /**
+         * Whether internal audio mic injection is enabled.
+         * 0 = disabled (normal microphone capture)
+         * 1 = enabled (internal audio routed to mic stream)
+         * @hide
+         */
+        @Readable
+        public static final String INTERNAL_AUDIO_MIC_INJECTION = "internal_audio_mic_injection";
+
+        /**
+         * Whether shake device gesture is enabled.
+         * 0 = disabled
+         * 1 = enabled
+         * @hide
+         */
+        @Readable
+        public static final String SHAKE_GESTURE_ENABLED = "shake_gesture_enabled";
+
+        /**
+         * Action to perform on shake device gesture.
+         * Default: "torch"
+         * Values: "screenshot", "assistant", "media_play_pause", "recents", "notifications", "torch", "app"
+         * @hide
+         */
+        @Readable
+        public static final String SHAKE_GESTURE_ACTION = "shake_gesture_action";
+
+        /**
+         * Package name to launch when shake gesture action is "app".
+         * @hide
+         */
+        @Readable
+        public static final String SHAKE_GESTURE_APP = "shake_gesture_app";
+
+        /**
+         * Sensitivity level for shake gesture (1 to 5, default 3).
+         * @hide
+         */
+        @Readable
+        public static final String SHAKE_GESTURE_SENSITIVITY = "shake_gesture_sensitivity";
+
+        /**
          * When {@code 1}, Telecom enhanced call blocking functionality is enabled.  When
          * {@code 0}, enhanced call blocking functionality is disabled.
          * @hide
