@@ -47,19 +47,38 @@ fun VolumePanelRoot(
     isExpandedAudioTileDetailsFeatureEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isHyperOSVolume = remember(context) {
+        android.provider.Settings.System.getInt(
+            context.contentResolver,
+            "hyperos_volume_panel_style",
+            0
+        ) == 1
+    }
     val accessibilityTitle = stringResource(R.string.accessibility_volume_settings)
     val state: VolumePanelState by viewModel.volumePanelState.collectAsStateWithLifecycle()
     val components by viewModel.componentsLayout.collectAsStateWithLifecycle()
 
-    with(VolumePanelComposeScope(state, isExpandedAudioTileDetailsFeatureEnabled)) {
+    if (isHyperOSVolume) {
         components?.let { componentsState ->
-            Components(
-                componentsState,
-                modifier
-                    .sysuiResTag(VolumePanelTestTag)
-                    .semantics { paneTitle = accessibilityTitle }
-                    .padding(start = padding, top = padding, end = padding, bottom = 20.dp),
+            HyperOSVolumePanel(
+                viewModel = viewModel,
+                layout = componentsState,
+                onDismissRequest = { viewModel.dismissPanel() },
+                modifier = modifier.sysuiResTag(VolumePanelTestTag),
             )
+        }
+    } else {
+        with(VolumePanelComposeScope(state, isExpandedAudioTileDetailsFeatureEnabled)) {
+            components?.let { componentsState ->
+                Components(
+                    componentsState,
+                    modifier
+                        .sysuiResTag(VolumePanelTestTag)
+                        .semantics { paneTitle = accessibilityTitle }
+                        .padding(start = padding, top = padding, end = padding, bottom = 20.dp),
+                )
+            }
         }
     }
 }

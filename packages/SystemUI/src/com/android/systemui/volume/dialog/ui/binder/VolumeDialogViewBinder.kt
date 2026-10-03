@@ -258,6 +258,9 @@ constructor(
 
             if (showAppVolume && hasActiveApp) {
                 soundAssistantContainer?.visibility = View.VISIBLE
+                if (soundAssistantButton is android.widget.ImageView) {
+                    soundAssistantButton.setImageResource(R.drawable.ic_hyperos_speaker_mid)
+                }
                 soundAssistantContainer?.let {
                     launchTraced("VDVB#soundAssistantTouchableBounds") {
                         viewModel.addTouchableBounds(it)
