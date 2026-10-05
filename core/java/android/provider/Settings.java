@@ -6896,13 +6896,6 @@ public final class Settings {
         public static final String CUSTOM_BLUR_INTENSITY = "custom_blur_intensity";
 
         /**
-         * Whether to enable HyperOS style volume panel
-         * @hide
-         */
-        @Readable
-        public static final String HYPEROS_VOLUME_PANEL_STYLE = "hyperos_volume_panel_style";
-
-        /**
          * Whether to show dual call volume slider during active phone/voice calls
          * @hide
          */

@@ -82,12 +82,7 @@ constructor(
             ) {
                 ShortcutElement(Shortcuts.Start, viewModel)
 
-                Box(
-                    Modifier.weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically, unbounded = true)
-                ) {
-                    LockscreenElement(IndicationArea)
-                }
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
 
                 ShortcutElement(Shortcuts.End, viewModel)
             }

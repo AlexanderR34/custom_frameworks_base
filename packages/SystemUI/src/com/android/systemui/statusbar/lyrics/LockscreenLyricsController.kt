@@ -20,6 +20,7 @@ import android.content.Context
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
@@ -64,6 +65,9 @@ class LockscreenLyricsController @Inject constructor(
     private var isKeyguardShowing = false
     private var isDozing = false
 
+    private val mediaSessionManager: MediaSessionManager? =
+        context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+
     private val tickerRunnable = object : Runnable {
         override fun run() {
             if (!isTicking) return
@@ -99,8 +103,14 @@ class LockscreenLyricsController @Inject constructor(
 
         override fun onSessionDestroyed() {
             mainHandler.post {
-                clearMedia()
+                checkActiveSessions()
             }
+        }
+    }
+
+    private val activeSessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
+        mainHandler.post {
+            updateFromActiveControllers(controllers)
         }
     }
 
@@ -120,6 +130,12 @@ class LockscreenLyricsController @Inject constructor(
         statusBarStateController.addCallback(this)
         isKeyguardShowing = statusBarStateController.state == StatusBarState.KEYGUARD
         isDozing = statusBarStateController.isDozing
+
+        try {
+            mediaSessionManager?.addOnActiveSessionsChangedListener(activeSessionsListener, null, mainHandler)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register active sessions listener: ${e.message}")
+        }
 
         val resolver = context.contentResolver
         try {
@@ -148,44 +164,63 @@ class LockscreenLyricsController @Inject constructor(
                 UserHandle.USER_ALL
             )
         } catch (e: Exception) {
-            resolver.registerContentObserver(
-                android.provider.Settings.System.getUriFor("lockscreen_lyrics_enabled"),
-                false,
-                settingsObserver
-            )
-            resolver.registerContentObserver(
-                android.provider.Settings.System.getUriFor("lockscreen_lyrics_display_target"),
-                false,
-                settingsObserver
-            )
-            resolver.registerContentObserver(
-                android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_lockscreen"),
-                false,
-                settingsObserver
-            )
-            resolver.registerContentObserver(
-                android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_aod"),
-                false,
-                settingsObserver
-            )
+            try {
+                resolver.registerContentObserver(
+                    android.provider.Settings.System.getUriFor("lockscreen_lyrics_enabled"),
+                    false,
+                    settingsObserver
+                )
+                resolver.registerContentObserver(
+                    android.provider.Settings.System.getUriFor("lockscreen_lyrics_display_target"),
+                    false,
+                    settingsObserver
+                )
+                resolver.registerContentObserver(
+                    android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_lockscreen"),
+                    false,
+                    settingsObserver
+                )
+                resolver.registerContentObserver(
+                    android.provider.Settings.System.getUriFor("lockscreen_lyrics_lines_aod"),
+                    false,
+                    settingsObserver
+                )
+            } catch (_: Exception) {}
         }
         updateSettings()
+        checkActiveSessions()
     }
 
     private fun updateSettings() {
         val resolver = context.contentResolver
-        isEnabled = android.provider.Settings.System.getIntForUser(
-            resolver, "lockscreen_lyrics_enabled", 1, UserHandle.USER_CURRENT
-        ) != 0
-        displayTarget = android.provider.Settings.System.getIntForUser(
-            resolver, "lockscreen_lyrics_display_target", 2, UserHandle.USER_CURRENT
-        )
-        linesLockscreen = android.provider.Settings.System.getIntForUser(
-            resolver, "lockscreen_lyrics_lines_lockscreen", 5, UserHandle.USER_CURRENT
-        )
-        linesAod = android.provider.Settings.System.getIntForUser(
-            resolver, "lockscreen_lyrics_lines_aod", 1, UserHandle.USER_CURRENT
-        )
+        isEnabled = try {
+            android.provider.Settings.System.getIntForUser(
+                resolver, "lockscreen_lyrics_enabled", 1, UserHandle.USER_CURRENT
+            ) != 0
+        } catch (_: Exception) {
+            true
+        }
+        displayTarget = try {
+            android.provider.Settings.System.getIntForUser(
+                resolver, "lockscreen_lyrics_display_target", 2, UserHandle.USER_CURRENT
+            )
+        } catch (_: Exception) {
+            2
+        }
+        linesLockscreen = try {
+            android.provider.Settings.System.getIntForUser(
+                resolver, "lockscreen_lyrics_lines_lockscreen", 5, UserHandle.USER_CURRENT
+            )
+        } catch (_: Exception) {
+            5
+        }
+        linesAod = try {
+            android.provider.Settings.System.getIntForUser(
+                resolver, "lockscreen_lyrics_lines_aod", 1, UserHandle.USER_CURRENT
+            )
+        } catch (_: Exception) {
+            1
+        }
         lyricsView?.setLineCounts(linesLockscreen, linesAod)
         updateLyricsDisplay()
         evaluateTickerState()
@@ -195,16 +230,15 @@ class LockscreenLyricsController @Inject constructor(
         if (!isEnabled) return false
         if (isDozing) {
             return displayTarget == 1 || displayTarget == 2
-        } else if (isKeyguardShowing) {
-            return displayTarget == 0 || displayTarget == 2
         }
-        return false
+        return displayTarget == 0 || displayTarget == 2
     }
 
     fun attachView(view: LockscreenLyricsView) {
         lyricsView = view
         lyricsView?.setLineCounts(linesLockscreen, linesAod)
         lyricsView?.setDozing(isDozing)
+        checkActiveSessions()
         updateLyricsDisplay()
         evaluateTickerState()
     }
@@ -212,6 +246,64 @@ class LockscreenLyricsController @Inject constructor(
     fun detachView() {
         lyricsView = null
         evaluateTickerState()
+    }
+
+    private fun checkActiveSessions() {
+        try {
+            val sessions = mediaSessionManager?.getActiveSessions(null)
+            updateFromActiveControllers(sessions)
+        } catch (e: Exception) {
+            Log.w(TAG, "checkActiveSessions failed: ${e.message}")
+        }
+    }
+
+    private fun updateFromActiveControllers(controllers: List<MediaController>?) {
+        if (controllers.isNullOrEmpty()) {
+            if (activeController == null) {
+                clearMedia()
+            }
+            return
+        }
+
+        // Prioritize actively playing controller
+        val candidate = controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            ?: controllers.firstOrNull { it.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.isNotBlank() == true }
+            ?: controllers.firstOrNull()
+
+        if (candidate == null) {
+            clearMedia()
+            return
+        }
+
+        bindController(candidate)
+    }
+
+    private fun bindController(controller: MediaController) {
+        if (activeController?.sessionToken != controller.sessionToken) {
+            try {
+                activeController?.unregisterCallback(mediaControllerCallback)
+            } catch (_: Exception) {}
+            activeController = controller
+            try {
+                controller.registerCallback(mediaControllerCallback, mainHandler)
+            } catch (_: Exception) {}
+        }
+
+        isMediaPlaying = controller.playbackState?.state == PlaybackState.STATE_PLAYING
+
+        val meta = controller.metadata
+        val song = meta?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim()
+        val artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)?.trim() ?: ""
+        val durationMs = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+
+        if (!song.isNullOrEmpty()) {
+            if (song != currentTrackName || artist != currentArtistName) {
+                loadLyrics(song, artist, durationMs)
+            } else {
+                evaluateTickerState()
+                updateLyricsDisplay()
+            }
+        }
     }
 
     override fun onMediaDataLoaded(
@@ -227,18 +319,21 @@ class LockscreenLyricsController @Inject constructor(
         if (data != null) {
             handleMediaData(data)
         } else {
-            clearMedia()
+            checkActiveSessions()
         }
     }
 
     override fun onMediaDataRemoved(key: String, userInitiated: Boolean) {
         if (!mediaDataManager.hasActiveMedia()) {
-            clearMedia()
+            checkActiveSessions()
         }
     }
 
     override fun onStateChanged(newState: Int) {
         isKeyguardShowing = (newState == StatusBarState.KEYGUARD)
+        if (isKeyguardShowing) {
+            checkActiveSessions()
+        }
         evaluateTickerState()
         updateLyricsDisplay()
     }
@@ -255,7 +350,7 @@ class LockscreenLyricsController @Inject constructor(
         val artist = data.artist?.toString()?.trim() ?: ""
 
         if (song.isNullOrEmpty()) {
-            clearMedia()
+            checkActiveSessions()
             return
         }
 
@@ -269,7 +364,7 @@ class LockscreenLyricsController @Inject constructor(
             }
         }
 
-        isMediaPlaying = data.isPlaying || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
+        isMediaPlaying = (data.isPlaying == true) || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
 
         if (song == currentTrackName && artist == currentArtistName) {
             evaluateTickerState()

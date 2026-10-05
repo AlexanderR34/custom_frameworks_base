@@ -2379,18 +2379,7 @@ public class AudioDeviceBroker {
     }
 
     boolean messageMutesMusic(int message) {
-        if (message == 0) {
-            return false;
-        }
-        // Do not mute on bluetooth event if music is playing on a wired headset.
-        if (AudioSystem.isStreamActive(AudioSystem.STREAM_MUSIC, 0)
-                && hasIntersection(mDeviceInventory.DEVICE_OVERRIDE_A2DP_ROUTE_ON_PLUG_SET,
-                mAudioService.getDeviceSetForStream(AudioSystem.STREAM_MUSIC).stream().map(
-                        AudioDeviceAttributes::getInternalType).collect(
-                        Collectors.toSet()))) {
-            return false;
-        }
-        return true;
+        return false;
     }
 
     /** Mutes or unmutes music according to pending A2DP messages */

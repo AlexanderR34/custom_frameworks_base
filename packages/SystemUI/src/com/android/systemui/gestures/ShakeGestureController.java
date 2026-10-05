@@ -57,9 +57,9 @@ public class ShakeGestureController implements CoreStartable, SensorEventListene
     private static final String TAG = "ShakeGestureController";
     private static final boolean DEBUG = false;
 
-    private static final int SHAKE_SLOP_TIME_MS = 500;
-    private static final int SHAKE_COOLDOWN_MS = 1200;
-    private static final int SHAKE_COUNT_RESET_TIME_MS = 3000;
+    private static final int SHAKE_MIN_INTERVAL_MS = 100;
+    private static final int SHAKE_MAX_INTERVAL_MS = 750;
+    private static final int SHAKE_COOLDOWN_MS = 800;
 
     private final Context mContext;
     private final FlashlightController mFlashlightController;
@@ -76,6 +76,9 @@ public class ShakeGestureController implements CoreStartable, SensorEventListene
     private String mAppPackage = "";
     private int mSensitivity = 3;
 
+    private float[] mGravity = new float[3];
+    private boolean mGravityInitialized = false;
+    private int mLastPeakSign = 0;
     private long mShakeTimestamp;
     private int mShakeCount;
     private long mLastTriggerTime = 0;
@@ -182,12 +185,12 @@ public class ShakeGestureController implements CoreStartable, SensorEventListene
 
     private float getSensitivityThreshold() {
         switch (mSensitivity) {
-            case 1: return 3.4f; // Low
-            case 2: return 3.0f; // Med-Low
-            case 4: return 2.2f; // Med-High
-            case 5: return 1.8f; // High
+            case 1: return 17.0f; // Low (firm shake required)
+            case 2: return 14.0f; // Med-Low
+            case 4: return 9.5f;  // Med-High
+            case 5: return 7.5f;  // High (easy flick)
             case 3:
-            default: return 2.6f; // Medium
+            default: return 11.5f; // Medium (natural double shake)
         }
     }
 
@@ -201,38 +204,71 @@ public class ShakeGestureController implements CoreStartable, SensorEventListene
         final float y = event.values[1];
         final float z = event.values[2];
 
-        final float gX = x / SensorManager.GRAVITY_EARTH;
-        final float gY = y / SensorManager.GRAVITY_EARTH;
-        final float gZ = z / SensorManager.GRAVITY_EARTH;
+        if (!mGravityInitialized) {
+            mGravity[0] = x;
+            mGravity[1] = y;
+            mGravity[2] = z;
+            mGravityInitialized = true;
+            return;
+        }
 
-        // gForce will be close to 1 when there is no movement.
-        final float gForce = (float) Math.sqrt(gX * gX + gY * gY + gZ * gZ);
+        // Low-pass filter to isolate static gravity
+        final float alpha = 0.8f;
+        mGravity[0] = alpha * mGravity[0] + (1.0f - alpha) * x;
+        mGravity[1] = alpha * mGravity[1] + (1.0f - alpha) * y;
+        mGravity[2] = alpha * mGravity[2] + (1.0f - alpha) * z;
 
+        // High-pass filter to isolate dynamic linear acceleration
+        final float linX = x - mGravity[0];
+        final float linY = y - mGravity[1];
+        final float linZ = z - mGravity[2];
+
+        final float linAcc = (float) Math.sqrt(linX * linX + linY * linY + linZ * linZ);
         final float threshold = getSensitivityThreshold();
 
-        if (gForce > threshold) {
-            final long now = System.currentTimeMillis();
+        final long now = System.currentTimeMillis();
 
-            // Ignore shake events too close to each other
-            if (mShakeTimestamp + SHAKE_SLOP_TIME_MS > now) {
-                return;
+        // Check if cooldown is active
+        if (now - mLastTriggerTime < SHAKE_COOLDOWN_MS) {
+            return;
+        }
+
+        if (linAcc > threshold) {
+            final long timeDiff = now - mShakeTimestamp;
+
+            // Determine dominant acceleration axis and direction sign
+            final float absX = Math.abs(linX);
+            final float absY = Math.abs(linY);
+            final float absZ = Math.abs(linZ);
+            final int currentSign;
+            if (absX >= absY && absX >= absZ) {
+                currentSign = linX > 0 ? 1 : -1;
+            } else if (absY >= absX && absY >= absZ) {
+                currentSign = linY > 0 ? 2 : -2;
+            } else {
+                currentSign = linZ > 0 ? 3 : -3;
             }
 
-            // Reset shake count if too much time passed between shakes
-            if (mShakeTimestamp + SHAKE_COUNT_RESET_TIME_MS < now) {
-                mShakeCount = 0;
-            }
+            if (mShakeCount == 0) {
+                mShakeTimestamp = now;
+                mShakeCount = 1;
+                mLastPeakSign = currentSign;
+            } else if (timeDiff >= SHAKE_MIN_INTERVAL_MS && timeDiff <= SHAKE_MAX_INTERVAL_MS) {
+                mShakeTimestamp = now;
+                mShakeCount++;
+                mLastPeakSign = currentSign;
 
-            mShakeTimestamp = now;
-            mShakeCount++;
-
-            // Trigger when 2 shakes are detected in sequence
-            if (mShakeCount >= 2) {
-                if (now - mLastTriggerTime > SHAKE_COOLDOWN_MS) {
+                // 2 distinct rapid motion peaks trigger the action
+                if (mShakeCount >= 2) {
                     mLastTriggerTime = now;
                     mShakeCount = 0;
                     mMainHandler.post(this::performShakeAction);
                 }
+            } else if (timeDiff > SHAKE_MAX_INTERVAL_MS) {
+                // Too slow between shakes, reset cycle
+                mShakeTimestamp = now;
+                mShakeCount = 1;
+                mLastPeakSign = currentSign;
             }
         }
     }

@@ -40,6 +40,7 @@ import android.service.notification.ZenModeConfig;
 import android.telecom.TelecomManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyManager;
 import android.text.format.DateFormat;
 import android.telephony.ims.ImsMmTelManager;
 import android.telephony.ims.ImsReasonInfo;
@@ -865,8 +866,20 @@ public class PhoneStatusBarPolicy
             return;
         }
 
+        TelephonyManager tm = mContext.getSystemService(TelephonyManager.class);
         for (SubscriptionInfo sub : subs) {
             final int subId = sub.getSubscriptionId();
+            if (tm != null) {
+                try {
+                    TelephonyManager subTm = tm.createForSubscriptionId(subId);
+                    int voiceNet = subTm.getVoiceNetworkType();
+                    int dataNet = subTm.getDataNetworkType();
+                    if (voiceNet == TelephonyManager.NETWORK_TYPE_LTE || voiceNet == TelephonyManager.NETWORK_TYPE_NR
+                            || dataNet == TelephonyManager.NETWORK_TYPE_LTE || dataNet == TelephonyManager.NETWORK_TYPE_NR) {
+                        mVolteRegistered = true;
+                    }
+                } catch (Exception e) {}
+            }
             if (mImsCallbacks.containsKey(subId)) {
                 continue;
             }
@@ -899,6 +912,7 @@ public class PhoneStatusBarPolicy
                 Log.e(TAG, "Failed to register IMS callback for subId: " + subId, e);
             }
         }
+        updateVolteVoWifiVisibility();
     }
 
     private void onConnectedDisplayAvailabilityChanged(ConnectedDisplayInteractor.State state) {

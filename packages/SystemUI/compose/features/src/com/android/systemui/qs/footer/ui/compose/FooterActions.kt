@@ -155,6 +155,7 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
         mutableStateOf<FooterActionsForegroundServicesButtonViewModel?>(null)
     }
     var userSwitcher by remember { mutableStateOf<FooterActionsButtonViewModel?>(null) }
+    var edit by remember { mutableStateOf<FooterActionsButtonViewModel?>(null) }
     var settings by remember { mutableStateOf<FooterActionsButtonViewModel?>(null) }
 
     var textFeedback by remember {
@@ -173,6 +174,7 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
         viewModel.security,
         viewModel.foregroundServices,
         viewModel.userSwitcher,
+        viewModel.edit,
         viewModel.textFeedback,
         viewModel.settings,
         minActiveState = Lifecycle.State.RESUMED,
@@ -180,6 +182,7 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
         launch { viewModel.security.collect { security = it } }
         launch { viewModel.foregroundServices.collect { foregroundServices = it } }
         launch { viewModel.userSwitcher.collect { userSwitcher = it } }
+        launch { viewModel.edit.collect { edit = it } }
         launch { viewModel.textFeedback.collect { textFeedback = it } }
         launch { viewModel.settings.collect { settings = it } }
     }
@@ -253,6 +256,11 @@ fun FooterActions(viewModel: FooterActionsViewModel, modifier: Modifier = Modifi
                 { userSwitcher },
                 useModifierBasedExpandable,
                 Modifier.sysuiResTag("multi_user_switch"),
+            )
+            IconButton(
+                { edit },
+                useModifierBasedExpandable,
+                Modifier.sysuiResTag("qs_edit_mode_button"),
             )
             IconButton(
                 { settings },
@@ -650,7 +658,8 @@ private fun buttonColorsForModel(footerAction: FooterActionsButtonViewModel): Bu
         when (footerAction) {
             is FooterActionsButtonViewModel.PowerActionViewModel ->
                 FooterActionsDefaults.activeButtonColors()
-            is FooterActionsButtonViewModel.SettingsActionViewModel ->
+            is FooterActionsButtonViewModel.SettingsActionViewModel,
+            is FooterActionsButtonViewModel.EditActionViewModel ->
                 FooterActionsDefaults.inactiveButtonColors()
             is FooterActionsButtonViewModel.UserSwitcherViewModel ->
                 FooterActionsDefaults.userSwitcherButtonColors()

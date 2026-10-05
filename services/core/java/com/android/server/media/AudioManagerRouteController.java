@@ -637,6 +637,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
             }
         }
 
+        MediaRoute2InfoHolder matchingTypeHolder = null;
         for (AudioDeviceInfo audioDeviceInfo : audioDeviceInfos) {
             if (audioDeviceInfo.getType() == AudioDeviceInfo.TYPE_BLE_BROADCAST) {
                 // Handled previously
@@ -654,8 +655,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
                                 mediaRoute2Info, audioDeviceInfoType);
                 mRouteIdToAvailableDeviceRoutes.put(mediaRoute2Info.getId(), newHolder);
                 if (selectedDeviceAttributesType == audioDeviceInfoType) {
+                    if (matchingTypeHolder == null) {
+                        matchingTypeHolder = newHolder;
+                    }
                     if (Flags.enableDeviceAddressAsIdentifierInMediaRouter2()) {
-                        if (selectedDeviceAttributesAddr.equals(audioDeviceInfoAddr)) {
+                        if (TextUtils.equals(selectedDeviceAttributesAddr, audioDeviceInfoAddr)) {
                             newSelectedRouteHolder = newHolder;
                         }
                     } else {
@@ -663,6 +667,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
                     }
                 }
             }
+        }
+
+        if (newSelectedRouteHolder == null && matchingTypeHolder != null) {
+            newSelectedRouteHolder = matchingTypeHolder;
         }
 
         if (mRouteIdToAvailableDeviceRoutes.isEmpty()) {
@@ -1131,6 +1139,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
                         MediaRoute2Info.TYPE_DOCK,
                         /* defaultRouteId= */ "ROUTE_ID_DOCK_ANALOG",
                         /* nameResource= */ R.string.default_audio_route_name_dock_speakers));
+        AUDIO_DEVICE_INFO_TYPE_TO_ROUTE_INFO.put(
+                AudioDeviceInfo.TYPE_REMOTE_SUBMIX,
+                new SystemRouteInfo(
+                        MediaRoute2Info.TYPE_GROUP,
+                        /* defaultRouteId= */ "ROUTE_ID_REMOTE_SUBMIX",
+                        /* nameResource= */ R.string.bluetooth_a2dp_audio_route_name));
         if (android.media.audio.Flags.enableMultichannelGroupDevice()) {
             AUDIO_DEVICE_INFO_TYPE_TO_ROUTE_INFO.put(
                     AudioDeviceInfo.TYPE_MULTICHANNEL_GROUP,

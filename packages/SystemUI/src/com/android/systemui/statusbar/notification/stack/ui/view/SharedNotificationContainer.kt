@@ -19,6 +19,7 @@ package com.android.systemui.statusbar.notification.stack.ui.view
 import android.content.Context
 import android.util.AttributeSet
 import android.view.View
+import android.view.ViewGroup
 import androidx.constraintlayout.core.widgets.Optimizer
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
@@ -31,6 +32,7 @@ import androidx.constraintlayout.widget.ConstraintSet.VERTICAL
 import com.android.systemui.res.R
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.statusbar.notification.stack.ui.viewmodel.SharedNotificationContainerViewModel.HorizontalPosition
+import com.android.systemui.statusbar.notification.stack.ui.viewmodel.SharedNotificationContainerViewModel.HorizontalPosition.Centered
 import com.android.systemui.statusbar.notification.stack.ui.viewmodel.SharedNotificationContainerViewModel.HorizontalPosition.EdgeToMiddle
 import com.android.systemui.statusbar.notification.stack.ui.viewmodel.SharedNotificationContainerViewModel.HorizontalPosition.MiddleToEdge
 
@@ -44,6 +46,8 @@ class SharedNotificationContainer(context: Context, attrs: AttributeSet?) :
     private val baseConstraintSet = ConstraintSet()
 
     init {
+        clipChildren = false
+        clipToPadding = false
         optimizationLevel = optimizationLevel or Optimizer.OPTIMIZATION_GRAPH
         baseConstraintSet.apply {
             create(R.id.nssl_guideline, VERTICAL)
@@ -53,6 +57,10 @@ class SharedNotificationContainer(context: Context, attrs: AttributeSet?) :
     }
 
     fun addNotificationStackScrollLayout(nssl: View) {
+        clipChildren = false
+        clipToPadding = false
+        (nssl as? ViewGroup)?.clipChildren = false
+        (nssl as? ViewGroup)?.clipToPadding = false
         addView(nssl)
     }
 
@@ -94,6 +102,10 @@ class SharedNotificationContainer(context: Context, attrs: AttributeSet?) :
                         // Ensure END alignment in case the maxWidth is smaller than half the
                         // parent width.
                         constraintSet.setHorizontalBias(nsslId, /* bias= */ 1f)
+                    }
+                    is Centered -> {
+                        constrainMaxWidth(nsslId, horizontalPosition.maxWidth)
+                        constraintSet.setHorizontalBias(nsslId, /* bias= */ 0.5f)
                     }
                     else -> Unit
                 }

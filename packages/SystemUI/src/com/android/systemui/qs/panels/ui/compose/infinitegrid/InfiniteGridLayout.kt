@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastMap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.compose.animation.scene.ContentScope
@@ -130,8 +131,8 @@ constructor(
         val spans by remember(sizedTiles) { derivedStateOf { sizedTiles.fastMap { it.width } } }
         VerticalSpannedGrid(
             columns = columns,
-            columnSpacing = if (isHyperOS) 10.androidx.compose.ui.unit.dp else dimensionResource(R.dimen.qs_tile_margin_horizontal),
-            rowSpacing = if (isHyperOS) 14.androidx.compose.ui.unit.dp else dimensionResource(R.dimen.qs_tile_margin_vertical),
+            columnSpacing = if (isHyperOS) 10.dp else dimensionResource(R.dimen.qs_tile_margin_horizontal),
+            rowSpacing = if (isHyperOS) 14.dp else dimensionResource(R.dimen.qs_tile_margin_vertical),
             spans = spans,
             keys = { sizedTiles[it].tile.spec },
             modifier = modifier,
@@ -211,8 +212,25 @@ constructor(
             remember(topBarActionsViewModel, showDualShadeSetting) {
                 topBarActionsViewModel.actions(showDualShadeSetting).toMutableStateList()
             }
-        val columns = columnsViewModel.columns
-        val largeTilesSpan = columnsViewModel.largeSpan
+        val context = LocalContext.current
+        val isDualShade = remember(context) {
+            android.provider.Settings.Secure.getInt(
+                context.contentResolver,
+                android.provider.Settings.Secure.DUAL_SHADE,
+                1
+            ) == 1
+        }
+        val controlCenterStyle = remember(context) {
+            android.provider.Settings.System.getInt(
+                context.contentResolver,
+                "control_center_style",
+                1
+            )
+        }
+        val isHyperOS = isDualShade || controlCenterStyle == 1
+
+        val columns = if (isHyperOS) 4 else columnsViewModel.columns
+        val largeTilesSpan = if (isHyperOS) 2 else columnsViewModel.largeSpan
         val largeTiles by viewModel.iconTilesViewModel.largeTilesState
 
         val currentTiles by rememberUpdatedState(tiles.filter { it.isCurrent })

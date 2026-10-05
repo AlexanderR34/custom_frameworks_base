@@ -32,6 +32,8 @@ import com.android.systemui.volume.dialog.domain.interactor.VolumeDialogVisibili
 import com.android.systemui.volume.dialog.shared.VolumeDialogLogger
 import com.android.systemui.volume.dialog.shared.model.CsdWarningConfigModel
 import com.android.systemui.volume.dialog.shared.model.VolumeDialogVisibilityModel
+import com.android.systemui.dagger.qualifiers.Application
+import android.content.Context
 import com.android.systemui.volume.dialog.ui.VolumeDialogUiEvent
 import javax.inject.Inject
 import kotlin.coroutines.resume
@@ -47,6 +49,7 @@ class VolumeDialogPluginViewModel
 @Inject
 constructor(
     @VolumeDialogPlugin private val coroutineScope: CoroutineScope,
+    @Application private val context: Context,
     private val dialogVisibilityInteractor: VolumeDialogVisibilityInteractor,
     private val dialogSafetyWarningInteractor: VolumeDialogSafetyWarningInteractor,
     private val dialogCsdWarningInteractor: VolumeDialogCsdWarningInteractor,
@@ -55,11 +58,24 @@ constructor(
     val csdWarningConfigModel: CsdWarningConfigModel,
     private val uiEventLogger: UiEventLogger,
     private val broadcastDispatcher: BroadcastDispatcher,
-    expandedAudioTileDetailsFeatureInteractor: ExpandedAudioTileDetailsFeatureInteractor,
+    private val expandedAudioTileDetailsFeatureInteractor: ExpandedAudioTileDetailsFeatureInteractor,
 ) {
 
-    // Use horizontal volume dialog if the audio tile details view is enabled
-    private val isVolumeDialogVertical = !expandedAudioTileDetailsFeatureInteractor.isEnabled()
+    // Use vertical volume dialog for HyperOS or when audio tile details view is not enabled
+    private val isVolumeDialogVertical: Boolean
+        get() {
+            val isHyperOS = try {
+                android.provider.Settings.System.getIntForUser(
+                    context.contentResolver,
+                    android.provider.Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+                    1,
+                    android.os.UserHandle.USER_CURRENT
+                ) == 1
+            } catch (e: Exception) {
+                true
+            }
+            return if (isHyperOS) true else !expandedAudioTileDetailsFeatureInteractor.isEnabled()
+        }
     private var dismissJob: Job? = null
 
     fun launchVolumeDialog() {

@@ -203,7 +203,8 @@ fun SystemUIDialogFactory.createBottomSheet(
                 val radius = dimensionResource(R.dimen.bottom_sheet_corner_radius)
                 val isBlurSupported by
                     dialog.blurInteractor!!.isBlurCurrentlySupported.collectAsStateWithLifecycle()
-                val isBlurEnabled = isVolumeAndPowerBlurEnabled()
+                val containerColor = containerColorProvider()
+                val isBlurEnabled = isVolumeAndPowerBlurEnabled() && containerColor != Color.Transparent
                 val backgroundBlurModifier =
                     if (isBlurEnabled) {
                         val bottomsheetBlurRadius =
@@ -265,7 +266,7 @@ fun SystemUIDialogFactory.createBottomSheet(
                                 LocalAndroidColorScheme.current.surfaceEffect0Fallback
                             }
                         } else {
-                            containerColorProvider()
+                            containerColor
                         },
                 ) {
                     Box(

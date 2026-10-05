@@ -38,11 +38,13 @@ import com.android.systemui.qs.dagger.QSFlagsModule.PM_LITE_ENABLED
 import com.android.systemui.qs.footer.data.model.UserSwitcherStatusModel
 import com.android.systemui.qs.footer.domain.interactor.FooterActionsInteractor
 import com.android.systemui.qs.footer.domain.model.SecurityButtonConfig
+import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsButtonViewModel.EditActionViewModel
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsButtonViewModel.PowerActionViewModel
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsButtonViewModel.SettingsActionViewModel
 import com.android.systemui.qs.footer.ui.viewmodel.FooterActionsButtonViewModel.UserSwitcherViewModel
 import com.android.systemui.qs.panels.domain.interactor.TextFeedbackInteractor
 import com.android.systemui.qs.panels.domain.model.TextFeedbackModel
+import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
 import com.android.systemui.qs.panels.ui.viewmodel.TextFeedbackContentViewModel.Companion.load
 import com.android.systemui.qs.panels.ui.viewmodel.TextFeedbackViewModel
 import com.android.systemui.res.R
@@ -62,6 +64,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 
@@ -77,6 +80,9 @@ class FooterActionsViewModel(
 
     /** The model for the user switcher button. */
     val userSwitcher: Flow<FooterActionsButtonViewModel?>,
+
+    /** The model for the edit button. */
+    val edit: Flow<FooterActionsButtonViewModel?>,
 
     /** The model for the settings button. */
     val settings: Flow<FooterActionsButtonViewModel?>,
@@ -133,7 +139,8 @@ class FooterActionsViewModel(
         private val textFeedbackInteractor: TextFeedbackInteractor,
         private val selectedUserInteractor: SelectedUserInteractor,
         @Named(PM_LITE_ENABLED) private val showPowerButton: Boolean,
-        private val keyguardStateController: KeyguardStateController
+        private val keyguardStateController: KeyguardStateController,
+        private val editModeViewModelProvider: Provider<EditModeViewModel>,
     ) {
         /** Create a [FooterActionsViewModel] bound to the lifecycle of [lifecycleOwner]. */
         fun create(lifecycleOwner: LifecycleOwner): FooterActionsViewModel {
@@ -163,6 +170,7 @@ class FooterActionsViewModel(
                 showPowerButton,
                 selectedUserInteractor,
                 keyguardStateController,
+                editModeViewModel = editModeViewModelProvider.get(),
             )
         }
 
@@ -190,6 +198,7 @@ class FooterActionsViewModel(
                 showPowerButton,
                 selectedUserInteractor,
                 keyguardStateController,
+                editModeViewModel = editModeViewModelProvider.get(),
             )
         }
     }
@@ -205,6 +214,7 @@ fun createFooterActionsViewModel(
     showPowerButton: Boolean,
     selectedUserInteractor: SelectedUserInteractor,
     keyguardStateController: KeyguardStateController,
+    editModeViewModel: EditModeViewModel? = null,
 ): FooterActionsViewModel {
     suspend fun observeDeviceMonitoringDialogRequests(quickSettingsContext: Context) {
         footerActionsInteractor.deviceMonitoringDialogRequests.collect {
@@ -244,6 +254,16 @@ fun createFooterActionsViewModel(
         }
 
         footerActionsInteractor.showUserSwitcher(expandable)
+    }
+
+    fun onEditButtonClicked(expandable: Expandable) {
+        if (falsingManager.isFalseTap(FalsingManager.LOW_PENALTY)) {
+            return
+        }
+
+        activityStarter.postQSRunnableDismissingKeyguard {
+            editModeViewModel?.startEditing()
+        }
     }
 
     fun onSettingsButtonClicked(expandable: Expandable) {
@@ -310,6 +330,19 @@ fun createFooterActionsViewModel(
     val userSwitcher =
         userSwitcherViewModel(qsThemedContext, footerActionsInteractor, ::onUserSwitcherClicked)
 
+    val edit =
+        if (editModeViewModel != null) {
+            selectedUserInteractor.isCurrentUserHeadlessSystemUser
+                .map { isHeadlessSystemUser ->
+                    EditActionViewModel(qsThemedContext, ::onEditButtonClicked).takeUnless {
+                        hsuQsChanges() && isHeadlessSystemUser
+                    }
+                }
+                .distinctUntilChanged()
+        } else {
+            flowOf(null)
+        }
+
     val settings =
         selectedUserInteractor.isCurrentUserHeadlessSystemUser
             .map { isHeadlessSystemUser ->
@@ -332,6 +365,7 @@ fun createFooterActionsViewModel(
         security = security,
         foregroundServices = foregroundServices,
         userSwitcher = userSwitcher,
+        edit = edit,
         settings = settings,
         power = power,
         observeDeviceMonitoringDialogRequests = ::observeDeviceMonitoringDialogRequests,

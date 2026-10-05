@@ -17,6 +17,7 @@
 package com.android.systemui.statusbar.notification.stack.ui.viewbinder
 
 import android.view.LayoutInflater
+import android.view.View
 import androidx.lifecycle.lifecycleScope
 import com.android.app.tracing.TraceUtils.traceAsync
 import com.android.app.tracing.coroutines.launchTraced as launch
@@ -225,11 +226,22 @@ constructor(
             }
             launch {
                 viewModel.shouldShowFooterView.collect { animatedVisibility ->
-                    footerView.setVisible(
-                        /* visible = */ animatedVisibility.value,
-                        /* animate = */ animatedVisibility.isAnimating,
-                    ) {
-                        animatedVisibility.stopAnimating()
+                    val isHyperOS = android.provider.Settings.System.getInt(
+                        parentView.context.contentResolver,
+                        "control_center_style",
+                        1
+                    ) == 1
+
+                    if (isHyperOS) {
+                        footerView.setVisible(false, false)
+                        footerView.visibility = View.GONE
+                    } else {
+                        footerView.setVisible(
+                            /* visible = */ animatedVisibility.value,
+                            /* animate = */ animatedVisibility.isAnimating,
+                        ) {
+                            animatedVisibility.stopAnimating()
+                        }
                     }
                 }
             }
@@ -250,13 +262,35 @@ constructor(
                 )
             launch {
                 viewModel.shouldIncludeFooterView.collect { animatedVisibility ->
-                    footerView.setVisible(
-                        /* visible = */ animatedVisibility.value,
-                        /* animate = */ animatedVisibility.isAnimating,
-                    )
+                    val isHyperOS = android.provider.Settings.System.getInt(
+                        parentView.context.contentResolver,
+                        "control_center_style",
+                        1
+                    ) == 1
+
+                    if (isHyperOS) {
+                        footerView.setVisible(false, false)
+                        footerView.visibility = View.GONE
+                    } else {
+                        footerView.setVisible(
+                            /* visible = */ animatedVisibility.value,
+                            /* animate = */ animatedVisibility.isAnimating,
+                        )
+                    }
                 }
             }
-            launch { viewModel.shouldHideFooterView.collect { footerView.setShouldBeHidden(it) } }
+            launch {
+                viewModel.shouldHideFooterView.collect {
+                    val isHyperOS = android.provider.Settings.System.getInt(
+                        parentView.context.contentResolver,
+                        "control_center_style",
+                        1
+                    ) == 1
+
+                    footerView.setShouldBeHidden(if (isHyperOS) true else it)
+                    if (isHyperOS) footerView.visibility = View.GONE
+                }
+            }
             disposableHandle.awaitCancellationThenDispose()
         }
     }

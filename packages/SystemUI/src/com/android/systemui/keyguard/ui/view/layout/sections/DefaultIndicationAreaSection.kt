@@ -67,6 +67,7 @@ constructor(
                 constraintLayout.requireViewById(R.id.keyguard_indication_area),
                 keyguardIndicationAreaViewModel,
                 indicationController,
+                lockscreenLyricsController,
             )
     }
 
@@ -95,15 +96,15 @@ constructor(
                 ConstraintSet.END
             )
 
-            // 2. Lyrics View: ARRIBA DEL ÁREA DE INDICACIÓN Y HUELLA DIGITAL
+            // 2. Lyrics View: DIRECTAMENTE ARRIBA DEL BOTÓN DE LA HUELLA DIGITAL
             constrainWidth(lyricsViewId, ViewGroup.LayoutParams.MATCH_PARENT)
             constrainHeight(lyricsViewId, ViewGroup.LayoutParams.WRAP_CONTENT)
             connect(
                 lyricsViewId,
                 ConstraintSet.BOTTOM,
-                indicationAreaViewId,
+                R.id.device_entry_icon_view,
                 ConstraintSet.TOP,
-                dpToPx(76f)
+                dpToPx(12f)
             )
             connect(
                 lyricsViewId,

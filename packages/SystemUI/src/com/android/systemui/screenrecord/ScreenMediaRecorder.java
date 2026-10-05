@@ -326,18 +326,24 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
             try {
                 mMediaRecorder.setVideoEncodingProfileLevel(
                         MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
-                        MediaCodecInfo.CodecProfileLevel.AVCLevel4);
+                        MediaCodecInfo.CodecProfileLevel.AVCLevel51);
             } catch (Exception e1) {
                 try {
                     mMediaRecorder.setVideoEncodingProfileLevel(
                             MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
-                            MediaCodecInfo.CodecProfileLevel.AVCLevel4);
+                            MediaCodecInfo.CodecProfileLevel.AVCLevel51);
                 } catch (Exception e2) {
                     try {
                         mMediaRecorder.setVideoEncodingProfileLevel(
-                                MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline,
-                                MediaCodecInfo.CodecProfileLevel.AVCLevel4);
-                    } catch (Exception ignored) {}
+                                MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
+                                MediaCodecInfo.CodecProfileLevel.AVCLevel42);
+                    } catch (Exception e3) {
+                        try {
+                            mMediaRecorder.setVideoEncodingProfileLevel(
+                                    MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline,
+                                    MediaCodecInfo.CodecProfileLevel.AVCLevel4);
+                        } catch (Exception ignored) {}
+                    }
                 }
             }
         } else {

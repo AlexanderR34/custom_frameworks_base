@@ -120,16 +120,23 @@ constructor(
     private val expandedAudioTileDetailsFeatureInteractor: ExpandedAudioTileDetailsFeatureInteractor,
 ) {
     fun bind(view: View) {
-        // Use horizontal volume dialog if the audio tile details view is enabled
-        val isVolumeDialogVertical = !expandedAudioTileDetailsFeatureInteractor.isEnabled()
+        val isHyperOS = Settings.System.getIntForUser(
+            view.context.contentResolver,
+            Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+            1,
+            UserHandle.USER_CURRENT
+        ) == 1
+        // Use horizontal volume dialog ONLY if audio tile details view is enabled AND NOT HyperOS
+        val isVolumeDialogVertical = if (isHyperOS) true else !expandedAudioTileDetailsFeatureInteractor.isEnabled()
         val sliderComposeViewId =
             if (isVolumeDialogVertical) {
                 R.id.volume_dialog_slider
             } else {
                 R.id.volume_dialog_slider_horizontal
             }
-        val sliderComposeView: ComposeView = view.requireViewById(sliderComposeViewId)
-        sliderComposeView.setContent {
+        val sliderComposeView: ComposeView? = view.findViewById(sliderComposeViewId)
+            ?: view.findViewById(R.id.volume_dialog_slider)
+        sliderComposeView?.setContent {
             PlatformTheme {
                 VolumeDialogSlider(
                     viewModel = viewModel,
@@ -190,7 +197,7 @@ private fun VolumeDialogSlider(
     val collectedSliderStateModel by viewModel.state.collectAsStateWithLifecycle(null)
     val sliderStateModel = collectedSliderStateModel ?: return
 
-    if (isHyperOS && isVolumeDialogVertical) {
+    if (isHyperOS) {
         HyperOSVolumeVerticalLayout(
             viewModel = viewModel,
             sliderStateModel = sliderStateModel,
@@ -446,12 +453,12 @@ private fun HyperOSVolumeVerticalLayout(
         ) == 1
     }
 
-    val sliderWidth = if (isLandscape) 56.dp else 62.dp
-    val sliderHeight = if (isLandscape) 165.dp else 232.dp
-    val sliderCornerRadius = if (isLandscape) 18.dp else 22.dp
-    val iconSize = if (isLandscape) 22.dp else 26.dp
-    val iconBottomPadding = if (isLandscape) 12.dp else 18.dp
-    val topPadding = if (isLandscape) 10.dp else 15.dp
+    val sliderWidth = 62.dp
+    val sliderHeight = 224.dp
+    val sliderCornerRadius = 22.dp
+    val iconSize = 26.dp
+    val iconBottomPadding = 18.dp
+    val topPadding = 15.dp
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -530,26 +537,29 @@ private fun HyperOSVolumeVerticalLayout(
                         detectTapGestures { offset ->
                             val touchY = offset.y
                             val heightPx = size.height.toFloat()
-                            val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                            if (isBoost200Enabled && !isVoiceCall && (touchY <= 25f || frac >= 0.98f)) {
-                                Settings.System.putIntForUser(
-                                    context.contentResolver,
-                                    Settings.System.VOLUME_BOOST_LEVEL,
-                                    100,
-                                    UserHandle.USER_CURRENT
-                                )
-                            } else if (isBoostActive && frac < 0.95f) {
-                                Settings.System.putIntForUser(
-                                    context.contentResolver,
-                                    Settings.System.VOLUME_BOOST_LEVEL,
-                                    0,
-                                    UserHandle.USER_CURRENT
-                                )
+                            // Only handle taps in slider middle area (ignoring top 38dp dots and bottom 38dp icon)
+                            if (touchY > 38f && touchY < (heightPx - 38f)) {
+                                val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                if (isBoost200Enabled && !isVoiceCall && (touchY <= 25f || frac >= 0.98f)) {
+                                    Settings.System.putIntForUser(
+                                        context.contentResolver,
+                                        Settings.System.VOLUME_BOOST_LEVEL,
+                                        100,
+                                        UserHandle.USER_CURRENT
+                                    )
+                                } else if (isBoostActive && frac < 0.95f) {
+                                    Settings.System.putIntForUser(
+                                        context.contentResolver,
+                                        Settings.System.VOLUME_BOOST_LEVEL,
+                                        0,
+                                        UserHandle.USER_CURRENT
+                                    )
+                                }
+                                val targetVal = min + frac * range
+                                overscrollViewModel.setSlider(targetVal, min, max)
+                                viewModel.setStreamVolume(targetVal, true)
+                                viewModel.onSliderChangeFinished(targetVal)
                             }
-                            val targetVal = min + frac * range
-                            overscrollViewModel.setSlider(targetVal, min, max)
-                            viewModel.setStreamVolume(targetVal, true)
-                            viewModel.onSliderChangeFinished(targetVal)
                         }
                     }
             ) {
@@ -583,26 +593,32 @@ private fun HyperOSVolumeVerticalLayout(
                 }
 
                 // Top 3 dots ••• (Expand / Sound Settings button)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = topPadding)
-                        .clickable {
-                            viewModel.openVolumePanel()
-                        }
-                        .padding(4.dp)
+                        .size(36.dp)
+                        .pointerInput(Unit) {
+                            detectTapGestures {
+                                viewModel.openVolumePanel()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    repeat(3) {
-                        Box(
-                            modifier = Modifier
-                                .size(if (isLandscape) 3.5.dp else 4.5.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (boostAnimationProgress > 0.5f) Color(0xEEFFFFFF) else Color(0xFFB0B0B0)
-                                )
-                        )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        repeat(3) {
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isLandscape) 3.5.dp else 4.5.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (boostAnimationProgress > 0.5f) Color(0xEEFFFFFF) else Color(0xFFB0B0B0)
+                                    )
+                            )
+                        }
                     }
                 }
 
@@ -670,8 +686,16 @@ private fun HyperOSVolumeVerticalLayout(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = iconBottomPadding)
-                        .size(iconSize)
+                        .padding(bottom = iconBottomPadding - 6.dp)
+                        .size(iconSize + 14.dp)
+                        .pointerInput(min, max, range, currentVal) {
+                            detectTapGestures {
+                                val targetVal = if (currentVal > min) min else (min + 0.7f * range)
+                                overscrollViewModel.setSlider(targetVal, min, max)
+                                viewModel.setStreamVolume(targetVal, true)
+                                viewModel.onSliderChangeFinished(targetVal)
+                            }
+                        }
                 ) {
                     androidx.compose.material3.Icon(
                         painter = painterResource(id = currentIconRes),
@@ -746,10 +770,10 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
     )
     val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
 
-    val capsuleWidth = if (isLandscape) 28.dp else 31.dp
-    val capsuleHeight = if (isLandscape) 165.dp else 232.dp
-    val capsuleCorner = if (isLandscape) 10.dp else 14.dp
-    val iconSize = if (isLandscape) 16.dp else 18.dp
+    val capsuleWidth = 31.dp
+    val capsuleHeight = 224.dp
+    val capsuleCorner = 14.dp
+    val iconSize = 18.dp
 
     val iconRes = if (targetStream == AudioManager.STREAM_VOICE_CALL) {
         R.drawable.ic_hyperos_call_volume
@@ -806,7 +830,7 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = if (isLandscape) 10.dp else 16.dp)
+                .padding(bottom = 16.dp)
                 .size(iconSize)
         ) {
             androidx.compose.material3.Icon(
@@ -829,10 +853,10 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
     var ringerMode by remember { mutableStateOf(audioManager.ringerModeInternal) }
     val isSilentOrVibrate = ringerMode != AudioManager.RINGER_MODE_NORMAL
 
-    val pillWidth = if (isLandscape) 56.dp else 62.dp
-    val pillHeight = if (isLandscape) 36.dp else 48.dp
-    val pillCorner = if (isLandscape) 14.dp else 18.dp
-    val iconSize = if (isLandscape) 20.dp else 24.dp
+    val pillWidth = 62.dp
+    val pillHeight = 48.dp
+    val pillCorner = 18.dp
+    val iconSize = 24.dp
 
     val animatedBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (isSilentOrVibrate) Color.White else Color(0x8A1A1A1A),
@@ -898,10 +922,10 @@ private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
         )
     }
 
-    val pillWidth = if (isLandscape) 56.dp else 62.dp
-    val pillHeight = if (isLandscape) 36.dp else 48.dp
-    val pillCorner = if (isLandscape) 14.dp else 18.dp
-    val iconSize = if (isLandscape) 20.dp else 24.dp
+    val pillWidth = 62.dp
+    val pillHeight = 48.dp
+    val pillCorner = 18.dp
+    val iconSize = 24.dp
 
     val animatedBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (isDndActive) Color.White else Color(0x8A1A1A1A),

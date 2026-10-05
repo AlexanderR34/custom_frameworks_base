@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -52,7 +54,7 @@ fun VolumePanelRoot(
         android.provider.Settings.System.getInt(
             context.contentResolver,
             "hyperos_volume_panel_style",
-            0
+            1
         ) == 1
     }
     val accessibilityTitle = stringResource(R.string.accessibility_volume_settings)
@@ -69,15 +71,24 @@ fun VolumePanelRoot(
             )
         }
     } else {
-        with(VolumePanelComposeScope(state, isExpandedAudioTileDetailsFeatureEnabled)) {
-            components?.let { componentsState ->
-                Components(
-                    componentsState,
-                    modifier
-                        .sysuiResTag(VolumePanelTestTag)
-                        .semantics { paneTitle = accessibilityTitle }
-                        .padding(start = padding, top = padding, end = padding, bottom = 20.dp),
-                )
+        androidx.compose.material3.Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(
+                topStart = 28.dp,
+                topEnd = 28.dp
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            with(VolumePanelComposeScope(state, isExpandedAudioTileDetailsFeatureEnabled)) {
+                components?.let { componentsState ->
+                    Components(
+                        componentsState,
+                        modifier
+                            .sysuiResTag(VolumePanelTestTag)
+                            .semantics { paneTitle = accessibilityTitle }
+                            .padding(start = padding, top = padding, end = padding, bottom = 20.dp),
+                    )
+                }
             }
         }
     }
@@ -92,20 +103,13 @@ private fun VolumePanelComposeScope.Components(
         if (isLargeScreen) {
             Arrangement.spacedBy(20.dp)
         } else {
-            if (isPortrait) Arrangement.spacedBy(padding) else Arrangement.spacedBy(4.dp)
+            Arrangement.spacedBy(padding)
         }
     Column(modifier = modifier, verticalArrangement = arrangement) {
-        if (isPortrait || isLargeScreen) {
-            VerticalVolumePanelContent(
-                modifier = Modifier.weight(weight = 1f, fill = false),
-                layout = layout,
-            )
-        } else {
-            HorizontalVolumePanelContent(
-                modifier = Modifier.weight(weight = 1f, fill = false).heightIn(max = 212.dp),
-                layout = layout,
-            )
-        }
+        VerticalVolumePanelContent(
+            modifier = Modifier.weight(weight = 1f, fill = false),
+            layout = layout,
+        )
         BottomBar(modifier = Modifier, layout = layout)
     }
 }

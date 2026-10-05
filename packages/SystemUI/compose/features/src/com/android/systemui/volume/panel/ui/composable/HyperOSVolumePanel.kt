@@ -20,6 +20,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioManager
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -73,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,22 +97,37 @@ fun HyperOSVolumePanel(
     val view = LocalView.current
     val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val notificationManager = remember(context) { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     var isVisible by remember { mutableStateOf(false) }
+
+    BackHandler {
+        isVisible = false
+        onDismissRequest()
+    }
 
     LaunchedEffect(Unit) {
         isVisible = true
     }
 
+    val topPadding = if (isLandscape) 16.dp else 64.dp
+    val bottomPadding = if (isLandscape) 16.dp else 24.dp
+    val verticalInnerPadding = if (isLandscape) 16.dp else 20.dp
+    val cardCornerRadius = if (isLandscape) 32.dp else 36.dp
+    val cardWidth = if (isLandscape) 380.dp else 340.dp
+
     // Outer full-screen container with dismiss-on-tap-outside
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    isVisible = false
-                    onDismissRequest()
-                }
+            .background(Color.Transparent)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                isVisible = false
+                onDismissRequest()
             },
         contentAlignment = Alignment.TopEnd
     ) {
@@ -125,19 +142,21 @@ fun HyperOSVolumePanel(
                 animationSpec = spring(stiffness = Spring.StiffnessMedium)
             ) + fadeOut()
         ) {
-            // Compact Floating Card
+            // Floating Card (HyperOS full-sized aesthetic)
             Box(
                 modifier = Modifier
-                    .padding(top = 70.dp, end = 16.dp, bottom = 24.dp)
-                    .width(310.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(32.dp))
-                    .pointerInput(Unit) {
+                    .padding(top = topPadding, end = if (isLandscape) 20.dp else 16.dp, bottom = bottomPadding)
+                    .width(cardWidth)
+                    .clip(RoundedCornerShape(cardCornerRadius))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                    .shadow(elevation = 20.dp, shape = RoundedCornerShape(cardCornerRadius))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
                         // Consume taps inside the card so tapping inside does NOT dismiss
-                        detectTapGestures {}
                     }
-                    .padding(horizontal = 14.dp, vertical = 18.dp)
+                    .padding(horizontal = 16.dp, vertical = verticalInnerPadding)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -147,16 +166,18 @@ fun HyperOSVolumePanel(
                     HyperOSVerticalSlidersRow(
                         layout = layout,
                         audioManager = audioManager,
-                        view = view
+                        view = view,
+                        isLandscape = isLandscape
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(if (isLandscape) 14.dp else 18.dp))
 
                     // Bottom Timers: Silent Mode & DND
                     HyperOSTimersSection(
                         audioManager = audioManager,
                         notificationManager = notificationManager,
-                        view = view
+                        view = view,
+                        isLandscape = isLandscape
                     )
                 }
             }
@@ -169,20 +190,9 @@ private fun HyperOSVerticalSlidersRow(
     layout: ComponentsLayout,
     audioManager: AudioManager,
     view: android.view.View,
+    isLandscape: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // Collect slider viewmodels from contentComponents
-    val sliderViewModels = remember(layout) {
-        val result = mutableListOf<SliderViewModel>()
-        for (componentState in layout.contentComponents) {
-            val component = componentState.component
-            if (component is com.android.systemui.volume.panel.component.volume.ui.composable.VolumeSlidersComponent) {
-                // Sliders component found
-            }
-        }
-        result
-    }
-
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -194,6 +204,7 @@ private fun HyperOSVerticalSlidersRow(
             audioManager = audioManager,
             fallbackIconRes = R.drawable.ic_hyperos_speaker_mid,
             view = view,
+            isLandscape = isLandscape,
             modifier = Modifier.weight(1f)
         )
 
@@ -205,6 +216,7 @@ private fun HyperOSVerticalSlidersRow(
             audioManager = audioManager,
             fallbackIconRes = R.drawable.ic_hyperos_bell_normal,
             view = view,
+            isLandscape = isLandscape,
             modifier = Modifier.weight(1f)
         )
 
@@ -214,8 +226,9 @@ private fun HyperOSVerticalSlidersRow(
         HyperOSVerticalStreamSlider(
             streamType = AudioManager.STREAM_ALARM,
             audioManager = audioManager,
-            fallbackIconRes = R.drawable.stat_sys_alarm,
+            fallbackIconRes = R.drawable.ic_alarm,
             view = view,
+            isLandscape = isLandscape,
             modifier = Modifier.weight(1f)
         )
 
@@ -227,6 +240,7 @@ private fun HyperOSVerticalSlidersRow(
             audioManager = audioManager,
             fallbackIconRes = R.drawable.ic_hyperos_call_volume,
             view = view,
+            isLandscape = isLandscape,
             modifier = Modifier.weight(1f)
         )
     }
@@ -238,8 +252,10 @@ private fun HyperOSVerticalStreamSlider(
     audioManager: AudioManager,
     fallbackIconRes: Int,
     view: android.view.View,
+    isLandscape: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val maxVolume = remember(streamType) {
         try {
             audioManager.getStreamMaxVolume(streamType).coerceAtLeast(1)
@@ -255,7 +271,7 @@ private fun HyperOSVerticalStreamSlider(
         }
     }
 
-    var currentVolume by remember {
+    var currentVolume by remember(streamType) {
         mutableIntStateOf(
             try {
                 audioManager.getStreamVolume(streamType)
@@ -263,6 +279,30 @@ private fun HyperOSVerticalStreamSlider(
                 (maxVolume / 2)
             }
         )
+    }
+
+    DisposableEffect(streamType, context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val st = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                    if (st == streamType || st == -1) {
+                        try {
+                            currentVolume = audioManager.getStreamVolume(streamType)
+                        } catch (e: Exception) {}
+                    }
+                }
+            }
+        }
+        val filter = android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        try {
+            context.registerReceiver(receiver, filter)
+        } catch (e: Exception) {}
+        onDispose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {}
+        }
     }
 
     val fraction = remember(currentVolume, minVolume, maxVolume) {
@@ -275,19 +315,22 @@ private fun HyperOSVerticalStreamSlider(
         label = "HyperOSVolumeFraction_$streamType"
     )
 
-    val isMuted = currentVolume <= minVolume
+    val sliderHeight = if (isLandscape) 160.dp else 210.dp
+    val bottomPadding = if (isLandscape) 10.dp else 14.dp
+    val iconBadgeSize = if (isLandscape) 36.dp else 44.dp
+    val iconSize = if (isLandscape) 20.dp else 24.dp
 
     Column(
         modifier = modifier
-            .height(175.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+            .height(sliderHeight)
+            .clip(RoundedCornerShape(if (isLandscape) 22.dp else 26.dp))
+            .background(Color(0x597F7F7F)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                .pointerInput(minVolume, maxVolume, streamType) {
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             val height = size.height
@@ -316,49 +359,66 @@ private fun HyperOSVerticalStreamSlider(
                         }
                     )
                 }
+                .pointerInput(minVolume, maxVolume, streamType) {
+                    detectTapGestures { offset ->
+                        val height = size.height
+                        // Only handle tap if not touching the bottom icon area
+                        if (offset.y < (height - 38f)) {
+                            val calculatedFraction = 1f - (offset.y / height).coerceIn(0f, 1f)
+                            val targetVol = (minVolume + calculatedFraction * (maxVolume - minVolume)).roundToInt()
+                            if (targetVol != currentVolume) {
+                                currentVolume = targetVol
+                                try {
+                                    audioManager.setStreamVolume(streamType, targetVol, 0)
+                                } catch (e: Exception) {}
+                                view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                            }
+                        }
+                    }
+                }
         ) {
-            val totalHeight = maxHeight
+            val monetPrimary = MaterialTheme.colorScheme.primary
+            val monetOnPrimary = MaterialTheme.colorScheme.onPrimary
 
-            // Active Filled Level (grows from bottom to top)
+            // Active Filled Level (grows from bottom to top) - Monet Adaptive Fill Bar
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(totalHeight * animatedFraction)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .fillMaxHeight(animatedFraction.coerceIn(0f, 1f))
+                    .background(monetPrimary)
             )
 
             // Bottom Icon badge
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp)
-                    .size(36.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        // Toggle Mute / Max on icon click
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        val targetVol = if (currentVolume > minVolume) minVolume else (maxVolume * 0.7f).roundToInt()
-                        currentVolume = targetVol
-                        try {
-                            audioManager.setStreamVolume(streamType, targetVol, 0)
-                        } catch (e: Exception) {}
+                    .padding(bottom = bottomPadding)
+                    .size(iconBadgeSize)
+                    .pointerInput(minVolume, maxVolume, streamType, currentVolume) {
+                        detectTapGestures {
+                            // Toggle Mute / Max on icon click
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            val targetVol = if (currentVolume > minVolume) minVolume else (maxVolume * 0.7f).roundToInt()
+                            currentVolume = targetVol
+                            try {
+                                audioManager.setStreamVolume(streamType, targetVol, 0)
+                            } catch (e: Exception) {}
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
                 val iconColor = if (animatedFraction > 0.18f) {
-                    MaterialTheme.colorScheme.onPrimary
+                    monetOnPrimary
                 } else {
-                    MaterialTheme.colorScheme.onSurface
+                    Color.White
                 }
 
                 Icon(
                     painter = painterResource(id = fallbackIconRes),
                     contentDescription = null,
                     tint = iconColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(iconSize)
                 )
             }
         }
@@ -370,24 +430,41 @@ private fun HyperOSTimersSection(
     audioManager: AudioManager,
     notificationManager: NotificationManager,
     view: android.view.View,
+    isLandscape: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val isSilentActive = audioManager.ringerMode == AudioManager.RINGER_MODE_SILENT
+    val isDndActive = remember(context) {
+        try {
+            android.provider.Settings.Global.getInt(
+                context.contentResolver,
+                android.provider.Settings.Global.ZEN_MODE,
+                android.provider.Settings.Global.ZEN_MODE_OFF
+            ) != android.provider.Settings.Global.ZEN_MODE_OFF
+        } catch (e: Exception) { false }
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 10.dp else 12.dp)
     ) {
-        // 1. Silent Mode Timer Row (30m to 8h)
+        // 1. Silent Mode Timer Row (30m to 8h) with Monet adaptive fill
         HyperOSTimerRow(
+            settingKey = "hyperos_silent",
+            isSystemActive = isSilentActive,
             iconRes = R.drawable.ic_hyperos_bell_normal,
             activeIconRes = R.drawable.ic_hyperos_bell_mute,
             label = "Silenciar dispositivo",
             defaultTimerText = "Deslice para establecer un temporizador",
             minMinutes = 30,
             maxMinutes = 480, // 8 hours
+            activeColor = Color(0xFFFF3B30),
+            isLandscape = isLandscape,
             onToggle = { isActive ->
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 try {
-                    audioManager.ringerMode = if (isActive) AudioManager.RINGER_MODE_SILENT else AudioManager.RINGER_MODE_NORMAL
+                    audioManager.ringerModeInternal = if (isActive) AudioManager.RINGER_MODE_SILENT else AudioManager.RINGER_MODE_NORMAL
                 } catch (e: Exception) {}
             },
             onTimerChanged = { minutes ->
@@ -395,14 +472,18 @@ private fun HyperOSTimersSection(
             }
         )
 
-        // 2. DND (Do Not Disturb) Timer Row (30m to 8h)
+        // 2. DND (Do Not Disturb) Timer Row (30m to 8h) with Monet adaptive fill
         HyperOSTimerRow(
+            settingKey = "hyperos_dnd",
+            isSystemActive = isDndActive,
             iconRes = R.drawable.ic_hyperos_dnd_moon,
             activeIconRes = R.drawable.ic_hyperos_dnd_moon,
             label = "No molestar",
             defaultTimerText = "Deslice para establecer un temporizador",
             minMinutes = 30,
             maxMinutes = 480, // 8 hours
+            activeColor = Color(0xFF7C4DFF),
+            isLandscape = isLandscape,
             onToggle = { isActive ->
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 try {
@@ -423,113 +504,213 @@ private fun HyperOSTimersSection(
 
 @Composable
 private fun HyperOSTimerRow(
+    settingKey: String,
+    isSystemActive: Boolean,
     iconRes: Int,
     activeIconRes: Int,
     label: String,
     defaultTimerText: String,
     minMinutes: Int,
     maxMinutes: Int,
+    activeColor: Color,
+    isLandscape: Boolean,
     onToggle: (Boolean) -> Unit,
     onTimerChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var isActive by remember { mutableStateOf(false) }
-    var timerProgress by remember { mutableFloatStateOf(0f) } // 0f to 1f
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
 
-    val calculatedMinutes = remember(timerProgress) {
-        if (timerProgress <= 0.02f) 0
-        else {
-            val stepMinutes = ((minMinutes + timerProgress * (maxMinutes - minMinutes)) / 15).roundToInt() * 15
-            stepMinutes.coerceIn(minMinutes, maxMinutes)
-        }
+    // Load stored timer from persistent storage
+    val now = System.currentTimeMillis()
+    val storedEnd = remember(settingKey) {
+        try {
+            android.provider.Settings.System.getLong(contentResolver, "${settingKey}_timer_end", 0L)
+        } catch (e: Exception) { 0L }
+    }
+    val storedInitial = remember(settingKey) {
+        try {
+            android.provider.Settings.System.getLong(contentResolver, "${settingKey}_timer_initial", 0L)
+        } catch (e: Exception) { 0L }
     }
 
-    val displayTimerText = remember(calculatedMinutes, defaultTimerText) {
-        if (calculatedMinutes == 0) {
-            defaultTimerText
-        } else {
-            val hours = calculatedMinutes / 60
-            val mins = calculatedMinutes % 60
-            when {
-                hours > 0 && mins > 0 -> "Temporizador: ${hours}h ${mins}m"
-                hours > 0 -> "Temporizador: ${hours}h"
-                else -> "Temporizador: ${mins}m"
+    val hasValidTimer = isSystemActive && storedEnd > now && storedInitial > 0L
+    val initialRemainingSecs = if (hasValidTimer) (storedEnd - now) / 1000L else 0L
+
+    var isActive by remember(isSystemActive) { mutableStateOf(isSystemActive) }
+    var remainingSeconds by remember(initialRemainingSecs) { mutableStateOf(initialRemainingSecs) }
+    var initialTotalSeconds by remember(storedInitial) { mutableStateOf(if (hasValidTimer) storedInitial else 0L) }
+    var isCountingDown by remember(hasValidTimer) { mutableStateOf(hasValidTimer) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
+
+    val maxSeconds = remember(maxMinutes) { (maxMinutes * 60f).coerceAtLeast(1f) }
+
+    // Real-time 1-second ticker countdown
+    LaunchedEffect(isCountingDown, remainingSeconds) {
+        if (isCountingDown && remainingSeconds > 0L) {
+            kotlinx.coroutines.delay(1000L)
+            remainingSeconds -= 1L
+            if (remainingSeconds <= 0L) {
+                isCountingDown = false
+                isActive = false
+                dragProgress = 0f
+                try {
+                    android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", 0L)
+                    android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", 0L)
+                } catch (e: Exception) {}
+                onToggle(false)
             }
         }
     }
 
+    // Dynamic progress fraction (shrinks progressively as countdown proceeds)
+    val liveFraction = remember(isCountingDown, remainingSeconds, maxSeconds, dragProgress) {
+        if (isCountingDown && remainingSeconds > 0L) {
+            (remainingSeconds.toFloat() / maxSeconds).coerceIn(0f, 1f)
+        } else {
+            dragProgress
+        }
+    }
+
+    val animatedLiveFraction by animateFloatAsState(
+        targetValue = liveFraction.coerceIn(0f, 1f),
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "TimerProgressFraction_$settingKey"
+    )
+
+    val displayTimerText = remember(isCountingDown, remainingSeconds, dragProgress, defaultTimerText) {
+        if (isCountingDown && remainingSeconds > 0L) {
+            val hours = remainingSeconds / 3600L
+            val mins = (remainingSeconds % 3600L) / 60L
+            val secs = remainingSeconds % 60L
+            when {
+                hours > 0L -> "Temporizador: ${hours}h ${mins}m ${secs}s"
+                mins > 0L -> "Temporizador: ${mins}m ${secs}s"
+                else -> "Temporizador: ${secs}s"
+            }
+        } else if (dragProgress > 0.02f) {
+            val totalMins = (((minMinutes + dragProgress * (maxMinutes - minMinutes)) / 15).roundToInt() * 15).coerceIn(minMinutes, maxMinutes)
+            val hours = totalMins / 60
+            val mins = totalMins % 60
+            when {
+                hours > 0 -> "Temporizador: ${hours}h ${mins}m 00s"
+                else -> "Temporizador: ${mins}m 00s"
+            }
+        } else {
+            defaultTimerText
+        }
+    }
+
+    val rowHeight = if (isLandscape) 46.dp else 56.dp
+    val buttonSize = if (isLandscape) 46.dp else 56.dp
+    val iconSize = if (isLandscape) 20.dp else 24.dp
+
+    val monetPrimary = MaterialTheme.colorScheme.primary
+    val monetOnPrimary = MaterialTheme.colorScheme.onPrimary
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(rowHeight),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Left Circular Button
+        // Left Circular Button (HyperOS style: Red for Silent, Purple for DND)
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(buttonSize)
                 .clip(CircleShape)
                 .background(
-                    if (isActive || calculatedMinutes > 0) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    if (isActive) activeColor
+                    else Color(0x597F7F7F)
                 )
                 .clickable {
-                    isActive = !isActive
-                    onToggle(isActive)
+                    if (isActive) {
+                        isActive = false
+                        isCountingDown = false
+                        remainingSeconds = 0L
+                        initialTotalSeconds = 0L
+                        dragProgress = 0f
+                        try {
+                            android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", 0L)
+                            android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", 0L)
+                        } catch (e: Exception) {}
+                        onToggle(false)
+                    } else {
+                        isActive = true
+                        onToggle(true)
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = painterResource(id = if (isActive) activeIconRes else iconRes),
                 contentDescription = label,
-                tint = if (isActive || calculatedMinutes > 0) MaterialTheme.colorScheme.onPrimary
-                       else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(22.dp)
+                tint = Color.White,
+                modifier = Modifier.size(iconSize)
             )
         }
 
-        // Right Capsule Slider for Timer
+        // Right Capsule Slider for Timer with Active Color Fill Bar
         BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                .height(buttonSize)
+                .clip(RoundedCornerShape(buttonSize / 2))
+                .background(Color(0x597F7F7F))
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragStart = { offset ->
                             val width = size.width
-                            timerProgress = (offset.x / width).coerceIn(0f, 1f)
-                            if (timerProgress > 0.05f) {
-                                isActive = true
-                                onToggle(true)
-                            }
-                            onTimerChanged(calculatedMinutes)
+                            dragProgress = (offset.x / width).coerceIn(0f, 1f)
+                            isCountingDown = false
                         },
                         onHorizontalDrag = { change, _ ->
                             change.consume()
                             val width = size.width
-                            timerProgress = (change.position.x / width).coerceIn(0f, 1f)
-                            if (timerProgress > 0.05f && !isActive) {
+                            dragProgress = (change.position.x / width).coerceIn(0f, 1f)
+                            isCountingDown = false
+                        },
+                        onDragEnd = {
+                            if (dragProgress > 0.05f) {
+                                val totalMins = (((minMinutes + dragProgress * (maxMinutes - minMinutes)) / 15).roundToInt() * 15).coerceIn(minMinutes, maxMinutes)
+                                val secs = totalMins * 60L
+                                remainingSeconds = secs
+                                initialTotalSeconds = secs
+                                isCountingDown = true
                                 isActive = true
+                                val endMillis = System.currentTimeMillis() + (secs * 1000L)
+                                try {
+                                    android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", endMillis)
+                                    android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", secs)
+                                } catch (e: Exception) {}
                                 onToggle(true)
+                                onTimerChanged(totalMins)
+                            } else {
+                                dragProgress = 0f
+                                remainingSeconds = 0L
+                                initialTotalSeconds = 0L
+                                isCountingDown = false
+                                isActive = false
+                                try {
+                                    android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", 0L)
+                                    android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", 0L)
+                                } catch (e: Exception) {}
+                                onToggle(false)
                             }
-                            onTimerChanged(calculatedMinutes)
                         }
                     )
                 },
             contentAlignment = Alignment.CenterStart
         ) {
-            val totalWidth = maxWidth
-
-            // Filled slider track
-            if (timerProgress > 0.01f) {
+            // Dynamic Monet Fill Level (Progressively shrinks from right to left as countdown proceeds)
+            if (animatedLiveFraction > 0.005f) {
                 Box(
                     modifier = Modifier
+                        .align(Alignment.CenterStart)
                         .fillMaxHeight()
-                        .width(totalWidth * timerProgress)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        .fillMaxWidth(animatedLiveFraction)
+                        .background(monetPrimary)
                 )
             }
 
@@ -537,15 +718,15 @@ private fun HyperOSTimerRow(
             Text(
                 text = displayTimerText,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = if (timerProgress > 0.5f) MaterialTheme.colorScheme.onPrimary
-                           else MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = if (isLandscape) 11.5.sp else 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (animatedLiveFraction > 0.2f) monetOnPrimary else Color.White
                 ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                maxLines = 1
+                    .padding(horizontal = 14.dp)
             )
         }
     }

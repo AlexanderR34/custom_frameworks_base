@@ -2067,7 +2067,8 @@ public class NotificationStackScrollLayout
                 setClipBounds(null);
             }
         } else if (clipped) {
-            setClipBounds(mRequestedClipBounds);
+            Rect wideClip = new Rect(-50000, mRequestedClipBounds.top, getWidth() + 50000, mRequestedClipBounds.bottom);
+            setClipBounds(wideClip);
         } else {
             setClipBounds(null);
         }

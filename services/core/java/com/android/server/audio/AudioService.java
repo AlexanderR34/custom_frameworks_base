@@ -9800,7 +9800,7 @@ public class AudioService extends IAudioService.Stub
     /** only public for mocking/spying, do not call outside of AudioService */
     @VisibleForTesting
     public void setMusicMute(boolean mute) {
-        getVssForStreamOrDefault(AudioSystem.STREAM_MUSIC).muteInternally(mute);
+        // Disabled to prevent triggering hardware mute in MediaTek DSP during BT connect/switch
     }
 
     /** Mute or unmute call audio */
@@ -11540,6 +11540,9 @@ public class AudioService extends IAudioService.Stub
          * @return true if the mute state was changed
          */
         public boolean muteInternally(boolean state) {
+            if (state && (mStreamType == AudioSystem.STREAM_MUSIC || mStreamType == AudioSystem.STREAM_ACCESSIBILITY)) {
+                return false;
+            }
             boolean changed = false;
             synchronized (mVolumeStateLock) {
                 if (state != mIsMutedInternally) {

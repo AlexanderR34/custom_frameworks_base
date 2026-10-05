@@ -19,6 +19,7 @@ package com.android.systemui.volume.ui.navigation
 import android.app.Dialog
 import android.content.Intent
 import android.provider.Settings
+import android.view.ViewGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -117,15 +118,19 @@ constructor(
     }
 
     private fun createNewVolumePanelDialog(): Dialog {
-        return dialogFactory.createBottomSheet(
-            content = { dialog ->
-                LaunchedEffect(dialog) {
-                    dialog.setOnDismissListener {
-                        uiEventLogger.log(VolumePanelUiEvent.VOLUME_PANEL_GONE)
-                        volumePanelGlobalStateInteractor.setVisible(false)
-                    }
-                }
+        val isHyperOS = try {
+            android.provider.Settings.System.getInt(
+                dialogFactory.applicationContext.contentResolver,
+                "hyperos_volume_panel_style",
+                1
+            ) == 1
+        } catch (e: Exception) {
+            true
+        }
 
+        val dialog = dialogFactory.createBottomSheet(
+            theme = com.android.systemui.res.R.style.Theme_SystemUI_Dialog_Volume,
+            content = { dialog ->
                 val coroutineScope = rememberCoroutineScope()
                 VolumePanelRoot(
                     remember(coroutineScope) { viewModelFactory.create(coroutineScope) },
@@ -134,9 +139,43 @@ constructor(
                 )
             },
             isDraggable = false,
-            // TODO(b/337205027) change maxWidth
-            maxWidth = 800.dp,
-            containerColorProvider = { MaterialTheme.colorScheme.surface },
+            maxWidth = if (isHyperOS) androidx.compose.ui.unit.Dp.Unspecified else 800.dp,
+            containerColorProvider = {
+                if (isHyperOS) {
+                    androidx.compose.ui.graphics.Color.Transparent
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                }
+            },
         )
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            )
+            addPrivateFlags(android.view.WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
+            setType(android.view.WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
+            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
+            setBackgroundDrawableResource(android.R.color.transparent)
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            decorView.setOnTouchListener { _, event ->
+                if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
+                    dialog.dismiss()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        dialog.setOnDismissListener {
+            uiEventLogger.log(VolumePanelUiEvent.VOLUME_PANEL_GONE)
+            volumePanelGlobalStateInteractor.setVisible(false)
+        }
+        return dialog
     }
 }

@@ -20,6 +20,10 @@ import com.android.systemui.statusbar.phone.ui.TintedIconManager
 
 /** A root view of the main SysUI window that supports scenes. */
 class SceneWindowRootView(context: Context, attrs: AttributeSet?) : WindowRootView(context, attrs) {
+    init {
+        clipChildren = false
+        clipToPadding = false
+    }
 
     private var motionEventHandler: SceneContainerViewModel.MotionEventHandler? = null
     // TODO(b/298525212): remove once Compose exposes window inset bounds.

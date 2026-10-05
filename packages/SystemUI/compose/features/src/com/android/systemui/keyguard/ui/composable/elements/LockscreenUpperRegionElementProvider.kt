@@ -139,12 +139,7 @@ constructor(
             val notificationWidth =
                 dimensionResource(R.dimen.shade_panel_width) -
                     (dimensionResource(R.dimen.overlay_qs_layout_horizontal_padding) * 2)
-            val widthModifier =
-                if (viewModel.shadeMode == ShadeMode.Dual) {
-                    Modifier.width(notificationWidth)
-                } else {
-                    Modifier.fillMaxWidth()
-                }
+            val widthModifier = Modifier.fillMaxWidth()
 
             LockscreenElement(
                 MediaCarousel,
@@ -217,9 +212,7 @@ constructor(
                     }
                 }
 
-            val narrowPadding =
-                dimensionResource(R.dimen.notification_side_paddings_single) +
-                    dimensionResource(R.dimen.notification_panel_margin_horizontal)
+            val narrowPadding = dimensionResource(R.dimen.notification_side_paddings_single)
 
             NestedScenes(
                 sceneKey =
@@ -246,7 +239,10 @@ constructor(
             ) {
                 scene(NarrowScenes.LargeClock) { LockscreenElement(Region.Clock.Large) }
                 scene(NarrowScenes.SmallClock) {
-                    Column {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         LockscreenElement(Region.Clock.Small)
                         MediaCarousel(Modifier.align(Alignment.Start))
                         Notifications(aodAlignment = Alignment.TopStart)

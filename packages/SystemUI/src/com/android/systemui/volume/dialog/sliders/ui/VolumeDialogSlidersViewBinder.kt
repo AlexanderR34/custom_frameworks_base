@@ -143,13 +143,7 @@ constructor(
             }
         )
         (layers.getDrawable(1) as GradientDrawable).setColor(
-            context.getColor(
-                if (supported) {
-                    R.color.volume_dialog_view_background_blur
-                } else {
-                    R.color.volume_dialog_view_background_blur_fallback
-                }
-            )
+            android.graphics.Color.TRANSPARENT
         )
     }
 

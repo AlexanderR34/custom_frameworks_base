@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.VerticalAlignmentLine
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.dp
 import com.android.compose.animation.scene.BaseContentScope
 import com.android.compose.animation.scene.ContentScope
 import com.android.compose.animation.scene.ElementContentScope
@@ -41,8 +42,8 @@ import com.android.systemui.lifecycle.rememberViewModel
 import com.android.systemui.plugins.keyguard.ui.composable.elements.BaseLockscreenElement.ElementSource
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElement
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys
-import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.AmbientIndicationArea
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.Clock
+import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.IndicationArea
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.LockIcon
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.MediaCarousel
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.Region
@@ -199,7 +200,7 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
             LockscreenElement(StatusBar)
             LockscreenElement(Region.Upper)
             LockscreenElement(LockIcon)
-            LockscreenElement(AmbientIndicationArea)
+            LockscreenElement(IndicationArea)
             LockscreenElement(Region.Lower)
             LockscreenElement(SettingsMenu)
         },
@@ -213,7 +214,7 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
         val statusBarMeasurable = measurables[0]
         val upperRegionMeasurable = measurables[1]
         val lockIconMeasurable = measurables[2]
-        val ambientIndicationMeasurable = measurables[3]
+        val indicationAreaMeasurable = measurables[3]
         val lowerRegionMeasurable = measurables[4]
         val settingsMenuMeasurable = measurables[5]
 
@@ -233,19 +234,18 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
                 bottom = lockIconPlaceable[LockIconAlignmentLines.Bottom],
             )
 
-        val ambientIndicationPlaceable =
-            ambientIndicationMeasurable.measure(
+        val indicationAreaPlaceable =
+            indicationAreaMeasurable.measure(
                 constraints = Constraints.fixedWidth(constraints.maxWidth)
             )
 
-        var upperRegionMaxHeight = lockIconBounds.top - statusBarPlaceable.measuredHeight
-        var lowerRegionMaxHeight = constraints.maxHeight - lockIconBounds.bottom
+        // Indication area (Lyrics + Charging/Status text) sits directly ABOVE the fingerprint sensor (LockIcon)
+        val indicationSpacing = 8.dp.roundToPx()
+        val indicationY = (lockIconBounds.top - indicationAreaPlaceable.measuredHeight - indicationSpacing)
+            .coerceAtLeast(statusBarPlaceable.measuredHeight)
 
-        if (!isUdfpsSupported) {
-            upperRegionMaxHeight -= ambientIndicationPlaceable.measuredHeight
-        } else {
-            lowerRegionMaxHeight -= ambientIndicationPlaceable.measuredHeight
-        }
+        val upperRegionMaxHeight = (indicationY - statusBarPlaceable.measuredHeight).coerceAtLeast(0)
+        val lowerRegionMaxHeight = (constraints.maxHeight - lockIconBounds.bottom).coerceAtLeast(0)
 
         val upperRegionPlaceable =
             upperRegionMeasurable.measure(
@@ -253,7 +253,7 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
                     minWidth = 0,
                     maxWidth = constraints.maxWidth.coerceAtLeast(0),
                     minHeight = 0,
-                    maxHeight = upperRegionMaxHeight.coerceAtLeast(0),
+                    maxHeight = upperRegionMaxHeight,
                 )
             )
 
@@ -263,7 +263,7 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
                     minWidth = 0,
                     maxWidth = constraints.maxWidth.coerceAtLeast(0),
                     minHeight = 0,
-                    maxHeight = lowerRegionMaxHeight.coerceAtLeast(0),
+                    maxHeight = lowerRegionMaxHeight,
                 )
             )
 
@@ -274,19 +274,8 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
             upperRegionPlaceable.placeRelative(0, statusBarPlaceable.measuredHeight)
             lockIconPlaceable.place(lockIconBounds.left, lockIconBounds.top)
 
-            if (isUdfpsSupported) {
-                // Place below UDFPS icon.
-                ambientIndicationPlaceable.placeRelative(
-                    0,
-                    lockIconBounds.top + lockIconPlaceable.measuredHeight,
-                )
-            } else {
-                // Place above lock icon.
-                ambientIndicationPlaceable.placeRelative(
-                    0,
-                    lockIconBounds.top - ambientIndicationPlaceable.measuredHeight,
-                )
-            }
+            // Place indication area directly ABOVE the lock icon / fingerprint sensor
+            indicationAreaPlaceable.placeRelative(0, indicationY)
 
             lowerRegionPlaceable.place(
                 0,

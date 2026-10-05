@@ -699,10 +699,7 @@ public class BluetoothUtils {
 
     /** Returns if the le audio sharing UI is available. */
     public static boolean isAudioSharingUIAvailable(@Nullable Context context) {
-        return (Flags.enableLeAudioSharing()
-                || (context != null && Flags.audioSharingDeveloperOption()
-                && getAudioSharingPreviewValue(context.getContentResolver())))
-                && isAudioSharingSupported();
+        return true;
     }
 
     /** Returns if the le audio sharing hysteresis mode fix is available. */

@@ -99,12 +99,22 @@ public class FooterView extends StackScrollerDecorView {
 
     /** Set the visibility of the Settings button to {@code visible}. */
     public void setSettingsButtonVisible(boolean visible) {
-        mSettingsButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            if (mSettingsButton != null) mSettingsButton.setVisibility(View.GONE);
+            return;
+        }
+        if (mSettingsButton != null) mSettingsButton.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     /** Set the visibility of the History button to {@code visible}. */
     public void setHistoryButtonVisible(boolean visible) {
-        mHistoryButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            if (mHistoryButton != null) mHistoryButton.setVisibility(View.GONE);
+            return;
+        }
+        if (mHistoryButton != null) mHistoryButton.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     /**
@@ -113,12 +123,52 @@ public class FooterView extends StackScrollerDecorView {
      */
     public void setClearAllButtonVisible(boolean visible, boolean animate,
             Consumer<Boolean> onAnimationEnded) {
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            if (mClearAllButton != null) mClearAllButton.setVisibility(View.GONE);
+            return;
+        }
         setSecondaryVisible(visible, animate, onAnimationEnded);
     }
 
     /** See {@link this#setShouldBeHidden} below. */
     public boolean shouldBeHidden() {
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            return true;
+        }
         return mShouldBeHidden;
+    }
+
+    @Override
+    public void setVisibility(int visibility) {
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            super.setVisibility(View.GONE);
+            return;
+        }
+        super.setVisibility(visibility);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            setMeasuredDimension(0, 0);
+            return;
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    public void setVisible(boolean visible, boolean animate, Consumer<Boolean> onAnimationEnded) {
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            super.setVisible(false, false, onAnimationEnded);
+            setVisibility(View.GONE);
+            return;
+        }
+        super.setVisible(visible, animate, onAnimationEnded);
     }
 
     /**
@@ -239,6 +289,14 @@ public class FooterView extends StackScrollerDecorView {
         mSettingsButton = findViewById(R.id.settings_button);
         mHistoryButton = findViewById(R.id.history_button);
         mSeenNotifsFooterTextView = findViewById(R.id.unlock_prompt_footer);
+        if (android.provider.Settings.System.getInt(
+                mContext.getContentResolver(), "control_center_style", 1) == 1) {
+            setVisibility(View.GONE);
+            if (mClearAllButton != null) mClearAllButton.setVisibility(View.GONE);
+            if (mSettingsButton != null) mSettingsButton.setVisibility(View.GONE);
+            if (mHistoryButton != null) mHistoryButton.setVisibility(View.GONE);
+            if (mSeenNotifsFooterTextView != null) mSeenNotifsFooterTextView.setVisibility(View.GONE);
+        }
         updateContent();
         updateColors();
     }

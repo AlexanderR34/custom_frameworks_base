@@ -36,30 +36,25 @@ constructor(private val userContextProvider: UserContextProvider) :
         get() = userContextProvider.userContext
 
     override fun startRecording(parameters: ScreenRecordingParameters) {
-        PendingIntent.getForegroundService(
+        val startIntent = with(parameters) {
+            RecordingService.getStartIntent(
                 userContext,
-                RecordingService.REQUEST_CODE,
-                with(parameters) {
-                    RecordingService.getStartIntent(
-                        userContext,
-                        Activity.RESULT_OK,
-                        audioSource.ordinal,
-                        shouldShowTaps,
-                        displayId,
-                        captureTarget,
-                        lowQuality,
-                        longerDuration,
-                        hevc,
-                        videoQuality,
-                        resolution,
-                        frameRate,
-                        timeLimit,
-                        0,
-                    )
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                Activity.RESULT_OK,
+                audioSource.ordinal,
+                shouldShowTaps,
+                displayId,
+                captureTarget,
+                lowQuality,
+                longerDuration,
+                hevc,
+                videoQuality,
+                resolution,
+                frameRate,
+                timeLimit,
+                0,
             )
-            .send(options)
+        }
+        userContext.startForegroundService(startIntent)
     }
 
     override fun stopRecording(reason: Int) {

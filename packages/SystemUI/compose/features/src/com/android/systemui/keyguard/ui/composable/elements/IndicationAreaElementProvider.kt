@@ -19,6 +19,8 @@ package com.android.systemui.keyguard.ui.composable.elements
 import android.content.Context
 import android.view.View
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +41,8 @@ import com.android.systemui.statusbar.KeyguardIndicationController
 import javax.inject.Inject
 import kotlinx.coroutines.DisposableHandle
 
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsController
+
 @SysUISingleton
 class IndicationAreaElementProvider
 @Inject
@@ -46,6 +50,7 @@ constructor(
     @ShadeDisplayAware private val context: Context,
     private val indicationAreaViewModel: KeyguardIndicationAreaViewModel,
     private val indicationController: KeyguardIndicationController,
+    private val lockscreenLyricsController: LockscreenLyricsController,
 ) : LockscreenElementProvider {
     override val elements: List<LockscreenElement> by lazy { listOf(IndicationAreaElement()) }
 
@@ -74,6 +79,7 @@ constructor(
                         view = view,
                         viewModel = indicationAreaViewModel,
                         indicationController = indicationController,
+                        lockscreenLyricsController = lockscreenLyricsController,
                     )
                 )
                 view
@@ -83,7 +89,7 @@ constructor(
             // directly applied in KeyguardIndicationAreaBinder/ViewModel since this UI has custom
             // burn-in amounts that aren't the same as the burn-in offsets used for other
             // LockscreenContent.
-            modifier = modifier.fillMaxSize(),
+            modifier = modifier.fillMaxWidth().wrapContentHeight(),
         )
     }
 }

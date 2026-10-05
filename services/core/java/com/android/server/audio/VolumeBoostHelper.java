@@ -102,7 +102,7 @@ public class VolumeBoostHelper {
 
         boolean isCallGainEnabled = Settings.System.getIntForUser(
                 mContext.getContentResolver(),
-                SETTING_CALL_GAIN_KEY, 1, UserHandle.USER_CURRENT) == 1;
+                SETTING_CALL_GAIN_KEY, 0, UserHandle.USER_CURRENT) == 1;
 
         boolean isInCall = (mCurrentAudioMode == AudioSystem.MODE_IN_CALL ||
                             mCurrentAudioMode == AudioSystem.MODE_IN_COMMUNICATION ||

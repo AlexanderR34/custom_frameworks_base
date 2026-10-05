@@ -19,70 +19,51 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/caption"
     android:layout_width="match_parent"
-    android:layout_height="40dp"
-    android:gravity="center_vertical"
+    android:layout_height="24dp"
+    android:gravity="center"
     android:orientation="horizontal"
-    android:background="@drawable/caption_decor_title"
-    android:paddingStart="10dp"
-    android:paddingEnd="6dp">
+    android:background="@drawable/caption_decor_title">
 
+    <!-- HyperOS Centered Handle Bar -->
+    <View
+        android:id="@+id/caption_handle"
+        android:layout_width="44dp"
+        android:layout_height="4.5dp"
+        android:background="@drawable/decor_handle_dark"
+        android:alpha="0.8" />
+
+    <!-- Retained for backward-compatible View binding without crashing -->
     <ImageView
         android:id="@+id/application_icon"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="4dp"
-        android:clickable="false"
-        android:focusable="false"
-        android:scaleType="fitCenter" />
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/application_name"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        android:textColor="#FFFFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:fontFamily="sans-serif-medium"
-        android:singleLine="true"
-        android:ellipsize="end"
-        android:clickable="false"
-        android:focusable="false"
-        tools:text="App Name" />
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <ImageButton
         style="@style/CaptionButtonStyle"
         android:id="@+id/pin_window"
-        android:layout_gravity="center_vertical"
-        android:src="@drawable/decor_pin_button_dark"
-        android:background="?android:selectableItemBackgroundBorderless"
-        android:tint="#FFFFFFFF"
-        android:contentDescription="Pin window"
-        android:visibility="gone"
-        android:duplicateParentState="true" />
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <ImageButton
         style="@style/CaptionButtonStyle"
         android:id="@+id/maximize_window"
-        android:layout_gravity="center_vertical"
-        android:src="@drawable/decor_maximize_button_dark"
-        android:background="?android:selectableItemBackgroundBorderless"
-        android:tint="#FFFFFFFF"
-        android:contentDescription="@string/maximize_button_text"
-        android:duplicateParentState="true" />
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <ImageButton
         style="@style/CaptionButtonStyle"
         android:id="@+id/close_window"
-        android:layout_gravity="center_vertical"
-        android:src="@drawable/decor_close_button_dark"
-        android:background="?android:selectableItemBackgroundBorderless"
-        android:tint="#FFFFFFFF"
-        android:contentDescription="@string/close_button_text"
-        android:duplicateParentState="true" />
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
 </com.android.wm.shell.windowdecor.WindowDecorLinearLayout>

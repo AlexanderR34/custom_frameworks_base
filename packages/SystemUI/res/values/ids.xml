@@ -198,6 +198,7 @@
     <item type="id" name="multi_user_switch"/>
     <item type="id" name="pm_lite"/>
     <item type="id" name="settings_button_container"/>
+    <item type="id" name="qs_edit_mode_button"/>
 
     <!--Keyboard Backlight Dialog -->
     <item type="id" name="keyboard_backlight_dialog_container"/>

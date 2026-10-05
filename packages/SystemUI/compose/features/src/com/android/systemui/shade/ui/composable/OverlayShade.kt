@@ -17,11 +17,16 @@
 package com.android.systemui.shade.ui.composable
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
@@ -77,7 +82,17 @@ fun ContentScope.OverlayShade(
     header: @Composable () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val isFullWidth = LocalSceneContainerPreloadedResources.current.isFullWidthShade
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val context = LocalContext.current
+    val isHyperOS = remember(context) {
+        android.provider.Settings.System.getInt(
+            context.contentResolver,
+            "control_center_style",
+            1
+        ) == 1
+    }
+    val isFullWidth = LocalSceneContainerPreloadedResources.current.isFullWidthShade || isLandscape || isHyperOS
     val panelSpec = rememberShadeExpansionMotion(isFullWidth)
     val panelCornerRadiusPx = with(LocalDensity.current) { panelSpec.radius.toPx() }
     val panelAlignment =
@@ -108,7 +123,13 @@ fun ContentScope.OverlayShade(
                                 label = "OverlayShade",
                             )
                         }
-                        .width(Dimensions.PanelWidth)
+                        .then(
+                            if (isFullWidth) {
+                                Modifier.fillMaxWidth()
+                            } else {
+                                Modifier.width(Dimensions.PanelWidth)
+                            }
+                        )
                         // TODO(440566878): Investigate if this can be optimized by replacing with
                         // onLayoutRectChanged.
                         .onPlaced { coordinates ->

@@ -232,8 +232,12 @@ public class RecordingService extends Service implements ScreenMediaRecorderList
                 Log.d(getTag(), "recording with audio source " + mAudioSource);
                 mShowTaps = intent.getBooleanExtra(EXTRA_SHOW_TAPS, false);
                 mLowQuality = intent.getBooleanExtra(EXTRA_LOW_QUALITY, false);
-                mLongerDuration = intent.getBooleanExtra(EXTRA_LONGER_DURATION, false);
-                mHEVC = intent.getBooleanExtra(EXTRA_HEVC, true);
+                if (intent.hasExtra(EXTRA_HEVC)) {
+                    mHEVC = intent.getBooleanExtra(EXTRA_HEVC, false);
+                } else {
+                    mHEVC = com.android.systemui.Prefs.getInt(
+                            mUserContextTracker.getUserContext(), "screenrecord_use_hevc", 0) == 1;
+                }
 
                 MediaProjectionCaptureTarget captureTarget =
                         intent.getParcelableExtra(EXTRA_CAPTURE_TARGET,

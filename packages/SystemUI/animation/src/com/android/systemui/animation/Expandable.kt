@@ -75,9 +75,7 @@ class Expandable(
 
         // Assuming one 'transitionSource' is always available when dynamic resolution is off
         if (!TransitionAnimator.dynamicTargetResolutionEnabled() && source == null) {
-            throw IllegalStateException(
-                "No TransitionSource found with dynamicTargetResolution flag disabled"
-            )
+            return null
         }
         return source
     }

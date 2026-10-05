@@ -35,6 +35,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsController
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsView
+
 /**
  * Binds a keyguard indication area view to its view-model.
  *
@@ -46,12 +49,22 @@ object KeyguardIndicationAreaBinder {
 
     /** Binds the view to the view-model, continuing to update the former based on the latter. */
     @JvmStatic
+    @JvmOverloads
     fun bind(
         view: ViewGroup,
         viewModel: KeyguardIndicationAreaViewModel,
         indicationController: KeyguardIndicationController,
+        lockscreenLyricsController: LockscreenLyricsController? = null,
     ): DisposableHandle {
         val disposables = DisposableHandles()
+
+        val lyricsView = view.findViewById<LockscreenLyricsView?>(R.id.keyguard_lockscreen_lyrics)
+        if (lyricsView != null && lockscreenLyricsController != null) {
+            lockscreenLyricsController.attachView(lyricsView)
+            disposables += DisposableHandle {
+                lockscreenLyricsController.detachView()
+            }
+        }
 
         // As the indication controller is a singleton, reset the view back to the previous view
         // once the current view is disposed.

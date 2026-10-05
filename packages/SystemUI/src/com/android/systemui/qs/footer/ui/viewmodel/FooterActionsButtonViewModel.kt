@@ -47,6 +47,22 @@ sealed interface FooterActionsButtonViewModel {
         @AttrRes override val backgroundColorFallback: Int = R.attr.shadeInactive
     }
 
+    data class EditActionViewModel(
+        private val context: Context,
+        override val onClick: (Expandable) -> Unit,
+    ) : FooterActionsButtonViewModel {
+        override val id: Int = R.id.qs_edit_mode_button
+        override val icon: Icon =
+            Icon.Resource(
+                R.drawable.ic_edit,
+                ContentDescription.Resource(R.string.accessibility_quick_settings_edit),
+            )
+        @ColorInt
+        override val iconTintFallback: Int =
+            Utils.getColorAttrDefaultColor(context, R.attr.onShadeInactiveVariant)
+        @AttrRes override val backgroundColorFallback: Int = R.attr.shadeInactive
+    }
+
     data class SettingsActionViewModel(
         private val context: Context,
         override val onClick: (Expandable) -> Unit,

@@ -19,6 +19,7 @@ package com.android.systemui.statusbar.notification.stack.ui.viewmodel
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.view.View
 import android.view.WindowInsets.Type.defaultVisible
 import androidx.annotation.VisibleForTesting
@@ -317,8 +318,25 @@ constructor(
                                 if (isRtl) right to left else left to right
                             }
 
+                        val isHyperOS =
+                            try {
+                                android.provider.Settings.System.getInt(
+                                    context.contentResolver,
+                                    "control_center_style",
+                                    1
+                                ) == 1
+                            } catch (e: Exception) {
+                                true
+                            }
+
                         val (marginStart, marginEnd) =
-                            if (shadeMode is Single) {
+                            if (isHyperOS) {
+                                if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                    0 to 0
+                                } else {
+                                    marginHorizontal to marginHorizontal
+                                }
+                            } else if (shadeMode is Single) {
                                 marginHorizontal to marginHorizontal
                             } else {
                                 when (horizontalAlignment) {
@@ -338,10 +356,30 @@ constructor(
                             }
 
                         val horizontalPosition =
-                            when (horizontalAlignment) {
-                                Alignment.Start -> HorizontalPosition.EdgeToMiddle(maxWidth)
-                                Alignment.End -> HorizontalPosition.MiddleToEdge(maxWidth)
-                                else -> HorizontalPosition.EdgeToEdge
+                            if (isHyperOS) {
+                                if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                    val landscapeWidth = (560 * displayMetrics.density).toInt()
+                                    HorizontalPosition.Centered(landscapeWidth)
+                                } else {
+                                    HorizontalPosition.EdgeToEdge
+                                }
+                            } else {
+                                when (horizontalAlignment) {
+                                    Alignment.Start -> HorizontalPosition.EdgeToMiddle(maxWidth)
+                                    Alignment.End -> HorizontalPosition.MiddleToEdge(maxWidth)
+                                    else -> HorizontalPosition.EdgeToEdge
+                                }
+                            }
+
+                        val marginBottom =
+                            if (isHyperOS) {
+                                if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                    (16 * displayMetrics.density).toInt()
+                                } else {
+                                    (120 * displayMetrics.density).toInt()
+                                }
+                            } else {
+                                getDimensionPixelSize(R.dimen.notification_panel_margin_bottom)
                             }
 
                         ConfigurationBasedDimensions(
@@ -351,8 +389,7 @@ constructor(
                             // container
                             marginTop = 0,
                             marginEnd = marginEnd,
-                            marginBottom =
-                                getDimensionPixelSize(R.dimen.notification_panel_margin_bottom),
+                            marginBottom = marginBottom,
                         )
                     }
                 }
@@ -1205,6 +1242,11 @@ constructor(
          * [maxWidth], whichever dimension is smaller.
          */
         data class MiddleToEdge(val maxWidth: Int = Int.MAX_VALUE) : HorizontalPosition
+
+        /**
+         * The container is horizontally centered on the screen with a maximum width of [maxWidth].
+         */
+        data class Centered(val maxWidth: Int) : HorizontalPosition
     }
 
     companion object {
