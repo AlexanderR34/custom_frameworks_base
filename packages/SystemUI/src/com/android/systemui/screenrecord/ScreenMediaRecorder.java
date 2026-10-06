@@ -323,27 +323,39 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
 
         if (!mHEVC) {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+            int level = MediaCodecInfo.CodecProfileLevel.AVCLevel42;
+            if ("4.1".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel41;
+            } else if ("4".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel4;
+            } else if ("5".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel5;
+            } else if ("5.1".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel51;
+            } else if ("5.2".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel52;
+            } else if ("3.2".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel32;
+            } else if ("3.1".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel31;
+            } else if ("3".equals(mAvcProfileLevel)) {
+                level = MediaCodecInfo.CodecProfileLevel.AVCLevel3;
+            }
             try {
                 mMediaRecorder.setVideoEncodingProfileLevel(
                         MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
-                        MediaCodecInfo.CodecProfileLevel.AVCLevel51);
+                        level);
             } catch (Exception e1) {
                 try {
                     mMediaRecorder.setVideoEncodingProfileLevel(
                             MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
-                            MediaCodecInfo.CodecProfileLevel.AVCLevel51);
+                            level);
                 } catch (Exception e2) {
                     try {
                         mMediaRecorder.setVideoEncodingProfileLevel(
-                                MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
-                                MediaCodecInfo.CodecProfileLevel.AVCLevel42);
-                    } catch (Exception e3) {
-                        try {
-                            mMediaRecorder.setVideoEncodingProfileLevel(
-                                    MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline,
-                                    MediaCodecInfo.CodecProfileLevel.AVCLevel4);
-                        } catch (Exception ignored) {}
-                    }
+                                MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline,
+                                level);
+                    } catch (Exception ignored) {}
                 }
             }
         } else {
