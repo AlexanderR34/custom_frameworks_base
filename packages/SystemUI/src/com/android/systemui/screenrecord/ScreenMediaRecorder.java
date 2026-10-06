@@ -433,8 +433,8 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
      * @return array with supported width, height, and refresh rate
      */
     private int[] getSupportedSize(final int screenWidth, final int screenHeight, int refreshRate) {
-        int alignedWidth = (screenWidth / 16) * 16;
-        int alignedHeight = (screenHeight / 16) * 16;
+        int alignedWidth = (screenWidth / 2) * 2;
+        int alignedHeight = (screenHeight / 2) * 2;
 
         // If the user manually selected resolution or frame rate, trust their selection
         // Hardware encoders with Level 5.1 support up to 4K @ 120 FPS natively
@@ -541,6 +541,7 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
         values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
         values.put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis());
         values.put(MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis());
+        values.put(MediaStore.Video.Media.IS_PENDING, 1);
 
         ContentResolver resolver = mContext.getContentResolver();
         Uri collectionUri = MediaStore.Video.Media.getContentUri(
@@ -571,6 +572,11 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
         OutputStream os = resolver.openOutputStream(itemUri, "w");
         Files.copy(mTempVideoFile.toPath(), os);
         os.close();
+
+        ContentValues updateValues = new ContentValues();
+        updateValues.put(MediaStore.Video.Media.IS_PENDING, 0);
+        resolver.update(itemUri, updateValues, null, null);
+
         if (mTempAudioFile != null) mTempAudioFile.delete();
         SavedRecording recording = new SavedRecording(
                 itemUri, mTempVideoFile, getRequiredThumbnailSize());
