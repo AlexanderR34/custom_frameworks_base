@@ -782,7 +782,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             subtitle = wifiSubtitle,
                             icon = tileState.icon,
                             iconSupplier = tileState.iconSupplier,
-                            fallbackIconRes = com.android.internal.R.drawable.ic_wifi_signal_4,
+                            fallbackIconRes = R.drawable.vd_wifi,
                             isActive = isWifiActive,
                             onClick = {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
@@ -932,7 +932,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             subtitle = wifiSubtitle,
                             icon = tileState.icon,
                             iconSupplier = tileState.iconSupplier,
-                            fallbackIconRes = com.android.internal.R.drawable.ic_wifi_signal_4,
+                            fallbackIconRes = R.drawable.vd_wifi,
                             isActive = isWifiActive,
                             onClick = {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
@@ -1093,8 +1093,8 @@ private fun HyperOSMediaCard(
     val cards = mediaViewModel.cards
     val currentCard = cards.firstOrNull()
 
-    val activeController = remember(currentCard) { getActiveMediaController(context, null) }
-    val cardPkg = remember(currentCard, activeController) {
+    val activeController = remember(currentCard?.key) { getActiveMediaController(context, null) }
+    val cardPkg = remember(currentCard?.key, activeController) {
         val keyStr = (currentCard?.key as? String) ?: ""
         when {
             keyStr.contains(":") -> keyStr.substringBefore(":")
@@ -1104,38 +1104,59 @@ private fun HyperOSMediaCard(
         }
     }
 
-    val backgroundBitmap = remember(currentCard?.background, cardPkg, activeController) {
-        (currentCard?.background as? com.android.systemui.common.shared.model.Icon.Loaded)?.asImageBitmap()
-            ?: try {
-                val controller = activeController ?: getActiveMediaController(context, cardPkg)
+    var cachedImageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var cachedAppIconBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var lastCoverKey by remember { mutableStateOf<String?>(null) }
+    var lastIconPkg by remember { mutableStateOf<String?>(null) }
+
+    // Update artwork only when track or background source actually changes, preventing constant recomposition crossfades
+    LaunchedEffect(currentCard?.background, currentCard?.title, currentCard?.subtitle, cardPkg) {
+        val currentTrackKey = "${currentCard?.key ?: ""}_${currentCard?.title ?: ""}_${currentCard?.subtitle ?: ""}_${cardPkg}"
+        if (currentTrackKey != lastCoverKey || cachedImageBitmap == null) {
+            val loadedBmp = (currentCard?.background as? com.android.systemui.common.shared.model.Icon.Loaded)?.let { loaded ->
+                val drawable = loaded.drawable
+                if (drawable is android.graphics.drawable.BitmapDrawable) {
+                    drawable.bitmap
+                } else null
+            }
+            val bmp = loadedBmp ?: try {
+                val controller = getActiveMediaController(context, cardPkg.ifBlank { null })
                 val meta = controller?.metadata
-                val bmp = meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
+                meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
                     ?: meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
-                bmp?.asImageBitmap()
             } catch (e: Exception) {
                 null
             }
+
+            if (bmp != null) {
+                cachedImageBitmap = bmp.asImageBitmap()
+                lastCoverKey = currentTrackKey
+            } else if (currentCard?.background == null) {
+                cachedImageBitmap = null
+                lastCoverKey = currentTrackKey
+            }
+        }
     }
 
-    val appIconBitmap = remember(currentCard?.icon, cardPkg, activeController) {
-        (currentCard?.icon as? com.android.systemui.common.shared.model.Icon.Loaded)?.asImageBitmap()
-            ?: try {
-                val pkg = if (cardPkg.isNotBlank()) cardPkg else activeController?.packageName ?: ""
-                if (pkg.isNotBlank()) {
-                    val drawable = context.packageManager.getApplicationIcon(pkg)
-                    val bmp = android.graphics.Bitmap.createBitmap(
-                        drawable.intrinsicWidth.coerceAtLeast(1),
-                        drawable.intrinsicHeight.coerceAtLeast(1),
-                        android.graphics.Bitmap.Config.ARGB_8888
-                    )
-                    val canvas = android.graphics.Canvas(bmp)
-                    drawable.setBounds(0, 0, canvas.width, canvas.height)
-                    drawable.draw(canvas)
-                    bmp.asImageBitmap()
-                } else null
+    // Load application icon once per target package
+    LaunchedEffect(cardPkg) {
+        if (cardPkg.isNotBlank() && cardPkg != lastIconPkg) {
+            try {
+                val drawable = context.packageManager.getApplicationIcon(cardPkg)
+                val bmp = android.graphics.Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bmp)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                cachedAppIconBitmap = bmp.asImageBitmap()
+                lastIconPkg = cardPkg
             } catch (e: Exception) {
-                null
+                cachedAppIconBitmap = null
             }
+        }
     }
 
     val cardBg = Color(0x597F7F7F)
@@ -1166,10 +1187,10 @@ private fun HyperOSMediaCard(
                 openMediaApp(context, view, currentCard, cardPkg)
             }
     ) {
-        // Smooth background crossfade between album arts
+        // Smooth background crossfade between album arts only when artwork actually changes
         Crossfade(
-            targetState = backgroundBitmap,
-            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+            targetState = cachedImageBitmap,
+            animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
             label = "HyperOSMediaBackgroundCrossfade"
         ) { bmp ->
             if (bmp != null) {
@@ -1206,7 +1227,7 @@ private fun HyperOSMediaCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // App / Album Thumbnail with smooth transition
+                // App / Album Thumbnail with stable transition
                 Box(
                     modifier = Modifier
                         .size(36.dp)
@@ -1215,8 +1236,8 @@ private fun HyperOSMediaCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Crossfade(
-                        targetState = backgroundBitmap ?: appIconBitmap,
-                        animationSpec = tween(durationMillis = 400),
+                        targetState = cachedImageBitmap ?: cachedAppIconBitmap,
+                        animationSpec = tween(durationMillis = 300),
                         label = "HyperOSMediaThumbCrossfade"
                     ) { thumb ->
                         if (thumb != null) {
@@ -1271,6 +1292,7 @@ private fun HyperOSMediaCard(
                     )
                 }
             }
+
 
             // Middle: Title and Subtitle with smooth slide-and-fade song transitions
             Column(
@@ -2473,12 +2495,28 @@ private fun HyperOSConnectivityCard(
             )
             .padding(horizontal = 16.dp)
     ) {
-        Icon(
-            painter = painterResource(id = fallbackIconRes),
-            contentDescription = title,
-            tint = animatedIconColor,
-            modifier = Modifier.size(28.dp)
-        )
+        val qsIcon = iconSupplier?.get() ?: icon
+        if (qsIcon != null) {
+            SmallTileContent(
+                iconProvider = {
+                    if (qsIcon is com.android.systemui.qs.tileimpl.QSTileImpl.ResourceIcon) {
+                        com.android.systemui.common.shared.model.Icon.Resource(qsIcon.resId, null)
+                    } else {
+                        com.android.systemui.common.shared.model.Icon.Loaded(qsIcon.getDrawable(this), null)
+                    }
+                },
+                color = animatedIconColor,
+                size = { 28.dp },
+                modifier = Modifier
+            )
+        } else {
+            Icon(
+                painter = painterResource(id = fallbackIconRes),
+                contentDescription = title,
+                tint = animatedIconColor,
+                modifier = Modifier.size(28.dp)
+            )
+        }
         Spacer(Modifier.width(10.dp))
         Column(verticalArrangement = Arrangement.Center) {
             Text(
