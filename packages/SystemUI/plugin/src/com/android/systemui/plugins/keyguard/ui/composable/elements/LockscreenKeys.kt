@@ -143,6 +143,9 @@ object LockscreenElementKeys {
     /** Standard indication area element */
     val IndicationArea = ElementKey("IndicationArea")
 
+    /** Lockscreen Lyrics element */
+    val Lyrics = ElementKey("LockscreenLyrics")
+
     /** Ambient Indication Area (vendor defined, not included in AOSP) */
     val AmbientIndicationArea = ElementKey("AmbientIndicationArea")
 

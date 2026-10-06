@@ -43,6 +43,9 @@ import kotlinx.coroutines.DisposableHandle
 
 import com.android.systemui.statusbar.lyrics.LockscreenLyricsController
 
+import com.android.systemui.res.R
+import com.android.systemui.statusbar.lyrics.LockscreenLyricsView
+
 @SysUISingleton
 class IndicationAreaElementProvider
 @Inject
@@ -52,7 +55,9 @@ constructor(
     private val indicationController: KeyguardIndicationController,
     private val lockscreenLyricsController: LockscreenLyricsController,
 ) : LockscreenElementProvider {
-    override val elements: List<LockscreenElement> by lazy { listOf(IndicationAreaElement()) }
+    override val elements: List<LockscreenElement> by lazy {
+        listOf(IndicationAreaElement(), LyricsElement())
+    }
 
     private inner class IndicationAreaElement : LockscreenElement {
         override val key = LockscreenElementKeys.IndicationArea
@@ -62,6 +67,17 @@ constructor(
         @Composable
         override fun LockscreenScope<ElementContentScope>.LockscreenElement() {
             IndicationArea()
+        }
+    }
+
+    private inner class LyricsElement : LockscreenElement {
+        override val key = LockscreenElementKeys.Lyrics
+        override val context = this@IndicationAreaElementProvider.context
+        override val source = ElementSource.STANDARD
+
+        @Composable
+        override fun LockscreenScope<ElementContentScope>.LockscreenElement() {
+            Lyrics()
         }
     }
 
@@ -79,7 +95,7 @@ constructor(
                         view = view,
                         viewModel = indicationAreaViewModel,
                         indicationController = indicationController,
-                        lockscreenLyricsController = lockscreenLyricsController,
+                        lockscreenLyricsController = null,
                     )
                 )
                 view
@@ -89,6 +105,24 @@ constructor(
             // directly applied in KeyguardIndicationAreaBinder/ViewModel since this UI has custom
             // burn-in amounts that aren't the same as the burn-in offsets used for other
             // LockscreenContent.
+            modifier = modifier.fillMaxWidth().wrapContentHeight(),
+        )
+    }
+
+    @Composable
+    fun Lyrics(modifier: Modifier = Modifier) {
+        AndroidView(
+            factory = { context ->
+                val lyricsView = LockscreenLyricsView(context).apply {
+                    id = R.id.keyguard_lockscreen_lyrics
+                    visibility = View.GONE
+                }
+                lockscreenLyricsController.attachView(lyricsView)
+                lyricsView
+            },
+            onRelease = {
+                lockscreenLyricsController.detachView()
+            },
             modifier = modifier.fillMaxWidth().wrapContentHeight(),
         )
     }

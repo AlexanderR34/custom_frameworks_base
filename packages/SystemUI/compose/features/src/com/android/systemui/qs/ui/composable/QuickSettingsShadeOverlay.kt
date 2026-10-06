@@ -20,12 +20,18 @@ import android.content.Intent
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import com.android.systemui.Dependency
+import com.android.systemui.plugins.ActivityStarter
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -677,6 +683,35 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
     val wifiManager = remember(context) { context.getSystemService(android.net.wifi.WifiManager::class.java) }
     val telephonyManager = remember(context) { context.getSystemService(android.telephony.TelephonyManager::class.java) }
 
+    var isWifiEnabled by remember {
+        mutableStateOf(wifiManager?.isWifiEnabled ?: false)
+    }
+    var isDataEnabled by remember {
+        mutableStateOf(telephonyManager?.isDataEnabled ?: false)
+    }
+
+    DisposableEffect(context, wifiManager, telephonyManager) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                isWifiEnabled = wifiManager?.isWifiEnabled ?: false
+                isDataEnabled = telephonyManager?.isDataEnabled ?: false
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(android.net.wifi.WifiManager.NETWORK_STATE_CHANGED_ACTION)
+            addAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION)
+            addAction("android.intent.action.ANY_DATA_STATE")
+            addAction(android.telephony.TelephonyManager.ACTION_MULTI_SIM_CONFIG_CHANGED)
+        }
+        context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED_UNAUDITED)
+        onDispose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: Exception) {}
+        }
+    }
+
     val navBarStart = WindowInsets.navigationBars.asPaddingValues().calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
     val navBarEnd = WindowInsets.navigationBars.asPaddingValues().calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
 
@@ -735,23 +770,28 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                 ) {
                     if (internetTile != null) {
                         val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
-                        val isActive = tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE
+                        val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
+                        val wifiSubtitle = when {
+                            !isWifiActive -> "Desactivado"
+                            tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                            else -> "Activado"
+                        }
                         HyperOSConnectivityCard(
                             title = "Wi-Fi",
-                            subtitle = if (isActive) (tileState.secondaryLabel?.toString() ?: "Activado") else "Desactivado",
+                            subtitle = wifiSubtitle,
                             icon = tileState.icon,
                             iconSupplier = tileState.iconSupplier,
                             fallbackIconRes = com.android.internal.R.drawable.ic_wifi_signal_4,
-                            isActive = isActive,
+                            isActive = isWifiActive,
                             onClick = {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                val targetWifi = !isWifiActive
+                                isWifiEnabled = targetWifi
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                     try {
                                         val wm = wifiManager ?: context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
-                                        if (wm != null) {
-                                            val isWifiOn = wm.isWifiEnabled
-                                            wm.setWifiEnabled(!isWifiOn)
-                                        }
+                                        wm?.setWifiEnabled(targetWifi)
                                     } catch (e: Exception) {
                                         android.util.Log.e("HyperOS", "Error toggling wifi", e)
                                     }
@@ -766,24 +806,30 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                     }
                     if (cellTile != null) {
                         val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
-                        val isActive = tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE
+                        val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                        val cellSubtitle = when {
+                            !isCellActive -> "Desactivado"
+                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                            else -> "Activado"
+                        }
                         HyperOSConnectivityCard(
                             title = tileState.label?.toString() ?: "Datos móviles",
-                            subtitle = if (isActive) (tileState.secondaryLabel?.toString() ?: "Activado") else "Desactivado",
+                            subtitle = cellSubtitle,
                             icon = tileState.icon,
                             iconSupplier = tileState.iconSupplier,
                             fallbackIconRes = R.drawable.ic_swap_vert,
-                            isActive = isActive,
+                            isActive = isCellActive,
                             onClick = {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                val targetData = !isCellActive
+                                isDataEnabled = targetData
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                     try {
                                         val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
                                         if (tm != null) {
-                                            val isDataOn = tm.isDataEnabled
                                             tm.setDataEnabledForReason(
                                                 android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                !isDataOn
+                                                targetData
                                             )
                                         }
                                     } catch (e: Exception) {
@@ -791,10 +837,9 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                                             val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
                                             val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
                                             val subTm = tm?.createForSubscriptionId(subId)
-                                            val isDataOn = subTm?.isDataEnabled ?: false
                                             subTm?.setDataEnabledForReason(
                                                 android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                !isDataOn
+                                                targetData
                                             )
                                         } catch (e2: Exception) {
                                             android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
@@ -875,23 +920,28 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                 ) {
                     if (internetTile != null) {
                         val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
-                        val isActive = tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE
+                        val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
+                        val wifiSubtitle = when {
+                            !isWifiActive -> "Desactivado"
+                            tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                            else -> "Activado"
+                        }
                         HyperOSConnectivityCard(
                             title = "Wi-Fi",
-                            subtitle = if (isActive) (tileState.secondaryLabel?.toString() ?: "Activado") else "Desactivado",
+                            subtitle = wifiSubtitle,
                             icon = tileState.icon,
                             iconSupplier = tileState.iconSupplier,
                             fallbackIconRes = com.android.internal.R.drawable.ic_wifi_signal_4,
-                            isActive = isActive,
+                            isActive = isWifiActive,
                             onClick = {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                val targetWifi = !isWifiActive
+                                isWifiEnabled = targetWifi
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                     try {
                                         val wm = wifiManager ?: context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
-                                        if (wm != null) {
-                                            val isWifiOn = wm.isWifiEnabled
-                                            wm.setWifiEnabled(!isWifiOn)
-                                        }
+                                        wm?.setWifiEnabled(targetWifi)
                                     } catch (e: Exception) {
                                         android.util.Log.e("HyperOS", "Error toggling wifi", e)
                                     }
@@ -906,24 +956,30 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                     }
                     if (cellTile != null) {
                         val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
-                        val isActive = tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE
+                        val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                        val cellSubtitle = when {
+                            !isCellActive -> "Desactivado"
+                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                            else -> "Activado"
+                        }
                         HyperOSConnectivityCard(
                             title = tileState.label?.toString() ?: "Datos móviles",
-                            subtitle = if (isActive) (tileState.secondaryLabel?.toString() ?: "Activado") else "Desactivado",
+                            subtitle = cellSubtitle,
                             icon = tileState.icon,
                             iconSupplier = tileState.iconSupplier,
                             fallbackIconRes = R.drawable.ic_swap_vert,
-                            isActive = isActive,
+                            isActive = isCellActive,
                             onClick = {
                                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                val targetData = !isCellActive
+                                isDataEnabled = targetData
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                     try {
                                         val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
                                         if (tm != null) {
-                                            val isDataOn = tm.isDataEnabled
                                             tm.setDataEnabledForReason(
                                                 android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                !isDataOn
+                                                targetData
                                             )
                                         }
                                     } catch (e: Exception) {
@@ -931,10 +987,9 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                                             val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
                                             val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
                                             val subTm = tm?.createForSubscriptionId(subId)
-                                            val isDataOn = subTm?.isDataEnabled ?: false
                                             subTm?.setDataEnabledForReason(
                                                 android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                !isDataOn
+                                                targetData
                                             )
                                         } catch (e2: Exception) {
                                             android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
@@ -1038,13 +1093,21 @@ private fun HyperOSMediaCard(
     val cards = mediaViewModel.cards
     val currentCard = cards.firstOrNull()
 
-    val cardPkg = (currentCard?.icon as? com.android.systemui.common.shared.model.Icon.Loaded)?.packageName
-        ?: (currentCard?.key as? String)?.substringBefore(":") ?: ""
+    val activeController = remember(currentCard) { getActiveMediaController(context, null) }
+    val cardPkg = remember(currentCard, activeController) {
+        val keyStr = (currentCard?.key as? String) ?: ""
+        when {
+            keyStr.contains(":") -> keyStr.substringBefore(":")
+            keyStr.contains(".") -> keyStr
+            activeController != null -> activeController.packageName
+            else -> ""
+        }
+    }
 
-    val backgroundBitmap = remember(currentCard?.background, cardPkg) {
+    val backgroundBitmap = remember(currentCard?.background, cardPkg, activeController) {
         (currentCard?.background as? com.android.systemui.common.shared.model.Icon.Loaded)?.asImageBitmap()
             ?: try {
-                val controller = getActiveMediaController(context, cardPkg)
+                val controller = activeController ?: getActiveMediaController(context, cardPkg)
                 val meta = controller?.metadata
                 val bmp = meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
                     ?: meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
@@ -1054,11 +1117,12 @@ private fun HyperOSMediaCard(
             }
     }
 
-    val appIconBitmap = remember(currentCard?.icon, cardPkg) {
+    val appIconBitmap = remember(currentCard?.icon, cardPkg, activeController) {
         (currentCard?.icon as? com.android.systemui.common.shared.model.Icon.Loaded)?.asImageBitmap()
             ?: try {
-                if (cardPkg.isNotBlank()) {
-                    val drawable = context.packageManager.getApplicationIcon(cardPkg)
+                val pkg = if (cardPkg.isNotBlank()) cardPkg else activeController?.packageName ?: ""
+                if (pkg.isNotBlank()) {
+                    val drawable = context.packageManager.getApplicationIcon(pkg)
                     val bmp = android.graphics.Bitmap.createBitmap(
                         drawable.intrinsicWidth.coerceAtLeast(1),
                         drawable.intrinsicHeight.coerceAtLeast(1),
@@ -1099,44 +1163,35 @@ private fun HyperOSMediaCard(
                 indication = null
             ) {
                 view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                if (currentCard != null) {
-                    try {
-                        val controller = getActiveMediaController(context, cardPkg)
-                        if (controller?.sessionActivity != null) {
-                            controller.sessionActivity?.send()
-                        } else {
-                            currentCard.onClick.invoke(com.android.systemui.animation.Expandable(mutableSetOf()))
-                        }
-                    } catch (e: Exception) {
-                        try {
-                            val launchIntent = context.packageManager.getLaunchIntentForPackage(cardPkg)
-                            if (launchIntent != null) {
-                                context.startActivity(launchIntent)
-                            }
-                        } catch (e2: Exception) {}
-                    }
-                }
+                openMediaApp(context, view, currentCard, cardPkg)
             }
     ) {
-        if (backgroundBitmap != null) {
-            Image(
-                bitmap = backgroundBitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.45f),
-                                    Color.Black.copy(alpha = 0.75f)
+        // Smooth background crossfade between album arts
+        Crossfade(
+            targetState = backgroundBitmap,
+            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+            label = "HyperOSMediaBackgroundCrossfade"
+        ) { bmp ->
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.45f),
+                                        Color.Black.copy(alpha = 0.75f)
+                                    )
                                 )
                             )
-                        )
-                    }
-            )
+                        }
+                )
+            }
         }
 
         Column(
@@ -1151,7 +1206,7 @@ private fun HyperOSMediaCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // App / Album Thumbnail
+                // App / Album Thumbnail with smooth transition
                 Box(
                     modifier = Modifier
                         .size(36.dp)
@@ -1159,199 +1214,315 @@ private fun HyperOSMediaCard(
                         .background(Color(0x33FFFFFF)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (backgroundBitmap != null) {
-                        Image(
-                            bitmap = backgroundBitmap,
-                            contentDescription = "Portada del álbum",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else if (currentCard != null) {
-                        SmallTileContent(
-                            iconProvider = { currentCard.icon },
-                            color = Color.White,
-                            size = { 24.dp },
-                            modifier = Modifier
-                        )
-                    } else {
+                    Crossfade(
+                        targetState = backgroundBitmap ?: appIconBitmap,
+                        animationSpec = tween(durationMillis = 400),
+                        label = "HyperOSMediaThumbCrossfade"
+                    ) { thumb ->
+                        if (thumb != null) {
+                            Image(
+                                bitmap = thumb,
+                                contentDescription = "Portada del álbum",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (currentCard != null) {
+                            SmallTileContent(
+                                iconProvider = { currentCard.icon },
+                                color = Color.White,
+                                size = { 24.dp },
+                                modifier = Modifier
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_music_note),
+                                contentDescription = "Música",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Output switcher / Cast Button
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0x22FFFFFF))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            if (currentCard != null) {
+                                try {
+                                    currentCard.outputSwitcherChipButton.onClick?.invoke()
+                                } catch (e: Exception) {}
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_cast),
+                        contentDescription = "Compartir audio",
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Middle: Title and Subtitle with smooth slide-and-fade song transitions
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                val titleText = if (currentCard != null && currentCard.title.isNotBlank()) {
+                    currentCard.title
+                } else {
+                    "No hay contenido"
+                }
+                val subtitleText = if (currentCard != null && currentCard.subtitle.isNotBlank()) {
+                    currentCard.subtitle
+                } else {
+                    "Toca para abrir música"
+                }
+
+                AnimatedContent(
+                    targetState = titleText,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(350)) + slideInVertically(animationSpec = tween(350)) { it / 2 })
+                            .togetherWith(fadeOut(animationSpec = tween(250)) + slideOutVertically(animationSpec = tween(250)) { -it / 2 })
+                    },
+                    label = "HyperOSMediaTitleTransition"
+                ) { targetTitle ->
+                    Text(
+                        text = targetTitle,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        ),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+
+                AnimatedContent(
+                    targetState = subtitleText,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(350, delayMillis = 60)) + slideInVertically(animationSpec = tween(350)) { it / 2 })
+                            .togetherWith(fadeOut(animationSpec = tween(250)) + slideOutVertically(animationSpec = tween(250)) { -it / 2 })
+                    },
+                    label = "HyperOSMediaSubtitleTransition"
+                ) { targetSubtitle ->
+                    Text(
+                        text = targetSubtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.75f)
+                        ),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Bottom Row: Previous, Play/Pause, Next Controls
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Previous Button
+                val prevInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val isPrevPressed by prevInteraction.collectIsPressedAsState()
+                val prevScale by animateFloatAsState(targetValue = if (isPrevPressed) 0.82f else 1.0f, label = "PrevScale")
+
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .graphicsLayer { scaleX = prevScale; scaleY = prevScale }
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(
+                            interactionSource = prevInteraction,
+                            indication = null
+                        ) {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            controlMediaSkipPrev(
+                                context = context,
+                                cardPackage = cardPkg
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_media_previous),
+                        contentDescription = "Anterior",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // Play / Pause Button
+                val isPlaying = currentCard?.playPauseAction?.state != com.android.systemui.media.remedia.shared.model.MediaSessionState.Paused
+                val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val isPlayPressed by playInteraction.collectIsPressedAsState()
+                val playScale by animateFloatAsState(targetValue = if (isPlayPressed) 0.85f else 1.0f, label = "PlayScale")
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable(
+                            interactionSource = playInteraction,
+                            indication = null
+                        ) {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            controlMediaPlayPause(
+                                context = context,
+                                cardPackage = cardPkg
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnimatedContent(
+                        targetState = isPlaying,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(200)).togetherWith(fadeOut(animationSpec = tween(200)))
+                        },
+                        label = "HyperOSMediaPlayPauseTransition"
+                    ) { playing ->
+                        val iconRes = if (currentCard != null && playing) {
+                            R.drawable.ic_media_pause
+                        } else {
+                            R.drawable.ic_media_play
+                        }
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_music_note),
-                            contentDescription = "Música",
+                            painter = painterResource(id = iconRes),
+                            contentDescription = if (playing) "Pausar" else "Reproducir",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
 
-            // Output switcher / Cast Button
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                        if (currentCard != null) {
-                            try {
-                                currentCard.outputSwitcherChipButton.onClick?.invoke()
-                            } catch (e: Exception) {}
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_cast),
-                    contentDescription = "Compartir audio",
-                    tint = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
+                // Next Button
+                val nextInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val isNextPressed by nextInteraction.collectIsPressedAsState()
+                val nextScale by animateFloatAsState(targetValue = if (isNextPressed) 0.82f else 1.0f, label = "NextScale")
 
-        // Middle: Title and Subtitle
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            val titleText = if (currentCard != null && currentCard.title.isNotBlank()) {
-                currentCard.title
-            } else {
-                "No hay contenido"
-            }
-            val subtitleText = if (currentCard != null && currentCard.subtitle.isNotBlank()) {
-                currentCard.subtitle
-            } else {
-                "Toca para abrir música"
-            }
-
-            Text(
-                text = titleText,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = Color.White
-                ),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Text(
-                text = subtitleText,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                ),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-        }
-
-        // Bottom Row: Previous, Play/Pause, Next Controls
-        val cardPkg = (currentCard?.key as? String)?.substringBefore(":") ?: ""
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Previous Button
-            val prevInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isPrevPressed by prevInteraction.collectIsPressedAsState()
-            val prevScale by animateFloatAsState(targetValue = if (isPrevPressed) 0.82f else 1.0f, label = "PrevScale")
-
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .graphicsLayer { scaleX = prevScale; scaleY = prevScale }
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable(
-                        interactionSource = prevInteraction,
-                        indication = null
-                    ) {
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                        controlMediaSkipPrev(
-                            context = context,
-                            cardPackage = cardPkg
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_media_previous),
-                    contentDescription = "Anterior",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            // Play / Pause Button
-            val isPlaying = currentCard?.playPauseAction?.state != com.android.systemui.media.remedia.shared.model.MediaSessionState.Paused
-            val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isPlayPressed by playInteraction.collectIsPressedAsState()
-            val playScale by animateFloatAsState(targetValue = if (isPlayPressed) 0.85f else 1.0f, label = "PlayScale")
-
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable(
-                        interactionSource = playInteraction,
-                        indication = null
-                    ) {
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                        controlMediaPlayPause(
-                            context = context,
-                            cardPackage = cardPkg
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                val iconRes = if (currentCard != null && isPlaying) {
-                    R.drawable.ic_media_pause
-                } else {
-                    R.drawable.ic_media_play
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .graphicsLayer { scaleX = nextScale; scaleY = nextScale }
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(
+                            interactionSource = nextInteraction,
+                            indication = null
+                        ) {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                            controlMediaSkipNext(
+                                context = context,
+                                cardPackage = cardPkg
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_media_next),
+                        contentDescription = "Siguiente",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
-                Icon(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = if (isPlaying) "Pausar" else "Reproducir",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-
-            // Next Button
-            val nextInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            val isNextPressed by nextInteraction.collectIsPressedAsState()
-            val nextScale by animateFloatAsState(targetValue = if (isNextPressed) 0.82f else 1.0f, label = "NextScale")
-
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .graphicsLayer { scaleX = nextScale; scaleY = nextScale }
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable(
-                        interactionSource = nextInteraction,
-                        indication = null
-                    ) {
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                        controlMediaSkipNext(
-                            context = context,
-                            cardPackage = cardPkg
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_media_next),
-                    contentDescription = "Siguiente",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
             }
         }
     }
 }
+
+private fun openMediaApp(
+    context: android.content.Context,
+    view: android.view.View,
+    currentCard: com.android.systemui.media.remedia.ui.viewmodel.MediaCardViewModel?,
+    cardPkg: String,
+) {
+    val activityStarter = try {
+        com.android.systemui.Dependency.get(com.android.systemui.plugins.ActivityStarter::class.java)
+    } catch (e: Exception) {
+        null
+    }
+
+    val activeController = getActiveMediaController(context, cardPkg.ifBlank { null })
+    val targetPkg = when {
+        cardPkg.isNotBlank() -> cardPkg
+        activeController?.packageName?.isNotBlank() == true -> activeController.packageName
+        else -> ""
+    }
+
+    // 1. Try launching through MediaCardViewModel's onClick (handles keyguard/shade dismiss & CUJ animation)
+    if (currentCard != null) {
+        try {
+            currentCard.onClick.invoke(com.android.systemui.animation.Expandable(mutableSetOf()))
+            return
+        } catch (e: Exception) {
+            android.util.Log.e("HyperOSMediaCard", "Error triggering currentCard.onClick", e)
+        }
+    }
+
+    // 2. Try launching through MediaController sessionActivity
+    if (activeController?.sessionActivity != null) {
+        try {
+            if (activityStarter != null) {
+                activityStarter.postStartActivityDismissingKeyguard(activeController.sessionActivity)
+                return
+            } else {
+                val opts = android.app.ActivityOptions.makeBasic().apply {
+                    pendingIntentBackgroundActivityStartMode =
+                        android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS
+                }
+                activeController.sessionActivity?.send(context, 0, null, null, null, null, opts.toBundle())
+                return
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("HyperOSMediaCard", "Error sending sessionActivity", e)
+        }
+    }
+
+    // 3. Try launching package launch intent
+    if (targetPkg.isNotBlank()) {
+        try {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(targetPkg)?.apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            }
+            if (launchIntent != null) {
+                if (activityStarter != null) {
+                    activityStarter.startActivity(launchIntent, true /* dismissShade */)
+                } else {
+                    context.startActivity(launchIntent)
+                }
+                return
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("HyperOSMediaCard", "Error launching target package $targetPkg", e)
+        }
+    }
+
+    // 4. Default fallback: open music category intent
+    try {
+        val musicIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+            addCategory(android.content.Intent.CATEGORY_APP_MUSIC)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (activityStarter != null) {
+            activityStarter.startActivity(musicIntent, true)
+        } else {
+            context.startActivity(musicIntent)
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("HyperOSMediaCard", "Error launching default music intent", e)
+    }
 }
 
 private fun getActiveMediaController(context: android.content.Context, cardPackage: String? = null): android.media.session.MediaController? {
@@ -2284,17 +2455,6 @@ private fun HyperOSConnectivityCard(
         label = "ConnCardScale"
     )
 
-    val cardIconProvider: android.content.Context.() -> com.android.systemui.common.shared.model.Icon = {
-        val qsIcon = icon ?: iconSupplier?.get()
-        qsIcon?.let {
-            if (it is com.android.systemui.qs.tileimpl.QSTileImpl.ResourceIcon) {
-                com.android.systemui.common.shared.model.Icon.Resource(it.resId, null)
-            } else {
-                com.android.systemui.common.shared.model.Icon.Loaded(it.getDrawable(this), null)
-            }
-        } ?: com.android.systemui.common.shared.model.Icon.Resource(fallbackIconRes, null)
-    }
-
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -2313,11 +2473,11 @@ private fun HyperOSConnectivityCard(
             )
             .padding(horizontal = 16.dp)
     ) {
-        SmallTileContent(
-            iconProvider = cardIconProvider,
-            color = animatedIconColor,
-            size = { 30.dp },
-            modifier = Modifier
+        Icon(
+            painter = painterResource(id = fallbackIconRes),
+            contentDescription = title,
+            tint = animatedIconColor,
+            modifier = Modifier.size(28.dp)
         )
         Spacer(Modifier.width(10.dp))
         Column(verticalArrangement = Arrangement.Center) {

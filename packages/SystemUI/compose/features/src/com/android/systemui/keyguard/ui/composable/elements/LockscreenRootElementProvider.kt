@@ -44,6 +44,7 @@ import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenEl
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.Clock
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.IndicationArea
+import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.Lyrics
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.LockIcon
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.MediaCarousel
 import com.android.systemui.plugins.keyguard.ui.composable.elements.LockscreenElementKeys.Region
@@ -200,6 +201,7 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
             LockscreenElement(StatusBar)
             LockscreenElement(Region.Upper)
             LockscreenElement(LockIcon)
+            LockscreenElement(Lyrics)
             LockscreenElement(IndicationArea)
             LockscreenElement(Region.Lower)
             LockscreenElement(SettingsMenu)
@@ -210,13 +212,14 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
                 Modifier.graphicsLayer { alpha = 0f }
             },
     ) { measurables, constraints ->
-        check(measurables.size == 6)
+        check(measurables.size == 7)
         val statusBarMeasurable = measurables[0]
         val upperRegionMeasurable = measurables[1]
         val lockIconMeasurable = measurables[2]
-        val indicationAreaMeasurable = measurables[3]
-        val lowerRegionMeasurable = measurables[4]
-        val settingsMenuMeasurable = measurables[5]
+        val lyricsMeasurable = measurables[3]
+        val indicationAreaMeasurable = measurables[4]
+        val lowerRegionMeasurable = measurables[5]
+        val settingsMenuMeasurable = measurables[6]
 
         val statusBarPlaceable =
             statusBarMeasurable.measure(constraints = Constraints.fixedWidth(constraints.maxWidth))
@@ -234,17 +237,27 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
                 bottom = lockIconPlaceable[LockIconAlignmentLines.Bottom],
             )
 
+        val lyricsPlaceable =
+            lyricsMeasurable.measure(
+                constraints = Constraints.fixedWidth(constraints.maxWidth)
+            )
+
         val indicationAreaPlaceable =
             indicationAreaMeasurable.measure(
                 constraints = Constraints.fixedWidth(constraints.maxWidth)
             )
 
-        // Indication area (Lyrics + Charging/Status text) sits directly ABOVE the fingerprint sensor (LockIcon)
-        val indicationSpacing = 8.dp.roundToPx()
-        val indicationY = (lockIconBounds.top - indicationAreaPlaceable.measuredHeight - indicationSpacing)
+        val spacing = 8.dp.roundToPx()
+
+        // 1. Letras de canciones: DIRECTAMENTE ARRIBA DEL BOTÓN DE LA HUELLA DACTILAR
+        val lyricsY = (lockIconBounds.top - lyricsPlaceable.measuredHeight - spacing)
             .coerceAtLeast(statusBarPlaceable.measuredHeight)
 
-        val upperRegionMaxHeight = (indicationY - statusBarPlaceable.measuredHeight).coerceAtLeast(0)
+        // 2. Información de carga / estado: DIRECTAMENTE DEBAJO DEL ÍCONO DE LA HUELLA
+        val indicationY = (lockIconBounds.bottom + spacing)
+            .coerceAtMost(constraints.maxHeight - indicationAreaPlaceable.measuredHeight)
+
+        val upperRegionMaxHeight = (lyricsY - statusBarPlaceable.measuredHeight).coerceAtLeast(0)
         val lowerRegionMaxHeight = (constraints.maxHeight - lockIconBounds.bottom).coerceAtLeast(0)
 
         val upperRegionPlaceable =
@@ -274,7 +287,10 @@ private fun LockscreenScope<ContentScope>.LockscreenSceneLayout(
             upperRegionPlaceable.placeRelative(0, statusBarPlaceable.measuredHeight)
             lockIconPlaceable.place(lockIconBounds.left, lockIconBounds.top)
 
-            // Place indication area directly ABOVE the lock icon / fingerprint sensor
+            // Colocar Letras de canciones ARRIBA de la huella
+            lyricsPlaceable.placeRelative(0, lyricsY)
+
+            // Colocar Texto de Carga / Estado DEBAJO de la huella
             indicationAreaPlaceable.placeRelative(0, indicationY)
 
             lowerRegionPlaceable.place(
