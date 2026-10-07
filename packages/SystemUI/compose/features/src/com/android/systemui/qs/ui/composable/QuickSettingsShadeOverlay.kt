@@ -2446,7 +2446,7 @@ private fun HyperOSBrightnessExpandedDialog(
     var isDarkMode by remember {
         mutableStateOf(
             try {
-                uiModeManager?.isNightModeActivated ?: (
+                (uiModeManager?.nightMode == android.app.UiModeManager.MODE_NIGHT_YES) || (
                     (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                         android.content.res.Configuration.UI_MODE_NIGHT_YES
                 )
@@ -2646,7 +2646,10 @@ private fun HyperOSBrightnessExpandedDialog(
                         isDarkMode = target
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                             try {
-                                uiModeManager?.setNightModeActivated(target)
+                                uiModeManager?.setNightMode(
+                                    if (target) android.app.UiModeManager.MODE_NIGHT_YES
+                                    else android.app.UiModeManager.MODE_NIGHT_NO
+                                )
                             } catch (e: Exception) {}
                         }
                     }

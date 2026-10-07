@@ -139,6 +139,7 @@
     <string name="hyperos_qs_edit_cards_subtitle">Toca para agregar o quitar interruptores</string>
     <string name="hyperos_qs_done">Listo</string>
     <string name="hyperos_qs_added_switches">Interruptores añadidos</string>
+    <string name="hyperos_qs_available_switches">Interruptores disponibles</string>
     <string name="hyperos_qs_close">Cerrar</string>
     <string name="hyperos_qs_state_on">Activado</string>
     <string name="hyperos_qs_state_off">Desactivado</string>
@@ -146,6 +147,11 @@
     <string name="hyperos_qs_remove">Quitar</string>
     <string name="hyperos_qs_brightness">Brillo</string>
     <string name="hyperos_qs_volume">Volumen</string>
+
+    <!-- Flashlight Dialog -->
+    <string name="flashlight_strength_title">Brillo de la linterna</string>
+    <string name="flashlight_strength_turn_off">Apagar</string>
+    <string name="flashlight_strength_turn_on">Encender</string>
 
     <!-- Status Bar Chips -->
     <string name="media_chip_paused">Pausa</string>

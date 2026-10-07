@@ -399,6 +399,17 @@ private fun HyperOSVolumeVerticalLayout(
         )
     }
 
+    var useMonet by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                "hyperos_volume_use_monet",
+                1,
+                UserHandle.USER_CURRENT
+            ) == 1
+        )
+    }
+
     DisposableEffect(context) {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
@@ -438,17 +449,6 @@ private fun HyperOSVolumeVerticalLayout(
             context.contentResolver.unregisterContentObserver(observer)
             context.contentResolver.unregisterContentObserver(monetObserver)
         }
-    }
-
-    var useMonet by remember {
-        mutableStateOf(
-            Settings.System.getIntForUser(
-                context.contentResolver,
-                "hyperos_volume_use_monet",
-                1,
-                UserHandle.USER_CURRENT
-            ) == 1
-        )
     }
 
     val isBoostActive = !isVoiceCall && isBoost200Enabled && boostLevel > 0 && rawProgressFraction >= 0.99f
@@ -498,7 +498,8 @@ private fun HyperOSVolumeVerticalLayout(
             HyperOSSecondaryVolumeVerticalCapsule(
                 context = context,
                 targetStream = targetSecondaryStream,
-                isLandscape = isLandscape
+                isLandscape = isLandscape,
+                useMonet = useMonet
             )
         }
 
@@ -748,7 +749,8 @@ private fun HyperOSVolumeVerticalLayout(
 private fun HyperOSSecondaryVolumeVerticalCapsule(
     context: Context,
     targetStream: Int,
-    isLandscape: Boolean = false
+    isLandscape: Boolean = false,
+    useMonet: Boolean = true
 ) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val minVol = remember(targetStream) { audioManager.getStreamMinVolume(targetStream).toFloat() }

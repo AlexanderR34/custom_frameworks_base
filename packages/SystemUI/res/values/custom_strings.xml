@@ -135,6 +135,7 @@
     <string name="hyperos_qs_edit_cards_subtitle">Tap to add or remove switches</string>
     <string name="hyperos_qs_done">Done</string>
     <string name="hyperos_qs_added_switches">Added switches</string>
+    <string name="hyperos_qs_available_switches">Available switches</string>
     <string name="hyperos_qs_close">Close</string>
     <string name="hyperos_qs_state_on">On</string>
     <string name="hyperos_qs_state_off">Off</string>
@@ -142,6 +143,11 @@
     <string name="hyperos_qs_remove">Remove</string>
     <string name="hyperos_qs_brightness">Brightness</string>
     <string name="hyperos_qs_volume">Volume</string>
+
+    <!-- Flashlight Dialog -->
+    <string name="flashlight_strength_title">Flashlight brightness</string>
+    <string name="flashlight_strength_turn_off">Turn off</string>
+    <string name="flashlight_strength_turn_on">Turn on</string>
 
     <!-- Status Bar Chips -->
     <string name="media_chip_paused">Paused</string>
