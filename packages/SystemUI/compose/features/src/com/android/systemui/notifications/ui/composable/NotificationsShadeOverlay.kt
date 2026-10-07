@@ -451,74 +451,71 @@ constructor(
                     val navBarEnd = WindowInsets.navigationBars.asPaddingValues().calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
                     val isDark = isSystemInDarkTheme()
 
-                    DisposableEffect(nsslView, isLandscape, isDark, navBarBottom, navBarEnd) {
-                        val container = (nsslView.parent as? ViewGroup) ?: (nsslView as? ViewGroup)
-                        if (container == null) return@DisposableEffect onDispose {}
-
-                        val floatingClearBtnView = ComposeView(context).apply {
-                            setViewCompositionStrategy(
-                                ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool
-                            )
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-                            setContent {
-                                val clearBtnBg = if (isDark) Color(0xEE2A2A2E) else Color.White
-                                val clearIconTint = if (isDark) Color.White else Color(0xFF1C1B1F)
-
-                                val interactionSource = remember { MutableInteractionSource() }
-                                val isPressed by interactionSource.collectIsPressedAsState()
-                                val scale by animateFloatAsState(
-                                    targetValue = if (isPressed) 0.88f else 1.0f,
-                                    animationSpec = androidx.compose.animation.core.spring(
-                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-                                    ),
-                                    label = "ClearAllButtonScale"
-                                )
-
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = if (isLandscape) Alignment.CenterEnd else Alignment.BottomCenter
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(
-                                                bottom = if (isLandscape) 0.dp else navBarBottom + 28.dp,
-                                                end = if (isLandscape) navBarEnd + 36.dp else 0.dp,
-                                            )
-                                            .graphicsLayer {
-                                                scaleX = scale
-                                                scaleY = scale
-                                            }
-                                            .shadow(elevation = 8.dp, shape = CircleShape)
-                                            .size(54.dp)
-                                            .clip(CircleShape)
-                                            .background(clearBtnBg)
-                                            .clickable(
-                                                interactionSource = interactionSource,
-                                                indication = null
-                                            ) {
-                                                nsslView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                                (nsslView as? NotificationStackScrollLayout)?.clearAllNotifications(false)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_close),
-                                            contentDescription = "Borrar notificaciones",
-                                            tint = clearIconTint,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
+                    var hasClearableNotifs by remember { mutableStateOf(false) }
+                    LaunchedEffect(nsslView) {
+                        while (true) {
+                            val nssl = nsslView as? NotificationStackScrollLayout
+                            val count = nssl?.childCount ?: 0
+                            var found = false
+                            for (i in 0 until count) {
+                                val child = nssl?.getChildAt(i)
+                                if (child is com.android.systemui.statusbar.notification.row.ExpandableNotificationRow && child.canViewBeDismissed()) {
+                                    found = true
+                                    break
                                 }
                             }
+                            hasClearableNotifs = found
+                            delay(300)
                         }
+                    }
 
-                        container.addView(floatingClearBtnView)
-                        onDispose {
-                            container.removeView(floatingClearBtnView)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = hasClearableNotifs,
+                        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(initialScale = 0.8f),
+                        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)) + androidx.compose.animation.scaleOut(targetScale = 0.8f),
+                        modifier = Modifier
+                            .align(if (isLandscape) Alignment.CenterEnd else Alignment.BottomCenter)
+                            .padding(
+                                bottom = if (isLandscape) 0.dp else navBarBottom + 28.dp,
+                                end = if (isLandscape) navBarEnd + 36.dp else 0.dp,
+                            )
+                    ) {
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val isPressed by interactionSource.collectIsPressedAsState()
+                        val scale by animateFloatAsState(
+                            targetValue = if (isPressed) 0.88f else 1.0f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                            ),
+                            label = "ClearAllButtonScale"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .shadow(elevation = 8.dp, shape = CircleShape)
+                                .size(54.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f) else Color.White)
+                                .clickable(
+                                    interactionSource = interactionSource,
+                                    indication = null
+                                ) {
+                                    nsslView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                    (nsslView as? NotificationStackScrollLayout)?.clearAllNotifications(false)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_close),
+                                contentDescription = stringResource(R.string.hyperos_qs_close),
+                                tint = if (isDark) Color.White else Color(0xFF1C1B1F),
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
                 }
