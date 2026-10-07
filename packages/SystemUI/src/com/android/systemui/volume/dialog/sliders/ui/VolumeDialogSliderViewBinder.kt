@@ -422,15 +422,33 @@ private fun HyperOSVolumeVerticalLayout(
             observer,
             UserHandle.USER_CURRENT
         )
-        context.contentResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.VOLUME_BOOST_LEVEL),
-            false,
-            observer,
-            UserHandle.USER_CURRENT
-        )
+        val uriMonet = Settings.System.getUriFor("hyperos_volume_use_monet")
+        val monetObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                useMonet = Settings.System.getIntForUser(
+                    context.contentResolver,
+                    "hyperos_volume_use_monet",
+                    1,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            }
+        }
+        context.contentResolver.registerContentObserver(uriMonet, false, monetObserver, UserHandle.USER_CURRENT)
         onDispose {
             context.contentResolver.unregisterContentObserver(observer)
+            context.contentResolver.unregisterContentObserver(monetObserver)
         }
+    }
+
+    var useMonet by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                "hyperos_volume_use_monet",
+                1,
+                UserHandle.USER_CURRENT
+            ) == 1
+        )
     }
 
     val isBoostActive = !isVoiceCall && isBoost200Enabled && boostLevel > 0 && rawProgressFraction >= 0.99f
@@ -563,13 +581,15 @@ private fun HyperOSVolumeVerticalLayout(
                         }
                     }
             ) {
-                // White solid progress fill from bottom (flat top edge, clipped naturally by parent container)
+                val mainFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color.White
+
+                // Solid progress fill from bottom (flat top edge, clipped naturally by parent container)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(progressFraction)
                         .align(Alignment.BottomCenter)
-                        .background(Color.White)
+                        .background(mainFillColor)
                 ) {
                     // Fluid red gradient deploying from top down when 200% boost is active
                     if (boostAnimationProgress > 0.001f) {
@@ -674,7 +694,11 @@ private fun HyperOSVolumeVerticalLayout(
                     else -> R.drawable.ic_hyperos_speaker_high
                 }
 
-                val baseIconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+                val baseIconTint = if (progressFraction >= 0.20f) {
+                    if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
+                } else {
+                    Color(0xFFEEEEEE)
+                }
                 val boostedIconTint = Color(0xFFE5252A)
                 val finalIconTint = if (boostAnimationProgress > 0.001f) {
                     androidx.compose.ui.graphics.lerp(baseIconTint, boostedIconTint, boostAnimationProgress)
@@ -816,13 +840,15 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
                 }
             }
     ) {
-        // White solid progress fill from bottom (flat top edge, clipped naturally by parent container)
+        val secFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color.White
+
+        // Solid progress fill from bottom (flat top edge, clipped naturally by parent container)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(progressFraction)
                 .align(Alignment.BottomCenter)
-                .background(Color.White)
+                .background(secFillColor)
         )
 
         // Bottom Icon
@@ -833,10 +859,15 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
                 .padding(bottom = 16.dp)
                 .size(iconSize)
         ) {
+            val secIconTint = if (progressFraction >= 0.20f) {
+                if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
+            } else {
+                Color(0xFFEEEEEE)
+            }
             androidx.compose.material3.Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = iconDesc,
-                tint = iconTint,
+                tint = secIconTint,
                 modifier = Modifier.size(iconSize)
             )
         }
