@@ -98,11 +98,74 @@ constructor(
                 )
             VolumePanelRoute.SYSTEM_UI_VOLUME_PANEL ->
                 volumePanelDialogManager.create(aboveStatusBar = true, view = null)
-            VolumePanelRoute.APP_VOLUME_PANEL ->
-                activityStarter.startActivity(
-                    /* intent= */ Intent(Settings.Panel.ACTION_APP_VOLUME),
-                    /* dismissShade= */ true,
+            VolumePanelRoute.APP_VOLUME_PANEL -> showAppVolumePanel()
+        }
+    }
+
+    private var appVolumeDialog: Dialog? = null
+
+    private fun showAppVolumePanel() {
+        appVolumeDialog?.dismiss()
+        val isHyperOS = try {
+            android.provider.Settings.System.getInt(
+                dialogFactory.applicationContext.contentResolver,
+                "hyperos_volume_panel_style",
+                0
+            ) == 1
+        } catch (e: Exception) {
+            false
+        }
+
+        if (isHyperOS) {
+            val dialog = dialogFactory.createBottomSheet(
+                theme = com.android.systemui.res.R.style.Theme_SystemUI_Dialog_Volume,
+                content = { dialog ->
+                    com.android.systemui.volume.panel.ui.composable.HyperOSAppVolumeContent(
+                        onDismiss = { dialog.dismiss() }
+                    )
+                },
+                isDraggable = false,
+                maxWidth = androidx.compose.ui.unit.Dp.Unspecified,
+                containerColorProvider = {
+                    androidx.compose.ui.graphics.Color.Transparent
+                },
+            )
+            dialog.setCanceledOnTouchOutside(true)
+            dialog.window?.apply {
+                addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                        android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                 )
+                addPrivateFlags(android.view.WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
+                setType(android.view.WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
+                clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                setDimAmount(0f)
+                setBackgroundDrawableResource(android.R.color.transparent)
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                decorView.setOnTouchListener { _, event ->
+                    if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
+                        dialog.dismiss()
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+            dialog.setOnDismissListener {
+                if (appVolumeDialog == dialog) {
+                    appVolumeDialog = null
+                }
+            }
+            appVolumeDialog = dialog
+            dialog.show()
+        } else {
+            activityStarter.startActivity(
+                /* intent= */ Intent(Settings.Panel.ACTION_APP_VOLUME),
+                /* dismissShade= */ true,
+            )
         }
     }
 
