@@ -16,7 +16,14 @@
 
 package com.android.systemui.statusbar.chips.ui.viewmodel
 
+import android.content.Context
+import android.database.ContentObserver
 import android.graphics.RectF
+import android.os.Handler
+import android.os.Looper
+import android.os.UserHandle
+import android.provider.Settings
+import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.DisplayAware
 import com.android.systemui.display.dagger.SystemUIDisplaySubcomponent.PerDisplaySingleton
 import com.android.systemui.display.domain.interactor.DisplayStateInteractor
@@ -26,21 +33,31 @@ import com.android.systemui.screencapture.record.domain.interactor.ScreenCapture
 import com.android.systemui.statusbar.chips.StatusBarChipLogTags.pad
 import com.android.systemui.statusbar.chips.StatusBarChipToHunAnimation
 import com.android.systemui.statusbar.chips.StatusBarChipsLog
+import com.android.systemui.statusbar.chips.bluetooth.ui.viewmodel.BluetoothChipViewModel
 import com.android.systemui.statusbar.chips.call.ui.viewmodel.CallChipViewModel
 import com.android.systemui.statusbar.chips.casttootherdevice.ui.viewmodel.CastToOtherDeviceChipViewModel
+import com.android.systemui.statusbar.chips.download.ui.viewmodel.DownloadChipViewModel
+import com.android.systemui.statusbar.chips.hotspot.ui.viewmodel.HotspotChipViewModel
+import com.android.systemui.statusbar.chips.media.ui.viewmodel.MediaChipViewModel
+import com.android.systemui.statusbar.chips.navigation.ui.viewmodel.NavigationChipViewModel
 import com.android.systemui.statusbar.chips.notification.ui.viewmodel.NotifChipsViewModel
+import com.android.systemui.statusbar.chips.privacy.ui.viewmodel.PrivacyChipViewModel
 import com.android.systemui.statusbar.chips.screenrecord.ui.viewmodel.ScreenRecordChipViewModel
 import com.android.systemui.statusbar.chips.sharetoapp.ui.viewmodel.ShareToAppChipViewModel
+import com.android.systemui.statusbar.chips.timer.ui.viewmodel.TimerChipViewModel
+import com.android.systemui.statusbar.chips.ui.model.ColorsModel
 import com.android.systemui.statusbar.chips.ui.model.MultipleOngoingActivityChipsModel
 import com.android.systemui.statusbar.chips.ui.model.OngoingActivityChipModel
 import com.android.systemui.statusbar.notification.shared.StatusBarHeadline
 import com.android.systemui.util.kotlin.filterValuesNotNull
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -56,11 +73,19 @@ import kotlinx.coroutines.flow.stateIn
 class OngoingActivityChipsViewModel
 @Inject
 constructor(
+    @Application private val context: Context,
     @DisplayAware scope: CoroutineScope,
+    privacyChipViewModel: PrivacyChipViewModel,
     screenRecordChipViewModel: ScreenRecordChipViewModel,
     shareToAppChipViewModel: ShareToAppChipViewModel,
     castToOtherDeviceChipViewModel: CastToOtherDeviceChipViewModel,
     callChipViewModel: CallChipViewModel,
+    downloadChipViewModel: DownloadChipViewModel,
+    mediaChipViewModel: MediaChipViewModel,
+    navigationChipViewModel: NavigationChipViewModel,
+    timerChipViewModel: TimerChipViewModel,
+    hotspotChipViewModel: HotspotChipViewModel,
+    bluetoothChipViewModel: BluetoothChipViewModel,
     notifChipsViewModel: NotifChipsViewModel,
     @DisplayAware displayStateInteractor: DisplayStateInteractor,
     private val screenCaptureRecordFeaturesInteractor: ScreenCaptureRecordFeaturesInteractor,
@@ -68,10 +93,17 @@ constructor(
     @StatusBarChipsLog private val logger: LogBuffer,
 ) {
     private enum class ChipType {
+        Privacy,
         ScreenRecord,
         ShareToApp,
         CastToOtherDevice,
         Call,
+        Timer,
+        Navigation,
+        Hotspot,
+        Download,
+        Media,
+        Bluetooth,
         Notification,
     }
 
@@ -90,94 +122,187 @@ constructor(
          * chip type should get hidden.
          */
         data class Inactive(
+            val privacy: OngoingActivityChipModel.Inactive,
             val screenRecord: OngoingActivityChipModel.Inactive,
             val shareToApp: OngoingActivityChipModel.Inactive,
             val castToOtherDevice: OngoingActivityChipModel.Inactive,
             val call: OngoingActivityChipModel.Inactive,
+            val timer: OngoingActivityChipModel.Inactive,
+            val navigation: OngoingActivityChipModel.Inactive,
+            val hotspot: OngoingActivityChipModel.Inactive,
+            val download: OngoingActivityChipModel.Inactive,
+            val media: OngoingActivityChipModel.Inactive,
+            val bluetooth: OngoingActivityChipModel.Inactive,
             val notifs: OngoingActivityChipModel.Inactive,
         ) : InternalChipModel
     }
 
     private data class ChipBundle(
+        val privacy: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val screenRecord: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val shareToApp: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val castToOtherDevice: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val call: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val timer: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val navigation: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val hotspot: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val download: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val media: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val bluetooth: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val notifs: List<OngoingActivityChipModel.Active> = emptyList(),
     )
 
-    /** Bundles all the incoming chips into one object to easily pass to various flows. */
-    private val incomingChipBundle =
+    private data class SystemChips(
+        val privacy: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val screenRecord: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val shareToApp: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val castToOtherDevice: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val call: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val timer: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+    )
+
+    private data class AppChips(
+        val navigation: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val hotspot: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val download: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val media: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val bluetooth: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val notifs: List<OngoingActivityChipModel.Active> = emptyList(),
+    )
+
+    private val systemChips: Flow<SystemChips> =
         if (screenCaptureRecordFeaturesInteractor.isLargeScreenScreencaptureEnabled) {
+            combine(
+                privacyChipViewModel.chip,
+                shareToAppChipViewModel.chip,
+                castToOtherDeviceChipViewModel.chip,
+                callChipViewModel.chip,
+                timerChipViewModel.chip,
+            ) { privacy, shareToApp, castToOtherDevice, call, timer ->
+                SystemChips(
+                    privacy,
+                    OngoingActivityChipModel.Inactive(),
+                    shareToApp,
+                    castToOtherDevice,
+                    call,
+                    timer,
+                )
+            }
+        } else {
+            combine(
                 combine(
-                    shareToAppChipViewModel.chip,
-                    castToOtherDeviceChipViewModel.chip,
-                    callChipViewModel.chip,
-                    notifChipsViewModel.chips,
-                ) { shareToApp, castToOtherDevice, call, notifs ->
-                    logChips(
-                        OngoingActivityChipModel.Inactive(),
-                        shareToApp,
-                        castToOtherDevice,
-                        call,
-                        notifs,
-                    )
-                    ChipBundle(
-                        shareToApp = shareToApp,
-                        castToOtherDevice = castToOtherDevice,
-                        call = call,
-                        notifs = notifs,
-                    )
-                }
-            } else {
-                combine(
+                    privacyChipViewModel.chip,
                     screenRecordChipViewModel.chip,
                     shareToAppChipViewModel.chip,
-                    castToOtherDeviceChipViewModel.chip,
-                    callChipViewModel.chip,
-                    notifChipsViewModel.chips,
-                ) { screenRecord, shareToApp, castToOtherDevice, call, notifs ->
-                    logChips(screenRecord, shareToApp, castToOtherDevice, call, notifs)
-                    ChipBundle(
-                        screenRecord = screenRecord,
-                        shareToApp = shareToApp,
-                        castToOtherDevice = castToOtherDevice,
-                        call = call,
-                        notifs = notifs,
-                    )
-                }
+                ) { privacy, screenRecord, shareToApp ->
+                    Triple(privacy, screenRecord, shareToApp)
+                },
+                castToOtherDeviceChipViewModel.chip,
+                callChipViewModel.chip,
+                timerChipViewModel.chip,
+            ) { (privacy, screenRecord, shareToApp), castToOtherDevice, call, timer ->
+                SystemChips(
+                    privacy,
+                    screenRecord,
+                    shareToApp,
+                    castToOtherDevice,
+                    call,
+                    timer,
+                )
             }
-            // Some of the chips could have timers in them and we don't want the start time for
-            // those timers to get reset for any reason. So, as soon as any subscriber has requested
-            // the chip information, we maintain it forever by using [SharingStarted.Lazily].
-            // See b/347726238.
-            .stateIn(scope, SharingStarted.Lazily, ChipBundle())
+        }
+
+    private val appChips: Flow<AppChips> =
+        combine(
+            navigationChipViewModel.chip,
+            hotspotChipViewModel.chip,
+            downloadChipViewModel.chip,
+            mediaChipViewModel.chip,
+            bluetoothChipViewModel.chip,
+        ) { navigation, hotspot, download, media, bluetooth ->
+            AppChips(
+                navigation,
+                hotspot,
+                download,
+                media,
+                bluetooth,
+                emptyList(),
+            )
+        }.combine(notifChipsViewModel.chips) { chips, notifs ->
+            chips.copy(notifs = notifs)
+        }
+
+    /** Bundles all the incoming chips into one object to easily pass to various flows. */
+    private val incomingChipBundle =
+        combine(systemChips, appChips) { sys, app ->
+            logChips(
+                sys.privacy,
+                sys.screenRecord,
+                sys.shareToApp,
+                sys.castToOtherDevice,
+                sys.call,
+                sys.timer,
+                app.navigation,
+                app.hotspot,
+                app.download,
+                app.media,
+                app.bluetooth,
+                app.notifs,
+            )
+            ChipBundle(
+                privacy = sys.privacy,
+                screenRecord = sys.screenRecord,
+                shareToApp = sys.shareToApp,
+                castToOtherDevice = sys.castToOtherDevice,
+                call = sys.call,
+                timer = sys.timer,
+                navigation = app.navigation,
+                hotspot = app.hotspot,
+                download = app.download,
+                media = app.media,
+                bluetooth = app.bluetooth,
+                notifs = app.notifs,
+            )
+        }
+        // Some of the chips could have timers in them and we don't want the start time for
+        // those timers to get reset for any reason. So, as soon as any subscriber has requested
+        // the chip information, we maintain it forever by using [SharingStarted.Lazily].
+        // See b/347726238.
+        .stateIn(scope, SharingStarted.Lazily, ChipBundle())
 
     private fun logChips(
+        privacy: OngoingActivityChipModel,
         screenRecord: OngoingActivityChipModel,
         shareToApp: OngoingActivityChipModel,
         castToOtherDevice: OngoingActivityChipModel,
         call: OngoingActivityChipModel,
+        timer: OngoingActivityChipModel,
+        navigation: OngoingActivityChipModel,
+        hotspot: OngoingActivityChipModel,
+        download: OngoingActivityChipModel,
+        media: OngoingActivityChipModel,
+        bluetooth: OngoingActivityChipModel,
         notifs: List<OngoingActivityChipModel.Active>,
     ) {
         logger.log(
             TAG,
             LogLevel.INFO,
             {
-                str1 = screenRecord.logName
-                str2 = shareToApp.logName
-                str3 = castToOtherDevice.logName
+                str1 = privacy.logName
+                str2 = screenRecord.logName
+                str3 = shareToApp.logName
             },
-            { "Chips: ScreenRecord=$str1 > ShareToApp=$str2 > CastToOther=$str3..." },
+            { "Chips: Privacy=$str1 > ScreenRecord=$str2 > ShareToApp=$str3..." },
         )
         logger.log(
             TAG,
             LogLevel.INFO,
             {
                 str1 = call.logName
-                str2 = notifs.map { it.logName }.toString()
+                str2 = timer.logName
+                str3 = "${navigation.logName} > Hotspot=${hotspot.logName} > Download=${download.logName} > Media=${media.logName} > Bluetooth=${bluetooth.logName} > Notifs=${notifs.map { it.logName }}"
             },
-            { "... > Call=$str1 > Notifs=$str2" },
+            { "... > Call=$str1 > Timer=$str2 > Nav=$str3" },
         )
     }
 
@@ -195,7 +320,8 @@ constructor(
             is OngoingActivityChipModel.Content.Timer,
             is OngoingActivityChipModel.Content.ShortTimeDelta,
             is OngoingActivityChipModel.Content.Text,
-            is OngoingActivityChipModel.Content.TextVariants -> true
+            is OngoingActivityChipModel.Content.TextVariants,
+            is OngoingActivityChipModel.Content.SensorIcons -> true
         }
     }
 
@@ -209,32 +335,158 @@ constructor(
         return this.copy(content = OngoingActivityChipModel.Content.IconOnly)
     }
 
+    private val chipsConfigVersion: StateFlow<Long> =
+        callbackFlow {
+            val observer =
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(System.currentTimeMillis())
+                    }
+                }
+            try {
+                val keysToObserve = listOf(
+                    SETTING_CHIPS_LIMIT,
+                    SETTING_MULTI_STYLE,
+                    SETTING_MEDIA_ART_STYLE,
+                    SETTING_MONET_COLORS,
+                    SETTING_MONET_ICONS,
+                    SETTING_ENABLE_PRIVACY,
+                    SETTING_ENABLE_SCREEN_RECORD,
+                    SETTING_ENABLE_SHARE_TO_APP,
+                    SETTING_ENABLE_CAST,
+                    SETTING_ENABLE_CALL,
+                    SETTING_ENABLE_TIMER,
+                    SETTING_ENABLE_NAVIGATION,
+                    SETTING_ENABLE_HOTSPOT,
+                    SETTING_ENABLE_DOWNLOAD,
+                    SETTING_ENABLE_MEDIA,
+                    SETTING_ENABLE_BLUETOOTH,
+                    SETTING_ENABLE_NOTIFS,
+                    SETTING_COLOR_CAM_MIC,
+                    SETTING_COLOR_LOCATION,
+                    SETTING_COLOR_COMBO,
+                    SETTING_COLOR_ALL,
+                )
+                for (key in keysToObserve) {
+                    context.contentResolver.registerContentObserver(
+                        Settings.System.getUriFor(key),
+                        false,
+                        observer,
+                        UserHandle.USER_ALL,
+                    )
+                }
+            } catch (e: Exception) {}
+            trySend(System.currentTimeMillis())
+            awaitClose {
+                try {
+                    context.contentResolver.unregisterContentObserver(observer)
+                } catch (e: Exception) {}
+            }
+        }
+        .stateIn(scope, SharingStarted.Lazily, 0L)
+
+    private fun getChipsLimit(): Int {
+        return try {
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                SETTING_CHIPS_LIMIT,
+                DEFAULT_CHIPS_LIMIT,
+                UserHandle.USER_CURRENT,
+            )
+        } catch (e: Exception) {
+            try {
+                Settings.System.getInt(context.contentResolver, SETTING_CHIPS_LIMIT, DEFAULT_CHIPS_LIMIT)
+            } catch (e2: Exception) {
+                DEFAULT_CHIPS_LIMIT
+            }
+        }
+    }
+
+    private fun getMultiStyle(): Int {
+        return try {
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                SETTING_MULTI_STYLE,
+                DEFAULT_MULTI_STYLE,
+                UserHandle.USER_CURRENT,
+            )
+        } catch (e: Exception) {
+            try {
+                Settings.System.getInt(context.contentResolver, SETTING_MULTI_STYLE, DEFAULT_MULTI_STYLE)
+            } catch (e2: Exception) {
+                DEFAULT_MULTI_STYLE
+            }
+        }
+    }
+
+    private fun isChipEnabled(settingKey: String, defaultValue: Int = 1): Boolean {
+        return try {
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                settingKey,
+                defaultValue,
+                UserHandle.USER_CURRENT,
+            ) == 1
+        } catch (e: Exception) {
+            try {
+                Settings.System.getInt(context.contentResolver, settingKey, defaultValue) == 1
+            } catch (e2: Exception) {
+                defaultValue == 1
+            }
+        }
+    }
+
     /**
      * A flow modeling the active and inactive chips as well as which should be shown in the status
      * bar after accounting for possibly multiple ongoing activities and animation requirements.
      */
     private val unrefinedChips =
         combine(
-            incomingChipBundle.map { bundle -> rankChips(bundle) },
+            incomingChipBundle,
+            chipsConfigVersion,
             displayStateInteractor.isWideScreen,
-        ) { rankedChips, isWideScreen ->
+        ) { bundle, _, isWideScreen ->
+            val limit = getChipsLimit()
+            val multiStyle = getMultiStyle()
+            val isMonetEnabled = isChipEnabled(SETTING_MONET_COLORS, defaultValue = 0)
+            val isMonetIconsEnabled = isChipEnabled(SETTING_MONET_ICONS, defaultValue = 0)
+            val rankedChips = rankChips(bundle, limit)
+
+            val activeChipsWithMonet = if (isMonetEnabled) {
+                rankedChips.active.map { chip ->
+                    if (chip.colors is ColorsModel.Red) {
+                        chip
+                    } else {
+                        chip.copy(colors = ColorsModel.AccentThemed(useSecondaryForIcons = isMonetIconsEnabled))
+                    }
+                }
+            } else {
+                rankedChips.active
+            }
+
             if (
                 !StatusBarHeadline.isEnabled &&
                     !isWideScreen &&
-                    rankedChips.active.filter { !it.isHidden }.size >= 2
+                    activeChipsWithMonet.filter { !it.isHidden }.size >= 2
             ) {
-                // If we have at least two showing chips and we don't have a ton of room
-                // (!isWideScreen), then we want to make both of them as small as possible
-                // so that we have the highest chance of showing both chips (as opposed to
-                // showing the first chip with a lot of text and completely hiding the other
-                // chips).
-                // With Headline, there's no need to squish chips.
+                var visibleCount = 0
                 val squishedActiveChips =
-                    rankedChips.active.map {
-                        if (!it.isHidden && it.shouldSquish()) {
-                            it.toIconOnly()
+                    activeChipsWithMonet.map { chip ->
+                        if (!chip.isHidden) {
+                            val isSecondary = visibleCount > 0
+                            visibleCount++
+                            val shouldCondense = when (multiStyle) {
+                                0 -> false // All expanded: show full text & details on all chips
+                                2 -> true  // All compact: condense all chips to icons only
+                                else -> isSecondary // 1: primary expanded, secondaries compact
+                            }
+                            if (shouldCondense && chip.shouldSquish()) {
+                                chip.toIconOnly()
+                            } else {
+                                chip
+                            }
                         } else {
-                            it
+                            chip
                         }
                     }
 
@@ -244,7 +496,11 @@ constructor(
                     inactive = rankedChips.inactive,
                 )
             } else {
-                rankedChips
+                MultipleOngoingActivityChipsModel(
+                    active = activeChipsWithMonet,
+                    overflow = rankedChips.overflow,
+                    inactive = rankedChips.inactive,
+                )
             }
         }
 
@@ -299,16 +555,10 @@ constructor(
     val visibleNotificationChipsWithBounds: Flow<Map<String, RectF>> =
         if (StatusBarChipToHunAnimation.isEnabled) {
             combine(visibleNotificationChipKeys, chipBounds) { keys, chipBounds ->
-                    // TODO(b/393369891): Should we provide the placeholder bounds as a backup and
-                    // make those bounds public so that [NotificationStackScrollLayout] can do a
-                    // good default animation for chips even if we couldn't fetch the bounds for
-                    // some reason?
                     keys.associateWith { chipBounds[it] }.filterValuesNotNull()
                 }
                 .distinctUntilChanged()
         } else {
-            // If the custom chip-to-HUN animation isn't enabled, just provide any non-null
-            // chip bounds so that [NotificationStackScrollLayout] knows there's a status bar chip.
             visibleNotificationChipKeys
                 .map { keys -> keys.associateWith { placeholderChipBounds } }
                 .distinctUntilChanged()
@@ -318,32 +568,73 @@ constructor(
      * Sort the given chip [bundle] in order of priority, and divide the chips between active,
      * overflow, and inactive (see [MultipleOngoingActivityChipsModel] for a description of each).
      */
-    // IMPORTANT: PromotedNotificationsInteractor re-implements this same ordering scheme. Any
-    // changes here should also be made in PromotedNotificationsInteractor.
-    // TODO(b/402471288): Create a single source of truth for the ordering.
-    private fun rankChips(bundle: ChipBundle): MultipleOngoingActivityChipsModel {
+    private fun rankChips(bundle: ChipBundle, maxVisibleChips: Int = DEFAULT_CHIPS_LIMIT): MultipleOngoingActivityChipsModel {
         val activeChips = mutableListOf<OngoingActivityChipModel.Active>()
         val overflowChips = mutableListOf<OngoingActivityChipModel.Active>()
         val inactiveChips = mutableListOf<OngoingActivityChipModel.Inactive>()
 
-        val sortedChips =
-            with(bundle) { listOf(screenRecord, shareToApp, castToOtherDevice, call) + notifs }
+        val privacyChip = if (isChipEnabled(SETTING_ENABLE_PRIVACY)) bundle.privacy else OngoingActivityChipModel.Inactive()
+        val screenRecordChip = if (isChipEnabled(SETTING_ENABLE_SCREEN_RECORD)) bundle.screenRecord else OngoingActivityChipModel.Inactive()
+        val shareToAppChip = if (isChipEnabled(SETTING_ENABLE_SHARE_TO_APP)) bundle.shareToApp else OngoingActivityChipModel.Inactive()
+        val castChip = if (isChipEnabled(SETTING_ENABLE_CAST)) bundle.castToOtherDevice else OngoingActivityChipModel.Inactive()
+        val callChip = if (isChipEnabled(SETTING_ENABLE_CALL)) bundle.call else OngoingActivityChipModel.Inactive()
+        val timerChip = if (isChipEnabled(SETTING_ENABLE_TIMER)) bundle.timer else OngoingActivityChipModel.Inactive()
+        val navChip = if (isChipEnabled(SETTING_ENABLE_NAVIGATION)) bundle.navigation else OngoingActivityChipModel.Inactive()
+        val hotspotChip = if (isChipEnabled(SETTING_ENABLE_HOTSPOT)) bundle.hotspot else OngoingActivityChipModel.Inactive()
+        val downloadChip = if (isChipEnabled(SETTING_ENABLE_DOWNLOAD)) bundle.download else OngoingActivityChipModel.Inactive()
+        val mediaChip = if (isChipEnabled(SETTING_ENABLE_MEDIA)) bundle.media else OngoingActivityChipModel.Inactive()
+        val btChip = if (isChipEnabled(SETTING_ENABLE_BLUETOOTH)) bundle.bluetooth else OngoingActivityChipModel.Inactive()
+        val specializedChips =
+            listOf(
+                privacyChip,
+                callChip,
+                mediaChip,
+                screenRecordChip,
+                shareToAppChip,
+                castChip,
+                timerChip,
+                navChip,
+                downloadChip,
+                hotspotChip,
+                btChip,
+            )
 
-        var shownSlotsRemaining = MAX_VISIBLE_CHIPS
+        // Deduplicate: filter out notification chips whose package or notification key is already covered by an active specialized chip
+        val activeSpecializedPackages = specializedChips
+            .filterIsInstance<OngoingActivityChipModel.Active>()
+            .mapNotNull { it.managingPackageName }
+            .toSet()
+
+        val activeSpecializedNotifKeys = specializedChips
+            .filterIsInstance<OngoingActivityChipModel.Active>()
+            .mapNotNull { it.notificationKey }
+            .toSet()
+
+        val isMediaChipActive = specializedChips.filterIsInstance<OngoingActivityChipModel.Active>().any { it.key.startsWith("mediaChip-") }
+        val notifsChips = if (isChipEnabled(SETTING_ENABLE_NOTIFS)) bundle.notifs else emptyList()
+        val filteredNotifsChips = notifsChips.filter { notifChip ->
+            val pkg = notifChip.managingPackageName ?: ""
+            val isBrowserPkg = pkg.contains("brave") ||
+                    pkg.contains("chrome") ||
+                    pkg.contains("browser") ||
+                    pkg.contains("firefox") ||
+                    pkg.contains("opera") ||
+                    pkg.contains("edge")
+            val pkgMatch = pkg.isNotEmpty() && activeSpecializedPackages.contains(pkg)
+            val keyMatch = notifChip.notificationKey != null && activeSpecializedNotifKeys.contains(notifChip.notificationKey)
+            val browserMediaMatch = isBrowserPkg && isMediaChipActive
+            !pkgMatch && !keyMatch && !browserMediaMatch
+        }
+
+        val sortedChips = specializedChips + filteredNotifsChips
+
+        var shownSlotsRemaining = maxVisibleChips
         for (chip in sortedChips) {
             when (chip) {
                 is OngoingActivityChipModel.Active -> {
-                    // Screen recording also activates the media projection APIs, which means that
-                    // whenever the screen recording chip is active, the share-to-app chip would
-                    // also be active. (Screen recording is a special case of share-to-app, where
-                    // the app receiving the share is specifically System UI.)
-                    // We want only the screen-recording-specific chip to be shown in this case. If
-                    // we did have screen recording as the primary chip, we need to suppress the
-                    // share-to-app chip to make sure they don't both show.
-                    // See b/296461748.
                     val suppressShareToApp =
-                        chip == bundle.shareToApp &&
-                            bundle.screenRecord is OngoingActivityChipModel.Active
+                        chip == shareToAppChip &&
+                            screenRecordChip is OngoingActivityChipModel.Active
                     if (shownSlotsRemaining > 0 && !suppressShareToApp) {
                         activeChips.add(chip)
                         if (!chip.isHidden) shownSlotsRemaining--
@@ -361,6 +652,33 @@ constructor(
 
     companion object {
         private val TAG = "ChipsViewModel".pad()
-        private const val MAX_VISIBLE_CHIPS = 3
+        const val SETTING_CHIPS_LIMIT = "status_bar_chips_limit"
+        const val DEFAULT_CHIPS_LIMIT = 2
+
+        const val SETTING_MULTI_STYLE = "status_bar_chips_multi_style"
+        const val DEFAULT_MULTI_STYLE = 0 // 0=All Expanded, 1=Primary Expanded, 2=All Compact
+
+        const val SETTING_MEDIA_ART_STYLE = "status_bar_chips_media_art_style"
+
+        const val SETTING_MONET_COLORS = "status_bar_chips_monet_colors"
+        const val SETTING_MONET_ICONS = "status_bar_chips_monet_icons"
+
+        const val SETTING_ENABLE_PRIVACY = "status_bar_chip_enable_privacy"
+        const val SETTING_ENABLE_SCREEN_RECORD = "status_bar_chip_enable_screen_record"
+        const val SETTING_ENABLE_SHARE_TO_APP = "status_bar_chip_enable_share_to_app"
+        const val SETTING_ENABLE_CAST = "status_bar_chip_enable_cast"
+        const val SETTING_ENABLE_CALL = "status_bar_chip_enable_call"
+        const val SETTING_ENABLE_TIMER = "status_bar_chip_enable_timer"
+        const val SETTING_ENABLE_NAVIGATION = "status_bar_chip_enable_navigation"
+        const val SETTING_ENABLE_HOTSPOT = "status_bar_chip_enable_hotspot"
+        const val SETTING_ENABLE_DOWNLOAD = "status_bar_chip_enable_download"
+        const val SETTING_ENABLE_MEDIA = "status_bar_chip_enable_media"
+        const val SETTING_ENABLE_BLUETOOTH = "status_bar_chip_enable_bluetooth"
+        const val SETTING_ENABLE_NOTIFS = "status_bar_chip_enable_notifs"
+
+        const val SETTING_COLOR_CAM_MIC = "status_bar_chips_color_cam_mic"
+        const val SETTING_COLOR_LOCATION = "status_bar_chips_color_location"
+        const val SETTING_COLOR_COMBO = "status_bar_chips_color_combo"
+        const val SETTING_COLOR_ALL = "status_bar_chips_color_all"
     }
 }

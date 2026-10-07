@@ -103,14 +103,14 @@ private class HideTextIfDoesNotFitNode(
         val placeable = measurable.measure(constraints.copy(maxWidth = maxWidth))
 
         val intrinsicWidth = textMeasurer.measure(text, textStyle, softWrap = false).size.width
-        return if (intrinsicWidth <= maxWidth) {
-            val height = placeable.height
-            val width = placeable.width
-            layout(width + horizontalPadding.roundToPx(), height) {
-                placeable.placeRelative(x = startPadding.roundToPx(), y = 0)
-            }
+        val effectiveWidth = if (intrinsicWidth <= maxWidth) {
+            placeable.width
         } else {
-            layout(0, 0) {}
+            maxWidth
+        }
+        val height = placeable.height
+        return layout(effectiveWidth + horizontalPadding.roundToPx(), height) {
+            placeable.placeRelative(x = startPadding.roundToPx(), y = 0)
         }
     }
 }

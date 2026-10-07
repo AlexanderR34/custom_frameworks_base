@@ -32,11 +32,14 @@ sealed interface ColorsModel {
     /** The color for the text (and icon) on the chip. */
     @ColorInt fun text(context: Context): Int
 
+    /** The color for the icon specifically. Defaults to text color. */
+    @ColorInt fun icon(context: Context): Int = text(context)
+
     /** The color to use for the chip outline, or null if the chip shouldn't have an outline. */
     @ColorInt fun outline(context: Context): Int?
 
     /** The chip should match the theme's primary accent color. */
-    data object AccentThemed : ColorsModel {
+    open class AccentThemed(open val useSecondaryForIcons: Boolean = false) : ColorsModel {
         override fun background(context: Context): ColorStateList =
             ColorStateList.valueOf(
                 context.getColor(com.android.internal.R.color.materialColorPrimaryFixedDim)
@@ -45,7 +48,28 @@ sealed interface ColorsModel {
         override fun text(context: Context) =
             context.getColor(com.android.internal.R.color.materialColorOnPrimaryFixed)
 
+        override fun icon(context: Context): Int =
+            if (useSecondaryForIcons) {
+                try {
+                    context.getColor(com.android.internal.R.color.materialColorSecondary)
+                } catch (e: Exception) {
+                    text(context)
+                }
+            } else {
+                text(context)
+            }
+
         override fun outline(context: Context) = null
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is AccentThemed) return false
+            return useSecondaryForIcons == other.useSecondaryForIcons
+        }
+
+        override fun hashCode(): Int = useSecondaryForIcons.hashCode()
+
+        companion object : AccentThemed(false)
     }
 
     /** The chip should match the system theme main color. */
@@ -118,6 +142,25 @@ sealed interface ColorsModel {
         override fun text(context: Context) = context.getColor(android.R.color.white)
 
         override fun outline(context: Context) = null
+    }
+
+    /** The chip adapts dynamically to an app's dominant color or uses a sleek dark pill. */
+    data class DynamicThemed(val dominantColor: Int? = null) : ColorsModel {
+        override fun background(context: Context): ColorStateList {
+            if (dominantColor != null) {
+                // Subtle dark tinted background based on dominant color
+                val r = (((dominantColor ushr 16) and 0xFF) * 0.28f + 0x18 * 0.72f).toInt()
+                val g = (((dominantColor ushr 8) and 0xFF) * 0.28f + 0x18 * 0.72f).toInt()
+                val b = ((dominantColor and 0xFF) * 0.28f + 0x18 * 0.72f).toInt()
+                val bg = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                return ColorStateList.valueOf(bg)
+            }
+            return ColorStateList.valueOf(0xFF222428.toInt())
+        }
+
+        override fun text(context: Context): Int = 0xFFFFFFFF.toInt()
+
+        override fun outline(context: Context): Int? = 0x26FFFFFF
     }
 }
 

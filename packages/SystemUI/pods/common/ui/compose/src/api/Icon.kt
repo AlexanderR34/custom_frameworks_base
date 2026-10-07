@@ -46,6 +46,10 @@ public fun Icon(
                 drawable.drawable?.let { drawable = it }
             }
             if (drawable is AdaptiveIconDrawable) {
+                if (tint == Color.Unspecified) {
+                    Icon(rememberDrawablePainter(drawable), contentDescription, modifier, tint)
+                    return
+                }
                 val monochrome = drawable.monochrome
                 if (monochrome != null) {
                     Icon(rememberDrawablePainter(monochrome), contentDescription, modifier, tint)

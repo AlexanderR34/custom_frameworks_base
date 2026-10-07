@@ -124,6 +124,19 @@ constructor(
                 }
 
                 currentChips.filterByPackage().map { it.toPrunedModel() }
+                    .filterNot { pruned ->
+                        val hasDomainText = pruned.textVariants?.any { isWebDomain(it) } ?: false
+                        val isBrowserPkg = pruned.packageName.contains("brave") ||
+                                pruned.packageName.contains("chrome") ||
+                                pruned.packageName.contains("browser") ||
+                                pruned.packageName.contains("chromium") ||
+                                pruned.packageName.contains("firefox") ||
+                                pruned.packageName.contains("opera") ||
+                                pruned.packageName.contains("edge") ||
+                                pruned.packageName.contains("duckduckgo") ||
+                                pruned.packageName.contains("vivaldi")
+                        isBrowserPkg || hasDomainText || isWebDomain(pruned.appName)
+                    }
             }
             .distinctUntilChanged()
 
@@ -148,11 +161,12 @@ constructor(
         if (NotificationChipFromCompactContent.isEnabled) {
             if (content.compactContent is ResolvedBasicCompactContent) {
                 val contentText = content.compactContent.text
-                chipTextVariants =
+                val rawVariants =
                     contentText
                         ?.takeUnless { it is Notification.Metric.TimeDifference }
                         ?.toValueString(context)
                         ?.textVariants
+                chipTextVariants = rawVariants?.filterNot { isWebDomain(it) }?.takeIf { it.isNotEmpty() }
                 chipChronometer =
                     (contentText as? Notification.Metric.TimeDifference)?.toChronometer()
                 chipChronometerFormat =
@@ -195,7 +209,8 @@ constructor(
                     is PromotedNotificationContentModel.When.Chronometer -> rawTime
                 }
 
-            chipTextVariants = (content.shortCriticalText ?: textFromMetric)?.let { x -> listOf(x) }
+            val rawText = (content.shortCriticalText ?: textFromMetric)
+            chipTextVariants = rawText?.takeUnless { isWebDomain(it.toString()) }?.let { x -> listOf(x.toString()) }
             chipTime = timeFromMetric ?: timeFromWhen
             chipChronometer = null
             chipChronometerFormat = null
@@ -544,6 +559,29 @@ constructor(
             val newStates = originalStates.toMutableMap()
             newStates[key] = newState
             return newStates
+        }
+
+        private fun isWebDomain(str: String): Boolean {
+            val lower = str.lowercase().trim()
+            if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("www.")) return true
+            if (Regex("(?i)^(https?://)?([a-z0-9-]+\\.)+[a-z]{2,}(/.*)?$").matches(lower)) return true
+            return lower.contains(".com") ||
+                    lower.contains(".net") ||
+                    lower.contains(".org") ||
+                    lower.contains(".io") ||
+                    lower.contains(".edu") ||
+                    lower.contains(".gov") ||
+                    lower.contains(".site") ||
+                    lower.contains(".online") ||
+                    lower.contains(".app") ||
+                    lower.contains(".xyz") ||
+                    lower.contains(".me") ||
+                    lower.contains(".tv") ||
+                    lower.contains("khinsider") ||
+                    lower.contains("music.youtube") ||
+                    lower.contains("youtube.com") ||
+                    lower.contains(".youtube") ||
+                    lower.contains("youtube")
         }
     }
 }

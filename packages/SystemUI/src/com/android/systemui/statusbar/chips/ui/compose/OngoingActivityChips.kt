@@ -18,8 +18,15 @@ package com.android.systemui.statusbar.chips.ui.compose
 
 import android.graphics.RectF
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -83,30 +90,33 @@ fun OngoingActivityChips(
                                 onChipBoundsChanged(notificationKey, bounds)
                             }
                         }
-                    if (activeChips.size == 1) {
-                        // AnimatedVisibility works well if we have just 1 active chip, but it
-                        // causes some problems if there's 2 chips and then one chip becomes hidden.
-                        // For now, use AnimatedVisibility only if we only have 1 active chip. See
-                        // b/393581408.
-                        AnimatedVisibility(
-                            visible = !it.isHidden,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
-                        ) {
-                            OngoingActivityChip(
-                                model = it,
-                                iconViewStore = iconViewStore,
-                                modifier = chipModifier,
-                            )
-                        }
-                    } else {
-                        if (!it.isHidden) {
-                            OngoingActivityChip(
-                                model = it,
-                                iconViewStore = iconViewStore,
-                                modifier = chipModifier,
-                            )
-                        }
+
+                    AnimatedVisibility(
+                        visible = !it.isHidden,
+                        enter = fadeIn(animationSpec = tween(280)) +
+                            expandHorizontally(
+                                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                                expandFrom = Alignment.Start,
+                            ) +
+                            scaleIn(
+                                initialScale = 0.85f,
+                                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                            ),
+                        exit = fadeOut(animationSpec = tween(200)) +
+                            shrinkHorizontally(
+                                animationSpec = tween(250, easing = FastOutLinearInEasing),
+                                shrinkTowards = Alignment.Start,
+                            ) +
+                            scaleOut(
+                                targetScale = 0.85f,
+                                animationSpec = tween(200),
+                            ),
+                    ) {
+                        OngoingActivityChip(
+                            model = it,
+                            iconViewStore = iconViewStore,
+                            modifier = chipModifier,
+                        )
                     }
                 }
             }

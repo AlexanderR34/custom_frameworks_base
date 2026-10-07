@@ -209,33 +209,30 @@ constructor(
         val key = "$KEY_PREFIX${newState.notificationKey}"
         val contentDescription = getContentDescription(newState.appName)
         val icon =
-            OngoingActivityChipModel.ChipIcon.StatusBarNotificationIcon(
-                newState.notificationKey,
-                contentDescription,
-            )
+            OngoingActivityChipModel.ChipIcon.SingleColorIcon(phoneIcon)
 
-        val colors = ColorsModel.AccentThemed
+        val colors = ColorsModel.DynamicThemed(0xFF1B5E20.toInt())
         val intent = newState.intent
         val instanceId = newState.notificationInstanceId
 
         val content =
             when {
-                newState.startTimeMs <= 0L -> {
-                    // If the start time is invalid, don't show a timer and show just an icon.
-                    // See b/192379214.
-                    OngoingActivityChipModel.Content.IconOnly
-                }
                 headsUpState.isShowingHeadsUpFromChipTap(
                     notificationKey = newState.notificationKey
                 ) -> {
                     // If the user tapped this chip to show the HUN, we want to just show the icon
                     // because the HUN will show the rest of the information.
-                    // Similar behavior to [NotifChipsViewModel].
                     OngoingActivityChipModel.Content.IconOnly
                 }
                 else -> {
+                    val validStartTime =
+                        if (newState.startTimeMs > 0L && newState.startTimeMs <= systemClock.currentTimeMillis()) {
+                            newState.startTimeMs
+                        } else {
+                            systemClock.currentTimeMillis()
+                        }
                     val startTimeInElapsedRealtime =
-                        newState.startTimeMs - systemClock.currentTimeMillis() +
+                        validStartTime - systemClock.currentTimeMillis() +
                             systemClock.elapsedRealtime()
                     OngoingActivityChipModel.Content.Timer(
                         value =

@@ -85,6 +85,10 @@ constructor(
                 is ChipIcon.StatusBarNotificationIcon -> {
                     HeadlineItemContent.ImageViewItem(notificationKey)
                 }
+
+                is ChipIcon.FullColorIcon -> {
+                    HeadlineItemContent.IconItem(impl)
+                }
             }
         }
 
@@ -113,7 +117,7 @@ constructor(
                     textVariants.firstOrNull()?.let { TextBasedContent.TextItem(Text.Loaded(it)) }
                 }
 
-                Content.IconOnly -> null
+                Content.IconOnly, is Content.SensorIcons -> null
             }
         }
     }

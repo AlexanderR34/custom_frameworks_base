@@ -199,6 +199,11 @@ sealed class OngoingActivityChipModel {
         data class TextVariants(val textVariants: List<String>) : Content() {
             override val logName = "TextVariants($textVariants)"
         }
+
+        /** This chip shows one or more native vector sensor icons (Camera, Mic, GPS). */
+        data class SensorIcons(val icons: List<Icon>) : Content() {
+            override val logName = "SensorIcons(count=${icons.size})"
+        }
     }
 
     /** Represents an icon to show on the chip. */
@@ -220,6 +225,15 @@ sealed class OngoingActivityChipModel {
          * UI created internally.
          */
         data class SingleColorIcon(val impl: Icon) : ChipIcon(hasEmbeddedPadding = false)
+
+        /**
+         * This icon is displayed in full color without tinting, suitable for app icons and bitmaps.
+         */
+        data class FullColorIcon(
+            val impl: Icon,
+            val isMediaArtwork: Boolean = false,
+            val artStyle: Int = 0,
+        ) : ChipIcon(hasEmbeddedPadding = false)
     }
 
     /** Defines the behavior of the chip when it is clicked. */

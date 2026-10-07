@@ -16,12 +16,16 @@
 
 package com.android.systemui.statusbar.chips.ui.compose
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -31,6 +35,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.chips.ui.model.ColorsModel
 import com.android.systemui.statusbar.chips.ui.model.OngoingActivityChipModel
@@ -136,59 +141,40 @@ fun ChipContent(
         }
 
         is OngoingActivityChipModel.Content.TextVariants -> {
-            if (android.app.Flags.metricValueAlternativeStrings()) {
-                val textVariants = viewModel.textVariants
+            val textVariants = viewModel.textVariants
 
-                BoxWithConstraints(modifier = modifier) {
-                    val horizontalPadding = startPadding + endPadding
-                    val maxWidth =
-                        minOf(
-                                with(density) { maxTextWidth.roundToPx() },
-                                (constraints.maxWidth -
-                                    with(density) { horizontalPadding.roundToPx() }),
-                            )
-                            .coerceAtLeast(constraints.minWidth)
-
-                    // Look for a text variant that fits, respecting order of preference. If none
-                    // fit, we give up and display no text.
-                    val fittingText =
-                        textVariants.firstOrNull { variant ->
-                            val result =
-                                textMeasurer.measure(
-                                    text = variant,
-                                    style = textStyle,
-                                    softWrap = false,
-                                )
-                            result.size.width <= maxWidth
-                        }
-
-                    if (fittingText != null) {
-                        Text(
-                            text = fittingText,
-                            color = textColor,
-                            style = textStyle,
-                            softWrap = false,
-                            modifier = Modifier.padding(start = startPadding, end = endPadding),
+            BoxWithConstraints(modifier = modifier) {
+                val horizontalPadding = startPadding + endPadding
+                val maxWidth =
+                    minOf(
+                            with(density) { maxTextWidth.roundToPx() },
+                            (constraints.maxWidth -
+                                with(density) { horizontalPadding.roundToPx() }),
                         )
-                    }
+                        .coerceAtLeast(constraints.minWidth)
+
+                // Look for a text variant that fits, respecting order of preference.
+                val fittingText =
+                    textVariants.firstOrNull { variant ->
+                        val result =
+                            textMeasurer.measure(
+                                text = variant,
+                                style = textStyle,
+                                softWrap = false,
+                            )
+                        result.size.width <= maxWidth
+                    } ?: textVariants.lastOrNull()
+
+                if (fittingText != null) {
+                    Text(
+                        text = fittingText,
+                        color = textColor,
+                        style = textStyle,
+                        softWrap = false,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = startPadding, end = endPadding),
+                    )
                 }
-            } else {
-                val text = viewModel.textVariants.first()
-                Text(
-                    text = text,
-                    color = textColor,
-                    style = textStyle,
-                    softWrap = false,
-                    modifier =
-                        modifier.hideTextIfDoesNotFit(
-                            text = text,
-                            textStyle = textStyle,
-                            textMeasurer = textMeasurer,
-                            maxTextWidth = maxTextWidth,
-                            startPadding = startPadding,
-                            endPadding = endPadding,
-                        ),
-                )
             }
         }
 
@@ -216,6 +202,23 @@ fun ChipContent(
                             endPadding = endPadding,
                         ),
                 )
+            }
+        }
+
+        is OngoingActivityChipModel.Content.SensorIcons -> {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = modifier.padding(start = startPadding, end = endPadding),
+            ) {
+                val iconColor = Color(colors.icon(context))
+                viewModel.icons.forEach { sensorIcon ->
+                    Icon(
+                        icon = sensorIcon,
+                        tint = iconColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
 

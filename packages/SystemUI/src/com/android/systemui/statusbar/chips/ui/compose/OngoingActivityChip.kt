@@ -21,7 +21,17 @@ import android.content.res.ColorStateList
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,12 +43,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
@@ -52,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.compose.animation.Expandable
 import com.android.compose.modifiers.thenIf
+import com.android.compose.ui.graphics.painter.rememberDrawablePainter
 import com.android.systemui.animation.Expandable
 import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.common.ui.compose.load
@@ -74,6 +90,7 @@ fun OngoingActivityChip(
             is OngoingActivityChipModel.ChipIcon.StatusBarNotificationIcon ->
                 icon.contentDescription.load()
             is OngoingActivityChipModel.ChipIcon.SingleColorIcon,
+            is OngoingActivityChipModel.ChipIcon.FullColorIcon,
             null -> null
         }
 
@@ -109,8 +126,16 @@ fun OngoingActivityChip(
                 chipSidePaddingTotal
         }
 
+    val context = LocalContext.current
+    val targetBgColor = Color(model.colors.background(context).defaultColor)
+    val animatedBgColor by animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "chipBgColor",
+    )
+
     Expandable(
-        color = Color(model.colors.background(LocalContext.current).defaultColor),
+        color = animatedBgColor,
         shape =
             RoundedCornerShape(dimensionResource(id = R.dimen.ongoing_activity_chip_corner_radius)),
         modifier =
@@ -237,6 +262,18 @@ private fun ChipIcon(
 ) {
     val context = LocalContext.current
 
+    // Hoist the infinite vinyl rotation transition to the top level so it never resets or stutters on recomposition!
+    val infiniteTransition = rememberInfiniteTransition(label = "vinylSpinTransition")
+    val vinylRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "vinylRotation",
+    )
+
     when (viewModel) {
         is OngoingActivityChipModel.ChipIcon.StatusBarNotificationIcon -> {
             check(iconViewStore != null)
@@ -249,10 +286,42 @@ private fun ChipIcon(
         is OngoingActivityChipModel.ChipIcon.SingleColorIcon -> {
             Icon(
                 icon = viewModel.impl,
-                tint = Color(colors.text(context)),
+                tint = Color(colors.icon(context)),
                 modifier =
                     modifier.size(dimensionResource(id = R.dimen.ongoing_activity_chip_icon_size)),
             )
+        }
+
+        is OngoingActivityChipModel.ChipIcon.FullColorIcon -> {
+            val iconModifier = if (viewModel.isMediaArtwork) {
+                when (viewModel.artStyle) {
+                    0 -> modifier.size(18.dp).graphicsLayer { rotationZ = vinylRotation }.clip(CircleShape)
+                    1 -> modifier.size(18.dp).clip(CircleShape)
+                    2 -> modifier.size(18.dp).clip(RoundedCornerShape(4.dp))
+                    3 -> modifier.size(18.dp) // Classic Square
+                    else -> modifier.size(18.dp)
+                }
+            } else {
+                // Normal app icons (Download, Navigation, Timer, etc.): static, clean circular
+                modifier.size(18.dp).clip(CircleShape)
+            }
+
+            // FullColorIcon must ALWAYS keep its authentic vibrant colors and never be tinted by Monet
+            val drawable = (viewModel.impl as? com.android.systemui.common.shared.model.Icon.Loaded)?.drawable
+            if (drawable != null) {
+                Image(
+                    painter = rememberDrawablePainter(drawable),
+                    contentDescription = null,
+                    modifier = iconModifier,
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    icon = viewModel.impl,
+                    tint = Color.Unspecified,
+                    modifier = iconModifier,
+                )
+            }
         }
     }
 }
@@ -266,7 +335,7 @@ private fun StatusBarIcon(
     iconFactory: () -> StatusBarIconView?,
 ) {
     val context = LocalContext.current
-    val colorTintList = ColorStateList.valueOf(colors.text(context))
+    val colorTintList = ColorStateList.valueOf(colors.icon(context))
 
     val iconSizePx =
         context.resources.getDimensionPixelSize(

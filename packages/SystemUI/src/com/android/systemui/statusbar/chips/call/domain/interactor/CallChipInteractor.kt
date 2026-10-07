@@ -28,8 +28,6 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 
@@ -46,17 +44,6 @@ constructor(
 
     val ongoingCallState: StateFlow<OngoingCallModel> =
         ongoingCallInteractor.ongoingCallState
-            .map { state ->
-                if (state is OngoingCallModel.InCall && state.requestedPromotion) {
-                    // If this notification requested promotion, then the promoted notification
-                    // chips will handle everything and we don't ever need to show a call chip. See
-                    // b/414830065.
-                    OngoingCallModel.NoCall
-                } else {
-                    state
-                }
-            }
-            .distinctUntilChanged()
             .onEach {
                 logger.d({ "Call chip state updated: newState=$str1" }) { str1 = it.logString() }
             }
