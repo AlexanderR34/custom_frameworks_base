@@ -212,6 +212,7 @@ public class MediaControlPanel {
     private final KeyguardStateController mKeyguardStateController;
     private final ActivityIntentHelper mActivityIntentHelper;
     private final NotificationLockscreenUserManager mLockscreenUserManager;
+    private final Lazy<com.android.systemui.statusbar.lyrics.LockscreenLyricsController> mLockscreenLyricsControllerLazy;
 
     // Used for logging.
     private MediaUiEventLogger mLogger;
@@ -288,7 +289,8 @@ public class MediaControlPanel {
             CommunalSceneInteractor communalSceneInteractor,
             NotificationLockscreenUserManager lockscreenUserManager,
             GlobalSettings globalSettings,
-            CommunalTransitionAnimatorController.Factory communalAnimationControllerFactory
+            CommunalTransitionAnimatorController.Factory communalAnimationControllerFactory,
+            Lazy<com.android.systemui.statusbar.lyrics.LockscreenLyricsController> lockscreenLyricsControllerLazy
     ) {
         mContext = context;
         mBackgroundExecutor = backgroundExecutor;
@@ -307,6 +309,7 @@ public class MediaControlPanel {
         mLockscreenUserManager = lockscreenUserManager;
         mCommunalSceneInteractor = communalSceneInteractor;
         mCommunalAnimationControllerFactory = communalAnimationControllerFactory;
+        mLockscreenLyricsControllerLazy = lockscreenLyricsControllerLazy;
 
         mSeekBarViewModel.setLogSeek(() -> {
             if (mPackageName != null && mInstanceId != null) {
@@ -518,12 +521,14 @@ public class MediaControlPanel {
 
         // Click action
         PendingIntent clickIntent = data.getClickIntent();
-        if (clickIntent != null) {
-            mMediaViewHolder.getPlayer().setOnClickListener(v -> {
-                if (mFalsingManager.isFalseTap(FalsingManager.LOW_PENALTY)) return;
-                if (mMediaViewController.isGutsVisible()) return;
-                mLogger.logTapContentView(mUid, mPackageName, mInstanceId);
+        mMediaViewHolder.getPlayer().setOnClickListener(v -> {
+            if (mFalsingManager.isFalseTap(FalsingManager.LOW_PENALTY)) return;
+            if (mMediaViewController.isGutsVisible()) return;
+            mLogger.logTapContentView(mUid, mPackageName, mInstanceId);
 
+
+
+            if (clickIntent != null) {
                 boolean showOverLockscreen = mKeyguardStateController.isShowing()
                         && mActivityIntentHelper.wouldPendingShowOverLockscreen(clickIntent,
                         mLockscreenUserManager.getCurrentUserId());
@@ -540,6 +545,28 @@ public class MediaControlPanel {
                     mActivityStarter.postStartActivityDismissingKeyguard(clickIntent,
                             buildLaunchAnimatorController(mMediaViewHolder.getPlayer()));
                 }
+            }
+        });
+
+        if (clickIntent != null) {
+            mMediaViewHolder.getPlayer().setOnLongClickListener(v -> {
+                boolean showOverLockscreen = mKeyguardStateController.isShowing()
+                        && mActivityIntentHelper.wouldPendingShowOverLockscreen(clickIntent,
+                        mLockscreenUserManager.getCurrentUserId());
+                if (showOverLockscreen) {
+                    mActivityStarter.startPendingIntentMaybeDismissingKeyguard(
+                            clickIntent,
+                            /* dismissShade = */ true,
+                            /* intentSentUiThreadCallback = */ null,
+                            buildLaunchAnimatorController(mMediaViewHolder.getPlayer()),
+                            /* fillIntent = */ null,
+                            /* extraOptions = */ null,
+                            /* customMessage */ null);
+                } else {
+                    mActivityStarter.postStartActivityDismissingKeyguard(clickIntent,
+                            buildLaunchAnimatorController(mMediaViewHolder.getPlayer()));
+                }
+                return true;
             });
         }
 

@@ -687,14 +687,28 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
         mutableStateOf(wifiManager?.isWifiEnabled ?: false)
     }
     var isDataEnabled by remember {
-        mutableStateOf(telephonyManager?.isDataEnabled ?: false)
+        val globalOn = try {
+            android.provider.Settings.Global.getInt(
+                context.contentResolver,
+                android.provider.Settings.Global.MOBILE_DATA,
+                0
+            ) == 1
+        } catch (e: Exception) { false }
+        mutableStateOf(globalOn || (telephonyManager?.isDataEnabled ?: false))
     }
 
     DisposableEffect(context, wifiManager, telephonyManager) {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
                 isWifiEnabled = wifiManager?.isWifiEnabled ?: false
-                isDataEnabled = telephonyManager?.isDataEnabled ?: false
+                val globalOn = try {
+                    android.provider.Settings.Global.getInt(
+                        (c ?: context).contentResolver,
+                        android.provider.Settings.Global.MOBILE_DATA,
+                        0
+                    ) == 1
+                } catch (e: Exception) { false }
+                isDataEnabled = globalOn || (telephonyManager?.isDataEnabled ?: false)
             }
         }
         val filter = android.content.IntentFilter().apply {
@@ -715,370 +729,743 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
     val navBarStart = WindowInsets.navigationBars.asPaddingValues().calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
     val navBarEnd = WindowInsets.navigationBars.asPaddingValues().calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
 
-    if (isLandscape) {
-        // Authentic HyperOS Landscape 2-Column Layout (Matching Image 4)
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(start = navBarStart + 16.dp, end = navBarEnd + 16.dp, top = 4.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            // LEFT COLUMN: Circular Quick Settings Tiles Grid (4 columns x 3 rows) + Editar button
-            Column(
+    var showMobileDataDialog by remember {
+        mutableStateOf(false)
+    }
+
+    Box(modifier = modifier) {
+        if (isLandscape) {
+            // Authentic HyperOS Landscape 2-Column Layout (Matching Image 4)
+            Row(
                 modifier = Modifier
-                    .weight(1.05f)
-                    .padding(horizontal = 6.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .padding(start = navBarStart + 16.dp, end = navBarEnd + 16.dp, top = 4.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                HyperOSTilesGrid(
-                    tiles = gridTiles,
-                    view = view,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                VerticalSeparator(12.dp)
-
-                HyperOSEditPill(view = view, qsContainerViewModel = qsContainerViewModel)
-
-                val buildNumberViewModel = rememberViewModel("QuickSettingsShadeOverlay.BuildNumber") {
-                    buildNumberViewModelFactory.create()
-                }
-                if (buildNumberViewModel.buildNumber != null) {
-                    VerticalSeparator(QuickSettingsShade.Dimensions.ShortPadding)
-                    BuildNumber(
-                        viewModel = buildNumberViewModel,
-                        modifier = Modifier.align(Alignment.Start).padding(start = 14.dp),
-                    )
-                }
-
-                VerticalSeparator(16.dp)
-            }
-
-            // RIGHT COLUMN: Top Dual Connectivity (Wi-Fi & Data) + Bottom (Media + Brightness + Volume)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 1. Top Dual Connectivity Cards (Wi-Fi and Mobile Data)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                // LEFT COLUMN: Circular Quick Settings Tiles Grid (4 columns x 3 rows) + Editar button
+                Column(
+                    modifier = Modifier
+                        .weight(1.05f)
+                        .padding(horizontal = 6.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (internetTile != null) {
-                        val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
-                        val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
-                        val wifiSubtitle = when {
-                            !isWifiActive -> "Desactivado"
-                            tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                            else -> "Activado"
-                        }
-                        HyperOSConnectivityCard(
-                            title = "Wi-Fi",
-                            subtitle = wifiSubtitle,
-                            icon = tileState.icon,
-                            iconSupplier = tileState.iconSupplier,
-                            fallbackIconRes = R.drawable.vd_wifi,
-                            isActive = isWifiActive,
-                            onClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                val targetWifi = !isWifiActive
-                                isWifiEnabled = targetWifi
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    try {
-                                        val wm = wifiManager ?: context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
-                                        wm?.setWifiEnabled(targetWifi)
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("HyperOS", "Error toggling wifi", e)
-                                    }
-                                }
-                            },
-                            onLongClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                internetTile.mainClick(internetTile.expandable)
-                            },
-                            modifier = Modifier.weight(1f)
+                    HyperOSTilesGrid(
+                        tiles = gridTiles,
+                        view = view,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    VerticalSeparator(12.dp)
+
+                    HyperOSEditPill(view = view, qsContainerViewModel = qsContainerViewModel)
+
+                    val buildNumberViewModel = rememberViewModel("QuickSettingsShadeOverlay.BuildNumber") {
+                        buildNumberViewModelFactory.create()
+                    }
+                    if (buildNumberViewModel.buildNumber != null) {
+                        VerticalSeparator(QuickSettingsShade.Dimensions.ShortPadding)
+                        BuildNumber(
+                            viewModel = buildNumberViewModel,
+                            modifier = Modifier.align(Alignment.Start).padding(start = 14.dp),
                         )
                     }
-                    if (cellTile != null) {
-                        val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
-                        val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
-                        val cellSubtitle = when {
-                            !isCellActive -> "Desactivado"
-                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                            else -> "Activado"
-                        }
-                        HyperOSConnectivityCard(
-                            title = tileState.label?.toString() ?: "Datos móviles",
-                            subtitle = cellSubtitle,
-                            icon = tileState.icon,
-                            iconSupplier = tileState.iconSupplier,
-                            fallbackIconRes = R.drawable.ic_swap_vert,
-                            isActive = isCellActive,
-                            onClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                val targetData = !isCellActive
-                                isDataEnabled = targetData
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    try {
-                                        val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                        if (tm != null) {
-                                            tm.setDataEnabledForReason(
-                                                android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                targetData
-                                            )
+
+                    VerticalSeparator(16.dp)
+                }
+
+                // RIGHT COLUMN: Top Dual Connectivity (Wi-Fi & Data) + Bottom (Media + Brightness + Volume)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 1. Top Dual Connectivity Cards (Wi-Fi and Mobile Data)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (internetTile != null) {
+                            val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
+                            val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
+                            val wifiSubtitle = when {
+                                !isWifiActive -> "Desactivado"
+                                tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                                !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                                else -> "Activado"
+                            }
+                            HyperOSConnectivityCard(
+                                title = "Wi-Fi",
+                                subtitle = wifiSubtitle,
+                                icon = tileState.icon,
+                                iconSupplier = tileState.iconSupplier,
+                                fallbackIconRes = R.drawable.vd_wifi,
+                                isActive = isWifiActive,
+                                onClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                    val targetWifi = !isWifiActive
+                                    isWifiEnabled = targetWifi
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        try {
+                                            val wm = wifiManager ?: context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+                                            wm?.setWifiEnabled(targetWifi)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("HyperOS", "Error toggling wifi", e)
                                         }
-                                    } catch (e: Exception) {
+                                    }
+                                },
+                                onLongClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                    internetTile.mainClick(internetTile.expandable)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (cellTile != null) {
+                            val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
+                            val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                            val cellSubtitle = when {
+                                !isCellActive -> "Desactivado"
+                                !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                                else -> "Activado"
+                            }
+                            HyperOSConnectivityCard(
+                                title = tileState.label?.toString() ?: "Datos móviles",
+                                subtitle = cellSubtitle,
+                                icon = tileState.icon,
+                                iconSupplier = tileState.iconSupplier,
+                                fallbackIconRes = R.drawable.ic_swap_vert,
+                                isActive = isCellActive,
+                                onClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                    val targetData = !isCellActive
+                                    isDataEnabled = targetData
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                         try {
                                             val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                            val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
-                                            val subTm = tm?.createForSubscriptionId(subId)
-                                            subTm?.setDataEnabledForReason(
-                                                android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                targetData
-                                            )
-                                        } catch (e2: Exception) {
-                                            android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
+                                            if (tm != null) {
+                                                tm.setDataEnabledForReason(
+                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                                                    targetData
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            try {
+                                                val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
+                                                val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+                                                val subTm = tm?.createForSubscriptionId(subId)
+                                                subTm?.setDataEnabledForReason(
+                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                                                    targetData
+                                                )
+                                            } catch (e2: Exception) {
+                                                android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            onLongClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                try {
-                                    val roamingIntent = android.content.Intent(android.provider.Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
-                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(roamingIntent)
-                                } catch (e: Exception) {
-                                    cellTile.settingsClick(cellTile.expandable)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
+                                },
+                                onLongClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                    showMobileDataDialog = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    VerticalSeparator(10.dp)
+
+                    // 2. Middle Row: HyperOS Media Card (Large) + Vertical Brightness & Volume Sliders (Slim)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HyperOSMediaCard(
+                            viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
+                            view = view,
+                            modifier = Modifier
+                                .weight(2.2f)
+                                .fillMaxHeight()
+                        )
+
+                        HyperOSVerticalBrightnessSlider(
+                            brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
+                            view = view,
+                            modifier = Modifier
+                                .weight(0.85f)
+                                .fillMaxHeight()
+                        )
+
+                        HyperOSVerticalVolumeSlider(
+                            volumeSliderViewModel = volumeSliderViewModel,
+                            audioManager = audioManager,
+                            view = view,
+                            modifier = Modifier
+                                .weight(0.85f)
+                                .fillMaxHeight()
                         )
                     }
                 }
-
-                VerticalSeparator(10.dp)
-
-                // 2. Middle Row: HyperOS Media Card (Large) + Vertical Brightness & Volume Sliders (Slim)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            }
+        } else {
+            // Portrait Layout (Matching Image 3)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    HyperOSMediaCard(
-                        viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
-                        view = view,
+                    // 1. Top Dual Connectivity Cards (Wi-Fi and Mobile Data)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (internetTile != null) {
+                            val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
+                            val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
+                            val wifiSubtitle = when {
+                                !isWifiActive -> "Desactivado"
+                                tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                                !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                                else -> "Activado"
+                            }
+                            HyperOSConnectivityCard(
+                                title = "Wi-Fi",
+                                subtitle = wifiSubtitle,
+                                icon = tileState.icon,
+                                iconSupplier = tileState.iconSupplier,
+                                fallbackIconRes = R.drawable.vd_wifi,
+                                isActive = isWifiActive,
+                                onClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                    val targetWifi = !isWifiActive
+                                    isWifiEnabled = targetWifi
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        try {
+                                            val wm = wifiManager ?: context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+                                            wm?.setWifiEnabled(targetWifi)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("HyperOS", "Error toggling wifi", e)
+                                        }
+                                    }
+                                },
+                                onLongClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                    internetTile.mainClick(internetTile.expandable)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (cellTile != null) {
+                            val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
+                            val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                            val cellSubtitle = when {
+                                !isCellActive -> "Desactivado"
+                                !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
+                                else -> "Activado"
+                            }
+                            HyperOSConnectivityCard(
+                                title = tileState.label?.toString() ?: "Datos móviles",
+                                subtitle = cellSubtitle,
+                                icon = tileState.icon,
+                                iconSupplier = tileState.iconSupplier,
+                                fallbackIconRes = R.drawable.ic_swap_vert,
+                                isActive = isCellActive,
+                                onClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                    val targetData = !isCellActive
+                                    isDataEnabled = targetData
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        try {
+                                            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
+                                            if (tm != null) {
+                                                tm.setDataEnabledForReason(
+                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                                                    targetData
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            try {
+                                                val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
+                                                val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+                                                val subTm = tm?.createForSubscriptionId(subId)
+                                                subTm?.setDataEnabledForReason(
+                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                                                    targetData
+                                                )
+                                            } catch (e2: Exception) {
+                                                android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
+                                            }
+                                        }
+                                    }
+                                },
+                                onLongClick = {
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                    showMobileDataDialog = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    VerticalSeparator(10.dp)
+
+                    // 2. Middle Row: HyperOS Large Media Card + Vertical Brightness Slider + Vertical Volume Slider
+                    Row(
                         modifier = Modifier
-                            .weight(2.2f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
+                            .height(185.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HyperOSMediaCard(
+                            viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
+                            view = view,
+                            modifier = Modifier
+                                .weight(2f)
+                                .fillMaxHeight()
+                        )
+
+                        HyperOSVerticalBrightnessSlider(
+                            brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
+                            view = view,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+
+                        HyperOSVerticalVolumeSlider(
+                            volumeSliderViewModel = volumeSliderViewModel,
+                            audioManager = audioManager,
+                            view = view,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                    }
+
+                    VerticalSeparator(14.dp)
+
+                    // 3. Circular Quick Settings Tiles Grid (12 buttons / 4 columns)
+                    HyperOSTilesGrid(
+                        tiles = gridTiles,
+                        view = view,
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    HyperOSVerticalBrightnessSlider(
-                        brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
-                        view = view,
-                        modifier = Modifier
-                            .weight(0.85f)
-                            .fillMaxHeight()
-                    )
+                    VerticalSeparator(14.dp)
 
-                    HyperOSVerticalVolumeSlider(
-                        volumeSliderViewModel = volumeSliderViewModel,
-                        audioManager = audioManager,
-                        view = view,
-                        modifier = Modifier
-                            .weight(0.85f)
-                            .fillMaxHeight()
-                    )
+                    // 4. Centered "Editar" Pill Button
+                    HyperOSEditPill(view = view, qsContainerViewModel = qsContainerViewModel)
+
+                    val buildNumberViewModel = rememberViewModel("QuickSettingsShadeOverlay.BuildNumber") {
+                        buildNumberViewModelFactory.create()
+                    }
+                    if (buildNumberViewModel.buildNumber != null) {
+                        VerticalSeparator(QuickSettingsShade.Dimensions.ShortPadding)
+                        BuildNumber(
+                            viewModel = buildNumberViewModel,
+                            modifier = Modifier.align(Alignment.Start).padding(start = 14.dp),
+                        )
+                    }
+
+                    VerticalSeparator(16.dp)
                 }
             }
         }
-    } else {
-        // Portrait Layout (Matching Image 3)
+
+        if (showMobileDataDialog) {
+            BackHandler(enabled = true) {
+                showMobileDataDialog = false
+            }
+            HyperOSMobileDataSelectorDialog(
+                isDataEnabled = isDataEnabled,
+                onToggleData = { targetData ->
+                    isDataEnabled = targetData
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        try {
+                            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
+                            val currentSubId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+                            val subTm = tm?.createForSubscriptionId(currentSubId) ?: tm
+                            subTm?.setDataEnabledForReason(
+                                android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                                targetData
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.e("HyperOS", "Error toggling mobile data from dialog", e)
+                        }
+                    }
+                },
+                onDismiss = { showMobileDataDialog = false },
+                view = view
+            )
+        }
+    }
+}
+
+@Composable
+private fun HyperOSMobileDataSelectorDialog(
+    isDataEnabled: Boolean,
+    onToggleData: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    view: android.view.View,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val subscriptionManager = remember(context) {
+        context.getSystemService(android.telephony.SubscriptionManager::class.java)
+    }
+    val telephonyManager = remember(context) {
+        context.getSystemService(android.telephony.TelephonyManager::class.java)
+    }
+
+    var activeSubs by remember {
+        mutableStateOf(
+            try {
+                subscriptionManager?.activeSubscriptionInfoList ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        )
+    }
+    var defaultDataSubId by remember {
+        mutableStateOf(android.telephony.SubscriptionManager.getDefaultDataSubscriptionId())
+    }
+
+    var localDataEnabled by remember {
+        mutableStateOf(
+            try {
+                val globalSetting = android.provider.Settings.Global.getInt(
+                    context.contentResolver,
+                    android.provider.Settings.Global.MOBILE_DATA,
+                    if (isDataEnabled) 1 else 0
+                ) == 1
+                globalSetting || isDataEnabled
+            } catch (e: Exception) {
+                isDataEnabled
+            }
+        )
+    }
+
+    DisposableEffect(context, subscriptionManager) {
+        val listener = object : android.telephony.SubscriptionManager.OnSubscriptionsChangedListener() {
+            override fun onSubscriptionsChanged() {
+                try {
+                    activeSubs = subscriptionManager?.activeSubscriptionInfoList ?: emptyList()
+                    defaultDataSubId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+                } catch (e: Exception) {}
+            }
+        }
+        subscriptionManager?.addOnSubscriptionsChangedListener(context.mainExecutor, listener)
+        onDispose {
+            try {
+                subscriptionManager?.removeOnSubscriptionsChangedListener(listener)
+            } catch (e: Exception) {}
+        }
+    }
+
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 6.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .fillMaxWidth(if (isLandscape) 0.52f else 0.92f)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color(0xFF222327))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { /* Consume touch inside dialog */ }
+                )
+                .padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
+            // Header: "Datos móviles" + Switch
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Top Dual Connectivity Cards (Wi-Fi and Mobile Data)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (internetTile != null) {
-                        val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
-                        val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
-                        val wifiSubtitle = when {
-                            !isWifiActive -> "Desactivado"
-                            tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                            else -> "Activado"
-                        }
-                        HyperOSConnectivityCard(
-                            title = "Wi-Fi",
-                            subtitle = wifiSubtitle,
-                            icon = tileState.icon,
-                            iconSupplier = tileState.iconSupplier,
-                            fallbackIconRes = R.drawable.vd_wifi,
-                            isActive = isWifiActive,
-                            onClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                val targetWifi = !isWifiActive
-                                isWifiEnabled = targetWifi
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    try {
-                                        val wm = wifiManager ?: context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
-                                        wm?.setWifiEnabled(targetWifi)
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("HyperOS", "Error toggling wifi", e)
-                                    }
-                                }
-                            },
-                            onLongClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                internetTile.mainClick(internetTile.expandable)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (cellTile != null) {
-                        val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
-                        val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
-                        val cellSubtitle = when {
-                            !isCellActive -> "Desactivado"
-                            !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                            else -> "Activado"
-                        }
-                        HyperOSConnectivityCard(
-                            title = tileState.label?.toString() ?: "Datos móviles",
-                            subtitle = cellSubtitle,
-                            icon = tileState.icon,
-                            iconSupplier = tileState.iconSupplier,
-                            fallbackIconRes = R.drawable.ic_swap_vert,
-                            isActive = isCellActive,
-                            onClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                val targetData = !isCellActive
-                                isDataEnabled = targetData
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    try {
-                                        val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                        if (tm != null) {
-                                            tm.setDataEnabledForReason(
-                                                android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                targetData
-                                            )
-                                        }
-                                    } catch (e: Exception) {
-                                        try {
-                                            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                            val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
-                                            val subTm = tm?.createForSubscriptionId(subId)
-                                            subTm?.setDataEnabledForReason(
-                                                android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                targetData
-                                            )
-                                        } catch (e2: Exception) {
-                                            android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
-                                        }
-                                    }
-                                }
-                            },
-                            onLongClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                try {
-                                    val roamingIntent = android.content.Intent(android.provider.Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
-                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(roamingIntent)
-                                } catch (e: Exception) {
-                                    cellTile.settingsClick(cellTile.expandable)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                VerticalSeparator(10.dp)
-
-                // 2. Middle Row: HyperOS Large Media Card + Vertical Brightness Slider + Vertical Volume Slider
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(185.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    HyperOSMediaCard(
-                        viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
-                        view = view,
-                        modifier = Modifier
-                            .weight(2f)
-                            .fillMaxHeight()
+                Text(
+                    text = "Datos móviles",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 20.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = Color.White
                     )
-
-                    HyperOSVerticalBrightnessSlider(
-                        brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
-                        view = view,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-
-                    HyperOSVerticalVolumeSlider(
-                        volumeSliderViewModel = volumeSliderViewModel,
-                        audioManager = audioManager,
-                        view = view,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-                }
-
-                VerticalSeparator(14.dp)
-
-                // 3. Circular Quick Settings Tiles Grid (12 buttons / 4 columns)
-                HyperOSTilesGrid(
-                    tiles = gridTiles,
-                    view = view,
-                    modifier = Modifier.fillMaxWidth()
                 )
 
-                VerticalSeparator(14.dp)
+                HyperOSSwitch(
+                    checked = localDataEnabled,
+                    onCheckedChange = { checked ->
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        localDataEnabled = checked
+                        onToggleData(checked)
+                    }
+                )
+            }
 
-                // 4. Centered "Editar" Pill Button
-                HyperOSEditPill(view = view, qsContainerViewModel = qsContainerViewModel)
-
-                val buildNumberViewModel = rememberViewModel("QuickSettingsShadeOverlay.BuildNumber") {
-                    buildNumberViewModelFactory.create()
-                }
-                if (buildNumberViewModel.buildNumber != null) {
-                    VerticalSeparator(QuickSettingsShade.Dimensions.ShortPadding)
-                    BuildNumber(
-                        viewModel = buildNumberViewModel,
-                        modifier = Modifier.align(Alignment.Start).padding(start = 14.dp),
+            // SIM Cards List (Material Expressive 3 Cards)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (activeSubs.isEmpty()) {
+                    HyperOSSimCardItem(
+                        slotIndex = 0,
+                        carrierName = "SIM 1",
+                        phoneNumber = null,
+                        isSelected = true,
+                        onClick = {}
                     )
-                }
+                } else {
+                    activeSubs.forEach { sub ->
+                        val isSelected = (sub.subscriptionId == defaultDataSubId)
+                        val carrierName = sub.carrierName?.toString()?.takeIf { it.isNotBlank() }
+                            ?: sub.displayName?.toString()?.takeIf { it.isNotBlank() }
+                            ?: "SIM ${sub.simSlotIndex + 1}"
+                        val number = sub.number?.takeIf { it.isNotBlank() }
 
-                VerticalSeparator(16.dp)
+                        HyperOSSimCardItem(
+                            slotIndex = sub.simSlotIndex,
+                            carrierName = carrierName,
+                            phoneNumber = number,
+                            isSelected = isSelected,
+                            onClick = {
+                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                if (!isSelected) {
+                                    val wasDataEnabled = localDataEnabled
+                                    defaultDataSubId = sub.subscriptionId
+                                    localDataEnabled = wasDataEnabled
+                                    onToggleData(wasDataEnabled)
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        try {
+                                            subscriptionManager?.setDefaultDataSubId(sub.subscriptionId)
+                                            try {
+                                                android.provider.Settings.Global.putInt(
+                                                    context.contentResolver,
+                                                    "user_preferred_data_sub",
+                                                    sub.subscriptionId
+                                                )
+                                                android.provider.Settings.Global.putInt(
+                                                    context.contentResolver,
+                                                    android.provider.Settings.Global.MOBILE_DATA,
+                                                    if (wasDataEnabled) 1 else 0
+                                                )
+                                            } catch (e: Exception) {}
+
+                                            if (wasDataEnabled) {
+                                                telephonyManager?.createForSubscriptionId(sub.subscriptionId)?.setDataEnabledForReason(
+                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                                                    true
+                                                )
+                                            }
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("HyperOS", "Error setting default data sub", e)
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // "Más ajustes" Material 3 Tonal Button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xFF33353A))
+                    .clickable {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_NETWORK_OPERATOR_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            try {
+                                 val intent = Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                            } catch (e2: Exception) {}
+                        }
+                        onDismiss()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Más ajustes",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 15.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                )
             }
         }
     }
 }
 
+@Composable
+private fun HyperOSSimCardItem(
+    slotIndex: Int,
+    carrierName: String,
+    phoneNumber: String?,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val backgroundColor = if (isSelected) Color(0xFFFFFFFF) else Color(0xFF2E3035)
+    val titleColor = if (isSelected) Color(0xFF1C1B1F) else Color(0xFFE6E1E5)
+    val subtitleColor = if (isSelected) Color(0xFF49454F) else Color(0xFF938F99)
+
+    // SIM 1 is Green (#00C853), SIM 2 is Blue (#2979FF)
+    val badgeBgColor = when (slotIndex) {
+        0 -> Color(0xFF00C853) // SIM 1: Green
+        1 -> Color(0xFF2979FF) // SIM 2: Blue
+        else -> Color(0xFFFF9100) // SIM 3+: Amber
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(backgroundColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            // SIM Slot Badge (Icon with cut-corner SIM card shape + slot number)
+            Box(
+                modifier = Modifier
+                    .size(26.dp, 30.dp)
+                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 9.dp, bottomStart = 5.dp, bottomEnd = 5.dp))
+                    .background(badgeBgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${slotIndex + 1}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 13.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = Color.White
+                    )
+                )
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = carrierName,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 16.sp,
+                        fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        color = titleColor
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!phoneNumber.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = phoneNumber,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 13.sp,
+                            color = subtitleColor
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2979FF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HyperOSSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) Color(0xFF007AFF) else Color(0xFF48484A),
+        animationSpec = tween(durationMillis = 200)
+    )
+    val thumbOffset by animateFloatAsState(
+        targetValue = if (checked) 22f else 2f,
+        animationSpec = tween(durationMillis = 200)
+    )
+
+    Box(
+        modifier = Modifier
+            .size(50.dp, 30.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(trackColor)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onCheckedChange(!checked) }
+            )
+            .padding(vertical = 2.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset.dp)
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+        )
+    }
+}
 
 @Composable
 private fun HyperOSMediaCard(
@@ -1628,12 +2015,151 @@ private fun HyperOSEditPill(
     qsContainerViewModel: QuickSettingsContainerViewModel,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val privacyController = remember {
+        try { Dependency.get(com.android.systemui.privacy.PrivacyItemController::class.java) } catch (e: Exception) { null }
+    }
+    var privacyItems by remember { mutableStateOf(privacyController?.privacyList ?: emptyList()) }
+
+    androidx.compose.runtime.DisposableEffect(privacyController) {
+        if (privacyController == null) return@DisposableEffect onDispose {}
+        val callback = object : com.android.systemui.privacy.PrivacyItemController.Callback {
+            override fun onPrivacyItemsChanged(items: List<com.android.systemui.privacy.PrivacyItem>) {
+                privacyItems = items
+            }
+        }
+        privacyController.addCallback(callback)
+        privacyItems = privacyController.privacyList
+        onDispose {
+            privacyController.removeCallback(callback)
+        }
+    }
+
+    val activePrivacyItems = remember(privacyItems) {
+        privacyItems.filter { !it.paused && (
+            it.privacyType == com.android.systemui.privacy.PrivacyType.TYPE_CAMERA ||
+            it.privacyType == com.android.systemui.privacy.PrivacyType.TYPE_MICROPHONE ||
+            it.privacyType == com.android.systemui.privacy.PrivacyType.TYPE_LOCATION
+        )}
+    }
+
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (activePrivacyItems.isNotEmpty()) {
+            val hasMic = activePrivacyItems.any { it.privacyType == com.android.systemui.privacy.PrivacyType.TYPE_MICROPHONE }
+            val hasCam = activePrivacyItems.any { it.privacyType == com.android.systemui.privacy.PrivacyType.TYPE_CAMERA }
+            val hasLocation = activePrivacyItems.any { it.privacyType == com.android.systemui.privacy.PrivacyType.TYPE_LOCATION }
+
+            val primaryItem = activePrivacyItems.first()
+            val pm = context.packageManager
+            val appInfo = remember(primaryItem.application.packageName) {
+                try { pm.getApplicationInfo(primaryItem.application.packageName, 0) } catch (e: Exception) { null }
+            }
+            val appName = remember(appInfo, primaryItem) {
+                appInfo?.let { pm.getApplicationLabel(it).toString() } ?: primaryItem.application.packageName
+            }
+            val appIconDrawable = remember(appInfo) {
+                appInfo?.let { pm.getApplicationIcon(it) }
+            }
+            val appIconBitmap = remember(appIconDrawable) {
+                appIconDrawable?.let { d ->
+                    try { d.toBitmap(48, 48).asImageBitmap() } catch (e: Exception) { null }
+                }
+            }
+
+            fun getPrivacyCustomColor(settingKey: String, defaultColor: Color): Color {
+                val hex = try {
+                    android.provider.Settings.System.getString(context.contentResolver, settingKey)?.trim()
+                } catch (e: Exception) {
+                    null
+                }
+                if (!hex.isNullOrEmpty()) {
+                    try {
+                        val formatted = if (hex.startsWith("#")) hex else "#$hex"
+                        return Color(android.graphics.Color.parseColor(formatted))
+                    } catch (e: Exception) {}
+                }
+                return defaultColor
+            }
+
+            val accentColor = when {
+                hasCam && hasMic && hasLocation -> getPrivacyCustomColor("status_bar_chips_color_all", Color(0xFFFFB300))
+                (hasCam || hasMic) && hasLocation -> getPrivacyCustomColor("status_bar_chips_color_combo", Color(0xFF00F5D4))
+                hasLocation && !hasCam && !hasMic -> getPrivacyCustomColor("status_bar_chips_color_location", Color(0xFF0091EA))
+                else -> getPrivacyCustomColor("status_bar_chips_color_cam_mic", Color(0xFF00E676))
+            }
+            val bgColor = accentColor.copy(alpha = 0.20f)
+
+            val sensorIcons = when {
+                hasCam && hasMic && hasLocation -> "📷 🎙️ 📍"
+                hasCam && hasMic -> "📷 🎙️"
+                hasCam && hasLocation -> "📷 📍"
+                hasMic && hasLocation -> "🎙️ 📍"
+                hasCam -> "📷"
+                hasMic -> "🎙️"
+                hasLocation -> "📍"
+                else -> ""
+            }
+
+            val privacyInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val isPrivacyPressed by privacyInteractionSource.collectIsPressedAsState()
+            val privacyScale by animateFloatAsState(
+                targetValue = if (isPrivacyPressed) 0.92f else 1.0f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                ),
+                label = "PrivacyPillScale"
+            )
+
+            Row(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = privacyScale
+                        scaleY = privacyScale
+                    }
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(bgColor)
+                    .clickable(
+                        interactionSource = privacyInteractionSource,
+                        indication = null
+                    ) {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        try {
+                            Dependency.get(com.android.systemui.privacy.PrivacyDialogControllerV2::class.java).showDialog(context)
+                        } catch (e: Exception) {
+                            try {
+                                Dependency.get(com.android.systemui.privacy.PrivacyDialogController::class.java).showDialog(context)
+                            } catch (e2: Exception) {}
+                        }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (appIconBitmap != null) {
+                    Image(
+                        bitmap = appIconBitmap,
+                        contentDescription = appName,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                    )
+                }
+                Text(
+                    text = sensorIcons,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+
         val editInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
         val isEditPressed by editInteractionSource.collectIsPressedAsState()
         val editScale by animateFloatAsState(
@@ -1660,7 +2186,7 @@ private fun HyperOSEditPill(
                     view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     qsContainerViewModel.editModeViewModel.startEditing()
                 }
-                .padding(horizontal = 28.dp, vertical = 8.dp),
+                .padding(horizontal = 24.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(

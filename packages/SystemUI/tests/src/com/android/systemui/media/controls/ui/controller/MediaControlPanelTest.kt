@@ -219,6 +219,7 @@ public class MediaControlPanelTest : SysuiTestCase() {
         CommunalTransitionAnimatorController.Factory
 
     @Mock private lateinit var globalSettings: GlobalSettings
+    @Mock private lateinit var lockscreenLyricsController: com.android.systemui.statusbar.lyrics.LockscreenLyricsController
 
     private val intent = Intent().apply { setFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
     private val pendingIntent =
@@ -270,6 +271,7 @@ public class MediaControlPanelTest : SysuiTestCase() {
                     lockscreenUserManager,
                     globalSettings,
                     communalAnimationControllerFactory,
+                    Lazy { lockscreenLyricsController },
                 ) {
                 override fun loadAnimator(
                     animId: Int,
