@@ -797,7 +797,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         tiles = gridTiles,
                         view = view,
                         showLabels = showTileLabels,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().element(QuickSettingsShade.Elements.TilesGrid)
                     )
 
                     VerticalSeparator(12.dp)
@@ -1113,7 +1113,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         tiles = gridTiles,
                         view = view,
                         showLabels = showTileLabels,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().element(QuickSettingsShade.Elements.TilesGrid)
                     )
 
                     VerticalSeparator(14.dp)
@@ -3541,6 +3541,7 @@ object QuickSettingsShade {
         val StatusBar = ElementKey("QuickSettingsShadeOverlayStatusBar")
         val Panel = ElementKey("QuickSettingsShadeOverlayPanel")
         val Header = ElementKey("QuickSettingsShadeOverlayHeader")
+        val TilesGrid = ElementKey("QuickSettingsShadeOverlayTilesGrid")
     }
 
     object Dimensions {

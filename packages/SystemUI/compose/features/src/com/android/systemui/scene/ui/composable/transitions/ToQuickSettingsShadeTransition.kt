@@ -66,6 +66,9 @@ fun TransitionBuilder.notificationsShadeToQuickSettingsShadeTransition(
     translate(QuickSettingsShade.Elements.Panel, Edge.End)
     translate(QuickSettingsShade.Elements.StatusBar, Edge.End)
 
+    // Staggered slide for Quick Settings tiles grid
+    translate(QuickSettingsShade.Elements.TilesGrid, Edge.End)
+
     // Silky smooth cross-fade with graceful overlap
     fractionRange(end = 0.55f, easing = Easings.StandardAccelerate) {
         fade(NotificationsShade.Elements.Panel)
@@ -74,6 +77,9 @@ fun TransitionBuilder.notificationsShadeToQuickSettingsShadeTransition(
     fractionRange(start = 0.25f, easing = Easings.StandardDecelerate) {
         fade(QuickSettingsShade.Elements.Panel)
         fade(QuickSettingsShade.Elements.StatusBar)
+    }
+    fractionRange(start = 0.35f, easing = Easings.StandardDecelerate) {
+        fade(QuickSettingsShade.Elements.TilesGrid)
     }
 }
 

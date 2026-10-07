@@ -975,11 +975,12 @@ private fun HyperOSNotificationsHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "$dateStr $timeStr",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 15.sp,
+                text = "$dateStr   $timeStr",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = 17.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                    color = Color.White
+                    color = Color.White,
+                    letterSpacing = (-0.5).sp
                 )
             )
 
@@ -1011,18 +1012,20 @@ private fun HyperOSNotificationsHeader(
                 Text(
                     text = timeStr,
                     style = MaterialTheme.typography.displayLarge.copy(
-                        fontSize = 58.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                        fontSize = 68.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         color = Color.White,
-                        letterSpacing = (-1.5).sp
+                        letterSpacing = (-2.5).sp,
+                        lineHeight = 70.sp
                     )
                 )
                 Text(
                     text = dateStr,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 15.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
-                        color = Color.White.copy(alpha = 0.9f)
+                        fontSize = 16.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.90f),
+                        letterSpacing = (-0.2).sp
                     )
                 )
             }
