@@ -833,11 +833,13 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         if (internetTile != null) {
                             val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
                             val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
+                            val stateOff = stringResource(R.string.hyperos_qs_state_off)
+                            val stateOn = stringResource(R.string.hyperos_qs_state_on)
                             val wifiSubtitle = when {
-                                !isWifiActive -> "Desactivado"
+                                !isWifiActive -> stateOff
                                 tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
                                 !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                                else -> "Activado"
+                                else -> stateOn
                             }
                             HyperOSConnectivityCard(
                                 title = "Wi-Fi",
@@ -869,13 +871,15 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         if (cellTile != null) {
                             val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
                             val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                            val stateOff = stringResource(R.string.hyperos_qs_state_off)
+                            val stateOn = stringResource(R.string.hyperos_qs_state_on)
                             val cellSubtitle = when {
-                                !isCellActive -> "Desactivado"
+                                !isCellActive -> stateOff
                                 !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                                else -> "Activado"
+                                else -> stateOn
                             }
                             HyperOSConnectivityCard(
-                                title = tileState.label?.toString() ?: "Datos móviles",
+                                title = tileState.label?.toString() ?: stringResource(R.string.hyperos_qs_mobile_data),
                                 subtitle = cellSubtitle,
                                 icon = tileState.icon,
                                 iconSupplier = tileState.iconSupplier,
@@ -977,11 +981,13 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         if (internetTile != null) {
                             val tileState by internetTile.state.collectAsStateWithLifecycle(internetTile.currentState)
                             val isWifiActive = isWifiEnabled || (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE)
+                            val stateOff = stringResource(R.string.hyperos_qs_state_off)
+                            val stateOn = stringResource(R.string.hyperos_qs_state_on)
                             val wifiSubtitle = when {
-                                !isWifiActive -> "Desactivado"
+                                !isWifiActive -> stateOff
                                 tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE && !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
                                 !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                                else -> "Activado"
+                                else -> stateOn
                             }
                             HyperOSConnectivityCard(
                                 title = "Wi-Fi",
@@ -1013,13 +1019,15 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         if (cellTile != null) {
                             val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
                             val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                            val stateOff = stringResource(R.string.hyperos_qs_state_off)
+                            val stateOn = stringResource(R.string.hyperos_qs_state_on)
                             val cellSubtitle = when {
-                                !isCellActive -> "Desactivado"
+                                !isCellActive -> stateOff
                                 !tileState.secondaryLabel.isNullOrBlank() -> tileState.secondaryLabel.toString()
-                                else -> "Activado"
+                                else -> stateOn
                             }
                             HyperOSConnectivityCard(
-                                title = tileState.label?.toString() ?: "Datos móviles",
+                                title = tileState.label?.toString() ?: stringResource(R.string.hyperos_qs_mobile_data),
                                 subtitle = cellSubtitle,
                                 icon = tileState.icon,
                                 iconSupplier = tileState.iconSupplier,
@@ -3362,7 +3370,7 @@ private fun HyperOSEditTileItem(
             ) {
                 Icon(
                     painter = painterResource(id = if (isAdd) R.drawable.ic_add else R.drawable.ic_remove),
-                    contentDescription = if (isAdd) "Añadir" else "Quitar",
+                    contentDescription = stringResource(if (isAdd) R.string.hyperos_qs_add else R.string.hyperos_qs_remove),
                     tint = Color.White,
                     modifier = Modifier.size(12.dp)
                 )
