@@ -407,7 +407,7 @@ constructor(
         }
 
         val metadata = controller.metadata
-        val isPlaying = stateVal == PlaybackState.STATE_PLAYING
+        val isPlaying = stateVal == PlaybackState.STATE_PLAYING && (playbackState.playbackSpeed > 0f || playbackState.position >= 0)
 
         var position = playbackState.position
         if (position >= 0) {
@@ -423,6 +423,7 @@ constructor(
                 }
                 position = maxOf(0L, SystemClock.elapsedRealtime() - localPlaybackStartTime)
             } else {
+                localPlaybackStartTime = 0L
                 position = 0L
             }
         }
