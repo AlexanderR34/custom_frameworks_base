@@ -453,12 +453,12 @@ private fun HyperOSVolumeVerticalLayout(
         ) == 1
     }
 
-    val sliderWidth = 62.dp
-    val sliderHeight = 224.dp
-    val sliderCornerRadius = 22.dp
-    val iconSize = 26.dp
-    val iconBottomPadding = 18.dp
-    val topPadding = 15.dp
+    val sliderWidth = if (isLandscape) 52.dp else 62.dp
+    val sliderHeight = if (isLandscape) 170.dp else 224.dp
+    val sliderCornerRadius = if (isLandscape) 18.dp else 22.dp
+    val iconSize = if (isLandscape) 22.dp else 26.dp
+    val iconBottomPadding = if (isLandscape) 14.dp else 18.dp
+    val topPadding = if (isLandscape) 10.dp else 15.dp
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -770,10 +770,10 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
     )
     val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
 
-    val capsuleWidth = 31.dp
-    val capsuleHeight = 224.dp
-    val capsuleCorner = 14.dp
-    val iconSize = 18.dp
+    val capsuleWidth = if (isLandscape) 28.dp else 31.dp
+    val capsuleHeight = if (isLandscape) 170.dp else 224.dp
+    val capsuleCorner = if (isLandscape) 12.dp else 14.dp
+    val iconSize = if (isLandscape) 16.dp else 18.dp
 
     val iconRes = if (targetStream == AudioManager.STREAM_VOICE_CALL) {
         R.drawable.ic_hyperos_call_volume

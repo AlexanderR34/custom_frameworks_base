@@ -111,11 +111,11 @@ fun HyperOSVolumePanel(
         isVisible = true
     }
 
-    val topPadding = if (isLandscape) 16.dp else 64.dp
-    val bottomPadding = if (isLandscape) 16.dp else 24.dp
-    val verticalInnerPadding = if (isLandscape) 16.dp else 20.dp
-    val cardCornerRadius = if (isLandscape) 32.dp else 36.dp
-    val cardWidth = if (isLandscape) 380.dp else 340.dp
+    val topPadding = if (isLandscape) 10.dp else 64.dp
+    val bottomPadding = if (isLandscape) 10.dp else 24.dp
+    val verticalInnerPadding = if (isLandscape) 12.dp else 20.dp
+    val cardCornerRadius = if (isLandscape) 28.dp else 36.dp
+    val cardWidth = if (isLandscape) 360.dp else 340.dp
 
     // Outer full-screen container with dismiss-on-tap-outside
     Box(
@@ -170,7 +170,7 @@ fun HyperOSVolumePanel(
                         isLandscape = isLandscape
                     )
 
-                    Spacer(modifier = Modifier.height(if (isLandscape) 14.dp else 18.dp))
+                    Spacer(modifier = Modifier.height(if (isLandscape) 10.dp else 18.dp))
 
                     // Bottom Timers: Silent Mode & DND
                     HyperOSTimersSection(
@@ -315,15 +315,15 @@ private fun HyperOSVerticalStreamSlider(
         label = "HyperOSVolumeFraction_$streamType"
     )
 
-    val sliderHeight = if (isLandscape) 160.dp else 210.dp
-    val bottomPadding = if (isLandscape) 10.dp else 14.dp
-    val iconBadgeSize = if (isLandscape) 36.dp else 44.dp
-    val iconSize = if (isLandscape) 20.dp else 24.dp
+    val sliderHeight = if (isLandscape) 140.dp else 210.dp
+    val bottomPadding = if (isLandscape) 8.dp else 14.dp
+    val iconBadgeSize = if (isLandscape) 34.dp else 44.dp
+    val iconSize = if (isLandscape) 18.dp else 24.dp
 
     Column(
         modifier = modifier
             .height(sliderHeight)
-            .clip(RoundedCornerShape(if (isLandscape) 22.dp else 26.dp))
+            .clip(RoundedCornerShape(if (isLandscape) 20.dp else 26.dp))
             .background(Color(0x597F7F7F)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -601,9 +601,9 @@ private fun HyperOSTimerRow(
         }
     }
 
-    val rowHeight = if (isLandscape) 46.dp else 56.dp
-    val buttonSize = if (isLandscape) 46.dp else 56.dp
-    val iconSize = if (isLandscape) 20.dp else 24.dp
+    val rowHeight = if (isLandscape) 40.dp else 56.dp
+    val buttonSize = if (isLandscape) 40.dp else 56.dp
+    val iconSize = if (isLandscape) 18.dp else 24.dp
 
     val monetPrimary = MaterialTheme.colorScheme.primary
     val monetOnPrimary = MaterialTheme.colorScheme.onPrimary
@@ -718,7 +718,7 @@ private fun HyperOSTimerRow(
             Text(
                 text = displayTimerText,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = if (isLandscape) 11.5.sp else 12.5.sp,
+                    fontSize = if (isLandscape) 11.sp else 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (animatedLiveFraction > 0.2f) monetOnPrimary else Color.White
                 ),
