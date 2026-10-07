@@ -147,7 +147,7 @@ constructor(
                     foundPercent != null -> "${foundPercent.groupValues[1]}%"
                     subText != null && subText.isNotBlank() && !isWebDomain(subText) -> subText
                     text != null && text.length <= 12 && !isWebDomain(text) -> text
-                    else -> "Descarga"
+                    else -> context.getString(R.string.download_chip_default_label)
                 }
                 break
             }

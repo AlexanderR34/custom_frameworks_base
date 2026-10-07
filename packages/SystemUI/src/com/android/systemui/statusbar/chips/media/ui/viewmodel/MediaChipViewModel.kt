@@ -171,7 +171,7 @@ constructor(
             } else if (!cleanTitle.isNullOrBlank()) {
                 OngoingActivityChipModel.Content.Text(cleanTitle)
             } else {
-                OngoingActivityChipModel.Content.Text("Pausa")
+                OngoingActivityChipModel.Content.Text(context.getString(R.string.media_chip_paused))
             }
 
         val colors = ColorsModel.DynamicThemed(state.dominantColor)

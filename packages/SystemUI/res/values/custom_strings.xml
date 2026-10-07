@@ -122,9 +122,20 @@
     <!-- Button to restart SystemUI, within the Restart Options dialog -->
     <string name="global_action_restart_systemui">SystemUI</string>
 
-    <!-- Flashlight Strength Dialog -->
-    <string name="flashlight_strength_title">Flashlight strength</string>
-    <string name="flashlight_strength_turn_off">Turn off</string>
-    <string name="flashlight_strength_turn_on">Turn on</string>
+    <!-- HyperOS Quick Settings Control Center -->
+    <string name="hyperos_qs_media_empty_title">No content</string>
+    <string name="hyperos_qs_media_empty_subtitle">Tap to open music</string>
+    <string name="hyperos_qs_mobile_data">Mobile data</string>
+    <string name="hyperos_qs_more_settings">More settings</string>
+    <string name="hyperos_qs_edit">Edit</string>
+    <string name="hyperos_qs_edit_cards">Edit switches</string>
+    <string name="hyperos_qs_edit_cards_subtitle">Tap to add or remove switches</string>
+    <string name="hyperos_qs_done">Done</string>
+    <string name="hyperos_qs_added_switches">Added switches</string>
+    <string name="hyperos_qs_available_switches">More switches</string>
+    <string name="hyperos_qs_close">Close</string>
 
+    <!-- Status Bar Chips -->
+    <string name="media_chip_paused">Paused</string>
+    <string name="download_chip_default_label">Download</string>
 </resources>

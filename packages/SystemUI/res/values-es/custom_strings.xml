@@ -125,4 +125,21 @@
     <string name="samsung_device_control_label">Control de dispositivos</string>
     <string name="samsung_state_on">Activado</string>
     <string name="samsung_state_off">Desactivado</string>
+
+    <!-- HyperOS Quick Settings Control Center -->
+    <string name="hyperos_qs_media_empty_title">No hay contenido</string>
+    <string name="hyperos_qs_media_empty_subtitle">Toca para abrir música</string>
+    <string name="hyperos_qs_mobile_data">Datos móviles</string>
+    <string name="hyperos_qs_more_settings">Más ajustes</string>
+    <string name="hyperos_qs_edit">Editar</string>
+    <string name="hyperos_qs_edit_cards">Editar tarjetas</string>
+    <string name="hyperos_qs_edit_cards_subtitle">Toca para agregar o quitar interruptores</string>
+    <string name="hyperos_qs_done">Listo</string>
+    <string name="hyperos_qs_added_switches">Interruptores añadidos</string>
+    <string name="hyperos_qs_available_switches">Más interruptores</string>
+    <string name="hyperos_qs_close">Cerrar</string>
+
+    <!-- Status Bar Chips -->
+    <string name="media_chip_paused">Pausa</string>
+    <string name="download_chip_default_label">Descarga</string>
 </resources>

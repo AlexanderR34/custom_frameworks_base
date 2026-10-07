@@ -1207,7 +1207,7 @@ private fun HyperOSMobileDataSelectorDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Datos móviles",
+                    text = stringResource(R.string.hyperos_qs_mobile_data),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = 20.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
@@ -1318,7 +1318,7 @@ private fun HyperOSMobileDataSelectorDialog(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Más ajustes",
+                    text = stringResource(R.string.hyperos_qs_more_settings),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 15.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
@@ -1686,15 +1686,17 @@ private fun HyperOSMediaCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                val emptyTitle = stringResource(R.string.hyperos_qs_media_empty_title)
+                val emptySubtitle = stringResource(R.string.hyperos_qs_media_empty_subtitle)
                 val titleText = if (currentCard != null && currentCard.title.isNotBlank()) {
                     currentCard.title
                 } else {
-                    "No hay contenido"
+                    emptyTitle
                 }
                 val subtitleText = if (currentCard != null && currentCard.subtitle.isNotBlank()) {
                     currentCard.subtitle
                 } else {
-                    "Toca para abrir música"
+                    emptySubtitle
                 }
 
                 AnimatedContent(
@@ -2190,7 +2192,7 @@ private fun HyperOSEditPill(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Editar",
+                text = stringResource(R.string.hyperos_qs_edit),
                 style = MaterialTheme.typography.labelMedium.copy(
                     color = Color.White,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
@@ -2667,7 +2669,7 @@ private fun HyperOSEditMode(
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_close),
-                        contentDescription = "Cerrar",
+                        contentDescription = stringResource(R.string.hyperos_qs_close),
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
@@ -2675,7 +2677,7 @@ private fun HyperOSEditMode(
 
                 Column {
                     Text(
-                        text = "Editar tarjetas",
+                        text = stringResource(R.string.hyperos_qs_edit_cards),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             fontSize = 17.sp,
@@ -2683,7 +2685,7 @@ private fun HyperOSEditMode(
                         )
                     )
                     Text(
-                        text = "Toca para agregar o quitar interruptores",
+                        text = stringResource(R.string.hyperos_qs_edit_cards_subtitle),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.65f)
@@ -2708,7 +2710,7 @@ private fun HyperOSEditMode(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Listo",
+                    text = stringResource(R.string.hyperos_qs_done),
                     style = MaterialTheme.typography.labelMedium.copy(
                         color = MaterialTheme.colorScheme.onPrimary,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
@@ -2727,7 +2729,7 @@ private fun HyperOSEditMode(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Interruptores añadidos",
+                text = stringResource(R.string.hyperos_qs_added_switches),
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     fontSize = 13.sp,
@@ -2786,7 +2788,7 @@ private fun HyperOSEditMode(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Más interruptores",
+                text = stringResource(R.string.hyperos_qs_available_switches),
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     fontSize = 13.sp,
