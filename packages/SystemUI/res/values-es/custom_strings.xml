@@ -148,11 +148,6 @@
     <string name="hyperos_qs_brightness">Brillo</string>
     <string name="hyperos_qs_volume">Volumen</string>
 
-    <!-- Flashlight Dialog -->
-    <string name="flashlight_strength_title">Brillo de la linterna</string>
-    <string name="flashlight_strength_turn_off">Apagar</string>
-    <string name="flashlight_strength_turn_on">Encender</string>
-
     <!-- Status Bar Chips -->
     <string name="media_chip_paused">Pausa</string>
     <string name="download_chip_default_label">Descarga</string>
