@@ -1789,17 +1789,28 @@ private fun HyperOSMediaCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                val activeTitle = remember(activeController?.metadata) {
+                    activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
+                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+                }
+                val activeArtist = remember(activeController?.metadata) {
+                    activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
+                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_AUTHOR)
+                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
+                }
+
                 val emptyTitle = stringResource(R.string.hyperos_qs_media_empty_title)
                 val emptySubtitle = stringResource(R.string.hyperos_qs_media_empty_subtitle)
-                val titleText = if (currentCard != null && currentCard.title.isNotBlank()) {
-                    currentCard.title
-                } else {
-                    emptyTitle
+                val titleText = when {
+                    currentCard != null && currentCard.title.isNotBlank() -> currentCard.title
+                    !activeTitle.isNullOrBlank() -> activeTitle
+                    else -> emptyTitle
                 }
-                val subtitleText = if (currentCard != null && currentCard.subtitle.isNotBlank()) {
-                    currentCard.subtitle
-                } else {
-                    emptySubtitle
+                val subtitleText = when {
+                    currentCard != null && currentCard.subtitle.isNotBlank() -> currentCard.subtitle
+                    !activeArtist.isNullOrBlank() -> activeArtist
+                    else -> emptySubtitle
                 }
 
                 AnimatedContent(
@@ -1879,7 +1890,11 @@ private fun HyperOSMediaCard(
                 }
 
                 // Play / Pause Button
-                val isPlaying = currentCard?.playPauseAction?.state != com.android.systemui.media.remedia.shared.model.MediaSessionState.Paused
+                val isPlaying = if (currentCard != null) {
+                    currentCard.playPauseAction?.state != com.android.systemui.media.remedia.shared.model.MediaSessionState.Paused
+                } else {
+                    activeController?.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
+                }
                 val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 val isPlayPressed by playInteraction.collectIsPressedAsState()
                 val playScale by animateFloatAsState(targetValue = if (isPlayPressed) 0.85f else 1.0f, label = "PlayScale")
@@ -1908,7 +1923,7 @@ private fun HyperOSMediaCard(
                         },
                         label = "HyperOSMediaPlayPauseTransition"
                     ) { playing ->
-                        val iconRes = if (currentCard != null && playing) {
+                        val iconRes = if (playing) {
                             R.drawable.ic_media_pause
                         } else {
                             R.drawable.ic_media_play
