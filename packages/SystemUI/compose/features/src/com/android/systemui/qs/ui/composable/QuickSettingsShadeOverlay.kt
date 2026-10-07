@@ -1573,6 +1573,10 @@ private fun HyperOSMediaCard(
     val cards = mediaViewModel.cards
     val activeController = remember(cards) { getActiveMediaController(context, null) }
     val currentCard = remember(cards, activeController) {
+        val byPlayingState = cards.firstOrNull {
+            it.playPauseAction?.state == com.android.systemui.media.remedia.shared.model.MediaSessionState.Playing
+        }
+
         val byActiveController = if (activeController != null) {
             cards.firstOrNull { card ->
                 val keyStr = (card.key as? String) ?: ""
@@ -1580,11 +1584,7 @@ private fun HyperOSMediaCard(
             }
         } else null
 
-        val byPlayingState = cards.firstOrNull {
-            it.playPauseAction?.state == com.android.systemui.media.remedia.shared.model.MediaSessionState.Playing
-        }
-
-        byActiveController ?: byPlayingState ?: cards.firstOrNull()
+        byPlayingState ?: byActiveController ?: cards.firstOrNull()
     }
 
     val cardPkg = remember(currentCard?.key, activeController) {
@@ -1612,22 +1612,19 @@ private fun HyperOSMediaCard(
                     drawable.bitmap
                 } else null
             }
-            val bmp = loadedBmp ?: try {
-                val controller = getActiveMediaController(context, cardPkg.ifBlank { null })
-                val meta = controller?.metadata
-                meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
-                    ?: meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
-            } catch (e: Exception) {
-                null
-            }
+            val bmp = loadedBmp ?: if (cardPkg.isNotBlank()) {
+                try {
+                    val controller = getActiveMediaController(context, cardPkg)
+                    val meta = controller?.metadata
+                    meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        ?: meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
 
-            if (bmp != null) {
-                cachedImageBitmap = bmp.asImageBitmap()
-                lastCoverKey = currentTrackKey
-            } else if (currentCard?.background == null) {
-                cachedImageBitmap = null
-                lastCoverKey = currentTrackKey
-            }
+            cachedImageBitmap = bmp?.asImageBitmap()
+            lastCoverKey = currentTrackKey
         }
     }
 
@@ -2050,8 +2047,7 @@ private fun getActiveMediaController(context: android.content.Context, cardPacka
         emptyList()
     }
     if (!cardPackage.isNullOrBlank()) {
-        val matching = controllers.firstOrNull { it.packageName == cardPackage }
-        if (matching != null) return matching
+        return controllers.firstOrNull { it.packageName == cardPackage }
     }
     return controllers.firstOrNull { it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
         ?: controllers.firstOrNull()
