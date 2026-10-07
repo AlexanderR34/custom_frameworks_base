@@ -127,6 +127,9 @@
     <string name="hyperos_qs_media_empty_subtitle">Tap to open music</string>
     <string name="hyperos_qs_mobile_data">Mobile data</string>
     <string name="hyperos_qs_more_settings">More settings</string>
+    <string name="hyperos_qs_auto_brightness">Auto brightness</string>
+    <string name="hyperos_qs_dark_mode">Dark mode</string>
+    <string name="hyperos_qs_reading_mode">Reading mode</string>
     <string name="hyperos_qs_edit">Edit</string>
     <string name="hyperos_qs_edit_cards">Edit switches</string>
     <string name="hyperos_qs_edit_cards_subtitle">Tap to add or remove switches</string>

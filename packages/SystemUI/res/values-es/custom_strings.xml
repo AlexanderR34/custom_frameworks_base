@@ -131,6 +131,9 @@
     <string name="hyperos_qs_media_empty_subtitle">Toca para abrir música</string>
     <string name="hyperos_qs_mobile_data">Datos móviles</string>
     <string name="hyperos_qs_more_settings">Más ajustes</string>
+    <string name="hyperos_qs_auto_brightness">Brillo automático</string>
+    <string name="hyperos_qs_dark_mode">Modo oscuro</string>
+    <string name="hyperos_qs_reading_mode">Modo lectura</string>
     <string name="hyperos_qs_edit">Editar</string>
     <string name="hyperos_qs_edit_cards">Editar tarjetas</string>
     <string name="hyperos_qs_edit_cards_subtitle">Toca para agregar o quitar interruptores</string>

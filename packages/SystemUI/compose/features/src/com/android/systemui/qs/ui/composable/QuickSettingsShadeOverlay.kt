@@ -20,13 +20,18 @@ import android.content.Intent
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -38,6 +43,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -764,6 +771,9 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
     var showMobileDataDialog by remember {
         mutableStateOf(false)
     }
+    var showBrightnessDialog by remember {
+        mutableStateOf(false)
+    }
 
     Box(modifier = modifier) {
         if (isLandscape) {
@@ -929,6 +939,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         HyperOSVerticalBrightnessSlider(
                             brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
                             view = view,
+                            onLongClick = { showBrightnessDialog = true },
                             modifier = Modifier
                                 .weight(0.85f)
                                 .fillMaxHeight()
@@ -1071,6 +1082,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         HyperOSVerticalBrightnessSlider(
                             brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
                             view = view,
+                            onLongClick = { showBrightnessDialog = true },
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -1117,7 +1129,26 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
             }
         }
 
-        if (showMobileDataDialog) {
+        AnimatedVisibility(
+            visible = showBrightnessDialog,
+            enter = fadeIn(tween(250, easing = FastOutSlowInEasing)),
+            exit = fadeOut(tween(200, easing = FastOutSlowInEasing))
+        ) {
+            BackHandler(enabled = true) {
+                showBrightnessDialog = false
+            }
+            HyperOSBrightnessExpandedDialog(
+                brightnessSliderViewModel = qsContainerViewModel.brightnessSliderViewModel,
+                onDismiss = { showBrightnessDialog = false },
+                view = view
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showMobileDataDialog,
+            enter = fadeIn(tween(250, easing = FastOutSlowInEasing)),
+            exit = fadeOut(tween(200, easing = FastOutSlowInEasing))
+        ) {
             BackHandler(enabled = true) {
                 showMobileDataDialog = false
             }
@@ -1209,10 +1240,21 @@ private fun HyperOSMobileDataSelectorDialog(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
+    val scaleAnim = remember { androidx.compose.animation.core.Animatable(0.85f) }
+    LaunchedEffect(Unit) {
+        scaleAnim.animateTo(
+            1.0f,
+            animationSpec = androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+            )
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
+            .background(Color.Black.copy(alpha = 0.65f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1223,9 +1265,13 @@ private fun HyperOSMobileDataSelectorDialog(
         Column(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
-                .fillMaxWidth(if (isLandscape) 0.52f else 0.92f)
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF222327))
+                .fillMaxWidth(if (isLandscape) 0.48f else 0.88f)
+                .graphicsLayer {
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                }
+                .clip(RoundedCornerShape(32.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -1245,7 +1291,7 @@ private fun HyperOSMobileDataSelectorDialog(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = 20.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
 
@@ -1330,8 +1376,8 @@ private fun HyperOSMobileDataSelectorDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xFF33353A))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
                     .clickable {
                         view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                         try {
@@ -1356,7 +1402,7 @@ private fun HyperOSMobileDataSelectorDialog(
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 15.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
             }
@@ -1372,15 +1418,14 @@ private fun HyperOSSimCardItem(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val backgroundColor = if (isSelected) Color(0xFFFFFFFF) else Color(0xFF2E3035)
-    val titleColor = if (isSelected) Color(0xFF1C1B1F) else Color(0xFFE6E1E5)
-    val subtitleColor = if (isSelected) Color(0xFF49454F) else Color(0xFF938F99)
+    val backgroundColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+    val titleColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+    val subtitleColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
 
-    // SIM 1 is Green (#00C853), SIM 2 is Blue (#2979FF)
     val badgeBgColor = when (slotIndex) {
-        0 -> Color(0xFF00C853) // SIM 1: Green
-        1 -> Color(0xFF2979FF) // SIM 2: Blue
-        else -> Color(0xFFFF9100) // SIM 3+: Amber
+        0 -> MaterialTheme.colorScheme.primary
+        1 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.secondary
     }
 
     Row(
@@ -1410,7 +1455,7 @@ private fun HyperOSSimCardItem(
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 13.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 )
             }
@@ -1448,16 +1493,16 @@ private fun HyperOSSimCardItem(
         if (isSelected) {
             Box(
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF2979FF)),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.onPrimary)
                 )
             }
         }
@@ -1469,8 +1514,14 @@ private fun HyperOSSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val activeTrackColor = MaterialTheme.colorScheme.primary
+    val inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)
     val trackColor by animateColorAsState(
-        targetValue = if (checked) Color(0xFF007AFF) else Color(0xFF48484A),
+        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
+        animationSpec = tween(durationMillis = 200)
+    )
+    val thumbColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outline,
         animationSpec = tween(durationMillis = 200)
     )
     val thumbOffset by animateFloatAsState(
@@ -1496,7 +1547,7 @@ private fun HyperOSSwitch(
                 .offset(x = thumbOffset.dp)
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(thumbColor)
         )
     }
 }
@@ -2241,6 +2292,7 @@ private fun HyperOSEditPill(
 private fun HyperOSVerticalBrightnessSlider(
     brightnessSliderViewModel: BrightnessSliderViewModel,
     view: android.view.View,
+    onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -2276,37 +2328,55 @@ private fun HyperOSVerticalBrightnessSlider(
             .clip(RoundedCornerShape(26.dp))
             .background(Color(0x593A3A3A))
             .pointerInput(minGamma, maxGamma) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        val height = size.height.toFloat()
-                        val calculatedFraction = (1f - (offset.y / height)).coerceIn(0f, 1f)
-                        dragFraction = calculatedFraction
-                        val targetGamma = GammaBrightness((minGamma.value + calculatedFraction * (maxGamma.value - minGamma.value)).roundToInt())
-                        coroutineScope.launch {
-                            brightnessSliderViewModel.onDrag(Drag.Dragging(targetGamma))
-                        }
-                    },
-                    onVerticalDrag = { change, _ ->
-                        change.consume()
-                        val height = size.height.toFloat()
-                        val calculatedFraction = (1f - (change.position.y / height)).coerceIn(0f, 1f)
-                        dragFraction = calculatedFraction
-                        val targetGamma = GammaBrightness((minGamma.value + calculatedFraction * (maxGamma.value - minGamma.value)).roundToInt())
-                        coroutineScope.launch {
-                            brightnessSliderViewModel.onDrag(Drag.Dragging(targetGamma))
-                        }
-                    },
-                    onDragEnd = {
-                        val currentDrag = dragFraction
-                        dragFraction = -1f
-                        val targetGamma = if (currentDrag >= 0f) {
-                            GammaBrightness((minGamma.value + currentDrag * (maxGamma.value - minGamma.value)).roundToInt())
-                        } else gamma
-                        coroutineScope.launch {
-                            brightnessSliderViewModel.onDrag(Drag.Stopped(targetGamma))
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startY = down.position.y
+                    val height = size.height.toFloat()
+                    var isDragging = false
+                    var longPressed = false
+
+                    val longPressJob = coroutineScope.launch {
+                        kotlinx.coroutines.delay(400L)
+                        if (!isDragging) {
+                            longPressed = true
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                            onLongClick()
                         }
                     }
-                )
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.find { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            longPressJob.cancel()
+                            if (isDragging) {
+                                val currentDrag = dragFraction
+                                dragFraction = -1f
+                                val targetGamma = if (currentDrag >= 0f) {
+                                    GammaBrightness((minGamma.value + currentDrag * (maxGamma.value - minGamma.value)).roundToInt())
+                                } else gamma
+                                coroutineScope.launch {
+                                    brightnessSliderViewModel.onDrag(Drag.Stopped(targetGamma))
+                                }
+                            }
+                            break
+                        }
+                        val diffY = kotlin.math.abs(change.position.y - startY)
+                        if (diffY > 8f && !isDragging) {
+                            isDragging = true
+                            longPressJob.cancel()
+                        }
+                        if (isDragging && !longPressed) {
+                            change.consume()
+                            val calculatedFraction = (1f - (change.position.y / height)).coerceIn(0f, 1f)
+                            dragFraction = calculatedFraction
+                            val targetGamma = GammaBrightness((minGamma.value + calculatedFraction * (maxGamma.value - minGamma.value)).roundToInt())
+                            coroutineScope.launch {
+                                brightnessSliderViewModel.onDrag(Drag.Dragging(targetGamma))
+                            }
+                        }
+                    }
+                }
             }
     ) {
         val fillColor = MaterialTheme.colorScheme.primary
@@ -2336,6 +2406,350 @@ private fun HyperOSVerticalBrightnessSlider(
                 modifier = Modifier.size(24.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun HyperOSBrightnessExpandedDialog(
+    brightnessSliderViewModel: BrightnessSliderViewModel,
+    onDismiss: () -> Unit,
+    view: android.view.View,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    // 1. Auto-brightness state and toggle
+    var isAutoBrightness by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.System.getInt(
+                    context.contentResolver,
+                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                ) == android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+            } catch (e: Exception) { false }
+        )
+    }
+
+    // 2. Dark theme state and toggle
+    val uiModeManager = remember(context) { context.getSystemService(android.app.UiModeManager::class.java) }
+    var isDarkMode by remember {
+        mutableStateOf(
+            try {
+                uiModeManager?.isNightModeActivated ?: (
+                    (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                        android.content.res.Configuration.UI_MODE_NIGHT_YES
+                )
+            } catch (e: Exception) { false }
+        )
+    }
+
+    // 3. Reading mode / Night light state and toggle
+    val colorDisplayManager = remember(context) {
+        context.getSystemService(android.hardware.display.ColorDisplayManager::class.java)
+    }
+    var isReadingMode by remember {
+        mutableStateOf(
+            try {
+                colorDisplayManager?.isNightDisplayActivated ?: (
+                    android.provider.Settings.Secure.getInt(
+                        context.contentResolver,
+                        android.provider.Settings.Secure.NIGHT_DISPLAY_ACTIVATED,
+                        0
+                    ) == 1
+                )
+            } catch (e: Exception) { false }
+        )
+    }
+
+    // Brightness state & drag handling
+    val gamma = brightnessSliderViewModel.currentBrightness
+    val minGamma = brightnessSliderViewModel.minBrightness
+    val maxGamma = brightnessSliderViewModel.maxBrightness
+    val fraction = remember(gamma, minGamma, maxGamma) {
+        if (gamma.value >= 0 && maxGamma.value > minGamma.value) {
+            ((gamma.value - minGamma.value).toFloat() / (maxGamma.value - minGamma.value).toFloat()).coerceIn(0f, 1f)
+        } else 0.5f
+    }
+    var dragFraction: Float by remember { mutableFloatStateOf(-1f) }
+    var isInitialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(gamma.value) {
+        if (gamma.value >= 0) isInitialized = true
+    }
+
+    val animatedFraction by animateFloatAsState(
+        targetValue = if (dragFraction >= 0f) dragFraction else fraction,
+        animationSpec = if (!isInitialized || dragFraction >= 0f) {
+            androidx.compose.animation.core.snap()
+        } else {
+            androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)
+        },
+        label = "ExpandedBrightnessFraction"
+    )
+
+    val scaleAnim = remember { androidx.compose.animation.core.Animatable(0.85f) }
+    LaunchedEffect(Unit) {
+        scaleAnim.animateTo(
+            1.0f,
+            animationSpec = androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.65f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .fillMaxWidth(if (isLandscape) 0.44f else 0.88f)
+                .graphicsLayer {
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                }
+                .clip(RoundedCornerShape(32.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { /* Consume clicks inside */ }
+                )
+                .padding(horizontal = 20.dp, vertical = 26.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(28.dp)
+        ) {
+            // Large Vertical Slider (Matching Image 1, styled with Monet)
+            BoxWithConstraints(
+                modifier = Modifier
+                    .width(108.dp)
+                    .height(210.dp)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                    .pointerInput(minGamma, maxGamma) {
+                        detectVerticalDragGestures(
+                            onDragStart = { offset ->
+                                val height = size.height.toFloat()
+                                val calculatedFraction = (1f - (offset.y / height)).coerceIn(0f, 1f)
+                                dragFraction = calculatedFraction
+                                val targetGamma = GammaBrightness((minGamma.value + calculatedFraction * (maxGamma.value - minGamma.value)).roundToInt())
+                                coroutineScope.launch {
+                                    brightnessSliderViewModel.onDrag(Drag.Dragging(targetGamma))
+                                }
+                            },
+                            onVerticalDrag = { change, _ ->
+                                change.consume()
+                                val height = size.height.toFloat()
+                                val calculatedFraction = (1f - (change.position.y / height)).coerceIn(0f, 1f)
+                                dragFraction = calculatedFraction
+                                val targetGamma = GammaBrightness((minGamma.value + calculatedFraction * (maxGamma.value - minGamma.value)).roundToInt())
+                                coroutineScope.launch {
+                                    brightnessSliderViewModel.onDrag(Drag.Dragging(targetGamma))
+                                }
+                            },
+                            onDragEnd = {
+                                val currentDrag = dragFraction
+                                dragFraction = -1f
+                                val targetGamma = if (currentDrag >= 0f) {
+                                    GammaBrightness((minGamma.value + currentDrag * (maxGamma.value - minGamma.value)).roundToInt())
+                                } else gamma
+                                coroutineScope.launch {
+                                    brightnessSliderViewModel.onDrag(Drag.Stopped(targetGamma))
+                                }
+                            }
+                        )
+                    }
+            ) {
+                // Active Filled Level with Monet Primary
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(animatedFraction.coerceIn(0f, 1f))
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+
+                // Sun Icon inside slider
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 18.dp)
+                        .size(34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val sunIconColor = if (animatedFraction > 0.16f) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_brightness_medium),
+                        contentDescription = "Brillo",
+                        tint = sunIconColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
+            // Row with 3 Action Buttons: Auto-brightness, Dark Mode, Reading Mode
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Top
+            ) {
+                // 1. Auto-brightness
+                HyperOSBrightnessActionItem(
+                    iconRes = R.drawable.ic_qs_autobrightness,
+                    label = stringResource(R.string.hyperos_qs_auto_brightness),
+                    isActive = isAutoBrightness,
+                    onClick = {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        val target = !isAutoBrightness
+                        isAutoBrightness = target
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            try {
+                                android.provider.Settings.System.putInt(
+                                    context.contentResolver,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                                    if (target) android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+                                    else android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                                )
+                            } catch (e: Exception) {}
+                        }
+                    }
+                )
+
+                // 2. Dark Mode
+                HyperOSBrightnessActionItem(
+                    iconRes = R.drawable.vd_theme,
+                    label = stringResource(R.string.hyperos_qs_dark_mode),
+                    isActive = isDarkMode,
+                    onClick = {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        val target = !isDarkMode
+                        isDarkMode = target
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            try {
+                                uiModeManager?.setNightModeActivated(target)
+                            } catch (e: Exception) {}
+                        }
+                    }
+                )
+
+                // 3. Reading mode / Night light
+                HyperOSBrightnessActionItem(
+                    iconRes = R.drawable.ic_broadcast_code_eye,
+                    label = stringResource(R.string.hyperos_qs_reading_mode),
+                    isActive = isReadingMode,
+                    onClick = {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        val target = !isReadingMode
+                        isReadingMode = target
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            try {
+                                colorDisplayManager?.setNightDisplayActivated(target)
+                                try {
+                                    android.provider.Settings.Secure.putInt(
+                                        context.contentResolver,
+                                        android.provider.Settings.Secure.NIGHT_DISPLAY_ACTIVATED,
+                                        if (target) 1 else 0
+                                    )
+                                } catch (e: Exception) {}
+                            } catch (e: Exception) {}
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HyperOSBrightnessActionItem(
+    iconRes: Int,
+    label: String,
+    isActive: Boolean,
+    activeIconColor: Color = MaterialTheme.colorScheme.onPrimary,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "BrightnessActionScale"
+    )
+
+    val activeBg = MaterialTheme.colorScheme.primary
+    val inactiveBg = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)
+    val inactiveIcon = MaterialTheme.colorScheme.onSurfaceVariant
+
+    val bgColor by animateColorAsState(
+        targetValue = if (isActive) activeBg else inactiveBg,
+        animationSpec = tween(durationMillis = 200),
+        label = "BrightnessActionBg"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (isActive) activeIconColor else inactiveIcon,
+        animationSpec = tween(durationMillis = 200),
+        label = "BrightnessActionIcon"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(88.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(58.dp)
+                .clip(CircleShape)
+                .background(bgColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = label,
+                tint = iconColor,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
