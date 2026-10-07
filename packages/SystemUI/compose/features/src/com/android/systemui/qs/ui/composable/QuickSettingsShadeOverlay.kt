@@ -1571,9 +1571,22 @@ private fun HyperOSMediaCard(
         viewModelFactory.create(context, MediaCarouselVisibility.WhenNotEmpty)
     }
     val cards = mediaViewModel.cards
-    val currentCard = cards.firstOrNull()
+    val activeController = remember(cards) { getActiveMediaController(context, null) }
+    val currentCard = remember(cards, activeController) {
+        val byActiveController = if (activeController != null) {
+            cards.firstOrNull { card ->
+                val keyStr = (card.key as? String) ?: ""
+                keyStr.startsWith(activeController.packageName) || keyStr.contains(activeController.packageName)
+            }
+        } else null
 
-    val activeController = remember(currentCard?.key) { getActiveMediaController(context, null) }
+        val byPlayingState = cards.firstOrNull {
+            it.playPauseAction?.state == com.android.systemui.media.remedia.shared.model.MediaSessionState.Playing
+        }
+
+        byActiveController ?: byPlayingState ?: cards.firstOrNull()
+    }
+
     val cardPkg = remember(currentCard?.key, activeController) {
         val keyStr = (currentCard?.key as? String) ?: ""
         when {

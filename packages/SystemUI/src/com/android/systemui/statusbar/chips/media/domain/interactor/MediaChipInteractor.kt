@@ -206,6 +206,9 @@ constructor(
                                 if (data.isPlaying == true || ctrl.playbackState?.state == PlaybackState.STATE_PLAYING || activeController == null) {
                                     activeController?.unregisterCallback(mediaCallback)
                                     activeController = ctrl
+                                    cachedSongTitle = null
+                                    cachedArtistName = null
+                                    cachedArtworkBitmap = null
                                     activeController?.registerCallback(mediaCallback, mainHandler)
                                     handleMetadataChanged(ctrl.metadata)
                                     handlePlaybackStateChanged(ctrl.playbackState)
@@ -324,6 +327,9 @@ constructor(
         if (activeController?.sessionToken != playingController.sessionToken) {
             activeController?.unregisterCallback(mediaCallback)
             activeController = playingController
+            cachedSongTitle = null
+            cachedArtistName = null
+            cachedArtworkBitmap = null
             activeController?.registerCallback(mediaCallback, mainHandler)
 
             handleMetadataChanged(activeController?.metadata)
@@ -386,6 +392,14 @@ constructor(
     private fun handleMetadataChanged(metadata: MediaMetadata?) {
         if (!isFeatureEnabled || isKeyguardShowing) return
         currentDuration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val metaTitle = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim()
+        if (!metaTitle.isNullOrBlank() && !isWebDomain(metaTitle)) {
+            cachedSongTitle = metaTitle
+        }
+        val metaArtist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)?.trim()
+        if (!metaArtist.isNullOrBlank() && !isWebDomain(metaArtist)) {
+            cachedArtistName = metaArtist
+        }
         updateMediaState()
     }
 
