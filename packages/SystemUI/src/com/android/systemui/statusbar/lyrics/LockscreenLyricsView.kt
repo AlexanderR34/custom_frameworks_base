@@ -180,35 +180,46 @@ class LockscreenLyricsView @JvmOverloads constructor(
         val text4 = if (index + 1 in 0 until total) lines[index + 1].text else ""
         val text5 = if (index + 2 in 0 until total) lines[index + 2].text else ""
 
-        if (animate) {
-            scrollAnimator?.cancel()
-            val shiftDistance = dpToPx(18f).toFloat()
+        // Apply row texts immediately so there is never an abrupt snap after animation
+        applyStaticRowTexts(text1, text2, text4, text5)
 
-            scrollAnimator = ValueAnimator.ofFloat(0f, -shiftDistance).apply {
-                duration = 220
-                interpolator = DecelerateInterpolator(1.4f)
+        scrollAnimator?.cancel()
+
+        if (animate) {
+            val shiftDistance = dpToPx(16f).toFloat()
+
+            // Start all rows shifted down (+shiftDistance) and smoothly glide up into 0f
+            for (row in rows) {
+                row.translationY = shiftDistance
+            }
+            row3.alpha = 0.65f
+
+            scrollAnimator = ValueAnimator.ofFloat(shiftDistance, 0f).apply {
+                duration = 260
+                interpolator = DecelerateInterpolator(1.6f)
                 addUpdateListener { animator ->
                     val value = animator.animatedValue as Float
+                    val fraction = animator.animatedFraction
                     for (row in rows) {
                         row.translationY = value
                     }
+                    row3.alpha = 0.65f + 0.35f * fraction
                 }
                 addListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         for (row in rows) {
                             row.translationY = 0f
                         }
-                        applyStaticRowTexts(text1, text2, text4, text5)
+                        row3.alpha = 1.0f
                     }
                 })
                 start()
             }
         } else {
-            scrollAnimator?.cancel()
             for (row in rows) {
                 row.translationY = 0f
             }
-            applyStaticRowTexts(text1, text2, text4, text5)
+            row3.alpha = 1.0f
         }
     }
 
@@ -243,8 +254,62 @@ class LockscreenLyricsView @JvmOverloads constructor(
         }
     }
 
+    private fun isCjkChar(c: Char): Boolean {
+        val code = c.code
+        return (code in 0x4E00..0x9FFF) ||
+               (code in 0x3400..0x4DBF) ||
+               (code in 0x3040..0x309F) ||
+               (code in 0x30A0..0x30FF) ||
+               (code in 0xAC00..0xD7AF) ||
+               (code in 0x1100..0x11FF) ||
+               (code in 0x3130..0x318F) ||
+               (code in 0xFF00..0xFFEF) ||
+               (code in 0x31F0..0x31FF) ||
+               (code in 0x0E00..0x0E7F) ||
+               (code in 0x0E80..0x0EFF) ||
+               (code in 0x1000..0x109F) ||
+               (code in 0x1780..0x17FF)
+    }
+
+    private fun isCjkCombiningOrProlong(c: Char): Boolean {
+        return c == 'ー' || c == '～' || c == '〜' || c == '・' || c == '…' ||
+               c in "\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308E\u3095\u3096\u30A1\u30A3\u30A5\u30A7\u30A9\u30C3\u30E3\u30E5\u30E7\u30EE\u30F5\u30F6"
+    }
+
+    private fun isPunctuation(c: Char): Boolean {
+        return c in ".,!?:;\"'()[]{}<>-~、。！？…・「」『』（）［］【】"
+    }
+
+    private fun extractTokenRanges(text: String, hasCjk: Boolean): List<IntRange> {
+        val ranges = mutableListOf<IntRange>()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c.isWhitespace()) {
+                i++
+                continue
+            }
+            if (hasCjk && isCjkChar(c)) {
+                val start = i
+                i++
+                // Group trailing combining kana, prolong marks, or trailing punctuation
+                while (i < text.length && (isCjkCombiningOrProlong(text[i]) || isPunctuation(text[i]))) {
+                    i++
+                }
+                ranges.add(start until i)
+            } else {
+                val start = i
+                while (i < text.length && !text[i].isWhitespace() && !(hasCjk && isCjkChar(text[i]))) {
+                    i++
+                }
+                ranges.add(start until i)
+            }
+        }
+        return ranges
+    }
+
     /**
-     * Updates Row 3 (the active vocal track line) with word-by-word progressive glow highlight.
+     * Updates Row 3 (the active vocal track line) with word-by-word and character-by-character progressive glow highlight.
      */
     private fun updateActiveRowProgress(lyrics: LyricsData, index: Int, positionMs: Long) {
         if (index !in lyrics.lines.indices) {
@@ -266,53 +331,51 @@ class LockscreenLyricsView @JvmOverloads constructor(
         }
 
         val rawGap = maxOf(400L, nextTimestampMs - currentLine.timestampMs)
+        val hasCjk = text.any { isCjkChar(it) }
+        val tokenRanges = extractTokenRanges(text, hasCjk)
 
-        val wordRanges = mutableListOf<IntRange>()
-        val matcher = Pattern.compile("\\S+").matcher(text)
-        while (matcher.find()) {
-            wordRanges.add(matcher.start() until matcher.end())
-        }
-
-        if (wordRanges.isEmpty()) {
+        if (tokenRanges.isEmpty()) {
             row3.text = text
             return
         }
 
-        val totalWordChars = wordRanges.sumOf { it.last - it.first + 1 }
-
-        // Line duration: For phrases up to 6s, the sung portion spans ~88% of the gap,
-        // matching held vowels and phrasing without cutting short.
+        val totalChars = tokenRanges.sumOf { it.last - it.first + 1 }
         val activeDuration = when {
             rawGap <= 1500L -> maxOf(300L, rawGap - 80L)
             rawGap <= 6000L -> (rawGap * 0.88f).toLong()
-            else -> minOf(rawGap - 800L, maxOf(3500L, (wordRanges.size * 450L + totalWordChars * 60L)))
+            hasCjk -> minOf(rawGap - 600L, maxOf(2500L, (tokenRanges.size * 260L + totalChars * 30L)))
+            else -> minOf(rawGap - 800L, maxOf(3500L, (tokenRanges.size * 450L + totalChars * 60L)))
         }
 
         val elapsed = maxOf(0L, positionMs - currentLine.timestampMs)
         val progress = (elapsed.toFloat() / activeDuration.toFloat()).coerceIn(0.0f, 1.0f)
 
-        // Word weighting: gives syllables, baseline duration, and cadence sustain to the final word
-        val wordWeights = wordRanges.mapIndexed { idx, range ->
+        val tokenWeights = tokenRanges.mapIndexed { idx, range ->
+            val isCjk = isCjkChar(text[range.first])
             val charLen = (range.last - range.first + 1).toFloat()
-            val baseWeight = charLen + 2.5f
-            if (idx == wordRanges.size - 1 && wordRanges.size > 1) {
-                baseWeight * 1.7f // Final word usually holds the note/cadence
+            val baseWeight = when {
+                isCjk -> 1.0f
+                hasCjk -> (0.15f * charLen + 0.85f).coerceIn(1.0f, 1.6f) // English/Latin words in CJK songs
+                else -> 0.45f * charLen + 0.5f // Pure Spanish / English songs (untouched)
+            }
+            if (idx == tokenRanges.size - 1 && tokenRanges.size > 1) {
+                baseWeight * 1.5f
             } else {
                 baseWeight
             }
         }
-        val totalWeight = wordWeights.sum()
+        val totalWeight = tokenWeights.sum()
 
         var cumulativeWeight = 0.0f
         var activeCharEnd = 0
 
-        for (i in wordRanges.indices) {
-            val range = wordRanges[i]
-            val weight = wordWeights[i]
-            val wordStart = cumulativeWeight / totalWeight
+        for (i in tokenRanges.indices) {
+            val range = tokenRanges[i]
+            val weight = tokenWeights[i]
+            val tokenStart = cumulativeWeight / totalWeight
             cumulativeWeight += weight
 
-            if (progress >= wordStart) {
+            if (progress >= tokenStart) {
                 activeCharEnd = range.last + 1
             } else {
                 break
@@ -326,7 +389,6 @@ class LockscreenLyricsView @JvmOverloads constructor(
         val spannable = SpannableStringBuilder(text)
         if (activeCharEnd > 0) {
             val vocalEnd = activeCharEnd.coerceAtMost(text.length)
-            // Vocalized words: pure bright glowing white + bold
             spannable.setSpan(
                 ForegroundColorSpan(Color.WHITE),
                 0,
@@ -340,7 +402,6 @@ class LockscreenLyricsView @JvmOverloads constructor(
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             )
 
-            // Upcoming words: dimmed translucent gray-white
             if (vocalEnd < text.length) {
                 spannable.setSpan(
                     ForegroundColorSpan(Color.argb(120, 255, 255, 255)),
@@ -356,7 +417,6 @@ class LockscreenLyricsView @JvmOverloads constructor(
                 )
             }
         } else {
-            // Before vocal starts for this line: all words dimmed
             spannable.setSpan(
                 ForegroundColorSpan(Color.argb(120, 255, 255, 255)),
                 0,

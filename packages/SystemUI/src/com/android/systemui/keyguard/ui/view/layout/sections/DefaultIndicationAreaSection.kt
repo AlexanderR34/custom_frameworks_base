@@ -96,7 +96,7 @@ constructor(
                 ConstraintSet.END
             )
 
-            // 2. Lyrics View: DIRECTAMENTE ARRIBA DEL BOTÓN DE LA HUELLA DIGITAL
+            // 2. Lyrics View: Directly above fingerprint icon
             constrainWidth(lyricsViewId, ViewGroup.LayoutParams.MATCH_PARENT)
             constrainHeight(lyricsViewId, ViewGroup.LayoutParams.WRAP_CONTENT)
             connect(
