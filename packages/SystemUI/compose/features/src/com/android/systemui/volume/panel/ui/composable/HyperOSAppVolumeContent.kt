@@ -22,6 +22,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import com.android.compose.theme.PlatformTheme
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -177,68 +178,70 @@ fun HyperOSAppVolumeContent(
     val navBarStart = WindowInsets.navigationBars.asPaddingValues().calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
     val navBarEnd = WindowInsets.navigationBars.asPaddingValues().calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
 
-    // Completely transparent backdrop with tap-to-dismiss outside
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                isVisible = false
-                onDismiss()
-            }
-            .then(
-                if (isLandscape) {
-                    Modifier.padding(start = navBarStart, end = navBarEnd)
-                } else Modifier
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = scaleIn(
-                initialScale = 0.85f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-            ) + fadeIn(),
-            exit = scaleOut(
-                targetScale = 0.85f,
-                animationSpec = spring(stiffness = Spring.StiffnessMedium)
-            ) + fadeOut()
+    PlatformTheme {
+        // Completely transparent backdrop with tap-to-dismiss outside
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Transparent)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    isVisible = false
+                    onDismiss()
+                }
+                .then(
+                    if (isLandscape) {
+                        Modifier.padding(start = navBarStart, end = navBarEnd)
+                    } else Modifier
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            val sliderWidth = if (isLandscape) 56.dp else 64.dp
-            val sliderHeight = if (isLandscape) 170.dp else 220.dp
-            val spacing = if (isLandscape) 16.dp else 18.dp
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = scaleIn(
+                    initialScale = 0.85f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                ) + fadeIn(),
+                exit = scaleOut(
+                    targetScale = 0.85f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                ) + fadeOut()
             ) {
-                // 1. General Media Volume Slider (Vertical Capsule)
-                HyperOSMediaVolumeSlider(
-                    audioManager = audioManager,
-                    sliderWidth = sliderWidth,
-                    sliderHeight = sliderHeight,
-                    isLandscape = isLandscape,
-                    useMonet = useMonet,
-                    view = view
-                )
+                val sliderWidth = if (isLandscape) 56.dp else 64.dp
+                val sliderHeight = if (isLandscape) 170.dp else 220.dp
+                val spacing = if (isLandscape) 16.dp else 18.dp
 
-                // 2. Individual App Volume Sliders (Vertical Capsule)
-                for (appVol in activeAppVolumes) {
-                    HyperOSSingleAppVolumeSlider(
-                        appVolume = appVol,
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    // 1. General Media Volume Slider (Vertical Capsule)
+                    HyperOSMediaVolumeSlider(
                         audioManager = audioManager,
-                        packageManager = packageManager,
                         sliderWidth = sliderWidth,
                         sliderHeight = sliderHeight,
                         isLandscape = isLandscape,
                         useMonet = useMonet,
                         view = view
                     )
+
+                    // 2. Individual App Volume Sliders (Vertical Capsule)
+                    for (appVol in activeAppVolumes) {
+                        HyperOSSingleAppVolumeSlider(
+                            appVolume = appVol,
+                            audioManager = audioManager,
+                            packageManager = packageManager,
+                            sliderWidth = sliderWidth,
+                            sliderHeight = sliderHeight,
+                            isLandscape = isLandscape,
+                            useMonet = useMonet,
+                            view = view
+                        )
+                    }
                 }
             }
         }

@@ -78,6 +78,7 @@ constructor(
     private val captionsButtonViewModel: VolumeDialogCaptionsButtonViewModel,
     private val jankListenerFactory: JankListenerFactory,
     private val tracer: VolumeTracer,
+    private val volumeNavigator: com.android.systemui.volume.ui.navigation.VolumeNavigator,
     @VolumeDialog private val viewBinders: List<@JvmSuppressWildcards ViewBinder>,
 ) {
 
@@ -267,10 +268,7 @@ constructor(
                     }
                 }
                 soundAssistantButton?.setOnClickListener {
-                    val intent = android.content.Intent(android.provider.Settings.Panel.ACTION_APP_VOLUME).apply {
-                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    root.context.startActivity(intent)
+                    volumeNavigator.openVolumePanel(com.android.systemui.volume.domain.model.VolumePanelRoute.APP_VOLUME_PANEL)
                     dialog.dismiss()
                 }
             } else {

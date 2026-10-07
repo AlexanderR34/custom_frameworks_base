@@ -26,6 +26,7 @@ import com.android.systemui.volume.dialog.sliders.ui.volumeDialogSlidersViewBind
 import com.android.systemui.volume.dialog.ui.utils.jankListenerFactory
 import com.android.systemui.volume.dialog.ui.viewmodel.volumeDialogViewModel
 import com.android.systemui.volume.dialog.utils.volumeTracer
+import com.android.systemui.volume.ui.navigation.volumeNavigator
 
 val Kosmos.systemUiVolumeDialogViewBinders by
     Kosmos.Fixture {
@@ -47,6 +48,7 @@ val Kosmos.volumeDialogViewBinder by
             volumeDialogCaptionsButtonViewModelKosmos,
             jankListenerFactory,
             volumeTracer,
+            volumeNavigator,
             volumeDialogViewBinders,
         )
     }
