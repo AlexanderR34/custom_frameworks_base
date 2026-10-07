@@ -729,6 +729,38 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
     val navBarStart = WindowInsets.navigationBars.asPaddingValues().calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
     val navBarEnd = WindowInsets.navigationBars.asPaddingValues().calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
 
+    val showTileLabels by produceState(
+        initialValue = try {
+            android.provider.Settings.System.getInt(
+                context.contentResolver,
+                "show_qs_tile_labels",
+                0
+            ) == 1
+        } catch (e: Exception) { false },
+        key1 = context
+    ) {
+        val uri = android.provider.Settings.System.getUriFor("show_qs_tile_labels")
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                value = try {
+                    android.provider.Settings.System.getInt(
+                        context.contentResolver,
+                        "show_qs_tile_labels",
+                        0
+                    ) == 1
+                } catch (e: Exception) { false }
+            }
+        }
+        try {
+            context.contentResolver.registerContentObserver(uri, false, observer)
+        } catch (e: Exception) {}
+        awaitDispose {
+            try {
+                context.contentResolver.unregisterContentObserver(observer)
+            } catch (e: Exception) {}
+        }
+    }
+
     var showMobileDataDialog by remember {
         mutableStateOf(false)
     }
@@ -754,6 +786,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                     HyperOSTilesGrid(
                         tiles = gridTiles,
                         view = view,
+                        showLabels = showTileLabels,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -1059,6 +1092,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                     HyperOSTilesGrid(
                         tiles = gridTiles,
                         view = view,
+                        showLabels = showTileLabels,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -2473,12 +2507,13 @@ private fun HyperOSVerticalVolumeSlider(
 private fun HyperOSTilesGrid(
     tiles: List<com.android.systemui.qs.panels.ui.viewmodel.TileViewModel>,
     view: android.view.View,
+    showLabels: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val rows = tiles.chunked(4)
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(if (showLabels) 14.dp else 12.dp)
     ) {
         for (row in rows) {
             Row(
@@ -2489,6 +2524,7 @@ private fun HyperOSTilesGrid(
                     HyperOSTileItem(
                         tile = tile,
                         view = view,
+                        showLabels = showLabels,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -2507,6 +2543,7 @@ private fun HyperOSTilesGrid(
 private fun HyperOSTileItem(
     tile: com.android.systemui.qs.panels.ui.viewmodel.TileViewModel,
     view: android.view.View,
+    showLabels: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -2598,21 +2635,23 @@ private fun HyperOSTileItem(
             )
         }
 
-        Spacer(Modifier.height(5.dp))
+        if (showLabels) {
+            Spacer(Modifier.height(5.dp))
 
-        Text(
-            text = tileState.label?.toString() ?: "",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
-                color = Color.White
-            ),
-            maxLines = 2,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+            Text(
+                text = tileState.label?.toString() ?: "",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                    color = Color.White
+                ),
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
