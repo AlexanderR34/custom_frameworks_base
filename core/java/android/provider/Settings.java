@@ -6286,6 +6286,15 @@ public final class Settings {
         public static final String HYPEROS_VOLUME_PANEL_STYLE = "hyperos_volume_panel_style";
 
         /**
+         * Whether Monet dynamic colors are used for HyperOS volume panel.
+         * 0 = HyperOS classic (white sliders with blue icons)
+         * 1 = Monet dynamic colors
+         * @hide
+         */
+        @Readable
+        public static final String HYPEROS_VOLUME_USE_MONET = "hyperos_volume_use_monet";
+
+        /**
          * Whether internal audio mic injection is enabled.
          * 0 = disabled (normal microphone capture)
          * 1 = enabled (internal audio routed to mic stream)
@@ -7516,6 +7525,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(GAMESPACE_SUPPRESS_FULLSCREEN_INTENT);
             PRIVATE_SETTINGS.add(CUSTOM_BLUR_INTENSITY);
             PRIVATE_SETTINGS.add(HYPEROS_VOLUME_PANEL_STYLE);
+            PRIVATE_SETTINGS.add(HYPEROS_VOLUME_USE_MONET);
             PRIVATE_SETTINGS.add(CONTROL_CENTER_STYLE);
             PRIVATE_SETTINGS.add(SHOW_CALL_VOLUME_SLIDER);
             PRIVATE_SETTINGS.add(VOLUME_BOOST_200_ENABLED);

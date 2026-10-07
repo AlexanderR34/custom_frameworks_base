@@ -68,11 +68,11 @@ constructor(
                 android.provider.Settings.System.getIntForUser(
                     context.contentResolver,
                     android.provider.Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
-                    1,
+                    0,
                     android.os.UserHandle.USER_CURRENT
                 ) == 1
             } catch (e: Exception) {
-                true
+                false
             }
             return if (isHyperOS) true else !expandedAudioTileDetailsFeatureInteractor.isEnabled()
         }

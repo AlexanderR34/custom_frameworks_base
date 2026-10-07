@@ -73,7 +73,7 @@ constructor(
                 val isHyperOS = android.provider.Settings.System.getIntForUser(
                     view.context.contentResolver,
                     android.provider.Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
-                    1,
+                    0,
                     android.os.UserHandle.USER_CURRENT
                 ) == 1
 

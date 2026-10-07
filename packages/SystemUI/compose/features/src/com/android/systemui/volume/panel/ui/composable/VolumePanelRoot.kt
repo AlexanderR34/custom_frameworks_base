@@ -54,7 +54,7 @@ fun VolumePanelRoot(
         android.provider.Settings.System.getInt(
             context.contentResolver,
             "hyperos_volume_panel_style",
-            1
+            0
         ) == 1
     }
     val accessibilityTitle = stringResource(R.string.accessibility_volume_settings)

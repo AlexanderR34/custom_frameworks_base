@@ -99,8 +99,46 @@ fun HyperOSVolumePanel(
     val notificationManager = remember(context) { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
     var isVisible by remember { mutableStateOf(false) }
+
+    var useMonet by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.System.getIntForUser(
+                    context.contentResolver,
+                    "hyperos_volume_use_monet",
+                    1,
+                    android.os.UserHandle.USER_CURRENT
+                ) == 1
+            } catch (e: Exception) { true }
+        )
+    }
+
+    DisposableEffect(context) {
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                useMonet = try {
+                    android.provider.Settings.System.getIntForUser(
+                        context.contentResolver,
+                        "hyperos_volume_use_monet",
+                        1,
+                        android.os.UserHandle.USER_CURRENT
+                    ) == 1
+                } catch (e: Exception) { true }
+            }
+        }
+        val uri = android.provider.Settings.System.getUriFor("hyperos_volume_use_monet")
+        try {
+            context.contentResolver.registerContentObserver(uri, false, observer, android.os.UserHandle.USER_CURRENT)
+        } catch (e: Exception) {}
+        onDispose {
+            try {
+                context.contentResolver.unregisterContentObserver(observer)
+            } catch (e: Exception) {}
+        }
+    }
 
     BackHandler {
         isVisible = false
@@ -116,6 +154,12 @@ fun HyperOSVolumePanel(
     val verticalInnerPadding = if (isLandscape) 12.dp else 20.dp
     val cardCornerRadius = if (isLandscape) 28.dp else 36.dp
     val cardWidth = if (isLandscape) 360.dp else 340.dp
+
+    val cardBg = if (useMonet) {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+    } else {
+        if (isDark) Color(0xEE222327) else Color(0xEEF5F5F7)
+    }
 
     // Outer full-screen container with dismiss-on-tap-outside
     Box(
@@ -148,7 +192,7 @@ fun HyperOSVolumePanel(
                     .padding(top = topPadding, end = if (isLandscape) 20.dp else 16.dp, bottom = bottomPadding)
                     .width(cardWidth)
                     .clip(RoundedCornerShape(cardCornerRadius))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                    .background(cardBg)
                     .shadow(elevation = 20.dp, shape = RoundedCornerShape(cardCornerRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -167,7 +211,8 @@ fun HyperOSVolumePanel(
                         layout = layout,
                         audioManager = audioManager,
                         view = view,
-                        isLandscape = isLandscape
+                        isLandscape = isLandscape,
+                        useMonet = useMonet
                     )
 
                     Spacer(modifier = Modifier.height(if (isLandscape) 10.dp else 18.dp))
@@ -177,7 +222,8 @@ fun HyperOSVolumePanel(
                         audioManager = audioManager,
                         notificationManager = notificationManager,
                         view = view,
-                        isLandscape = isLandscape
+                        isLandscape = isLandscape,
+                        useMonet = useMonet
                     )
                 }
             }
@@ -191,6 +237,7 @@ private fun HyperOSVerticalSlidersRow(
     audioManager: AudioManager,
     view: android.view.View,
     isLandscape: Boolean,
+    useMonet: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -205,6 +252,7 @@ private fun HyperOSVerticalSlidersRow(
             fallbackIconRes = R.drawable.ic_hyperos_speaker_mid,
             view = view,
             isLandscape = isLandscape,
+            useMonet = useMonet,
             modifier = Modifier.weight(1f)
         )
 
@@ -217,6 +265,7 @@ private fun HyperOSVerticalSlidersRow(
             fallbackIconRes = R.drawable.ic_hyperos_bell_normal,
             view = view,
             isLandscape = isLandscape,
+            useMonet = useMonet,
             modifier = Modifier.weight(1f)
         )
 
@@ -229,6 +278,7 @@ private fun HyperOSVerticalSlidersRow(
             fallbackIconRes = R.drawable.ic_alarm,
             view = view,
             isLandscape = isLandscape,
+            useMonet = useMonet,
             modifier = Modifier.weight(1f)
         )
 
@@ -241,6 +291,7 @@ private fun HyperOSVerticalSlidersRow(
             fallbackIconRes = R.drawable.ic_hyperos_call_volume,
             view = view,
             isLandscape = isLandscape,
+            useMonet = useMonet,
             modifier = Modifier.weight(1f)
         )
     }
@@ -253,6 +304,7 @@ private fun HyperOSVerticalStreamSlider(
     fallbackIconRes: Int,
     view: android.view.View,
     isLandscape: Boolean,
+    useMonet: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -377,16 +429,16 @@ private fun HyperOSVerticalStreamSlider(
                     }
                 }
         ) {
-            val monetPrimary = MaterialTheme.colorScheme.primary
-            val monetOnPrimary = MaterialTheme.colorScheme.onPrimary
+            val sliderFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color.White
+            val activeIconColor = if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
 
-            // Active Filled Level (grows from bottom to top) - Monet Adaptive Fill Bar
+            // Active Filled Level (grows from bottom to top)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .fillMaxHeight(animatedFraction.coerceIn(0f, 1f))
-                    .background(monetPrimary)
+                    .background(sliderFillColor)
             )
 
             // Bottom Icon badge
@@ -409,7 +461,7 @@ private fun HyperOSVerticalStreamSlider(
                 contentAlignment = Alignment.Center
             ) {
                 val iconColor = if (animatedFraction > 0.18f) {
-                    monetOnPrimary
+                    activeIconColor
                 } else {
                     Color.White
                 }
@@ -431,6 +483,7 @@ private fun HyperOSTimersSection(
     notificationManager: NotificationManager,
     view: android.view.View,
     isLandscape: Boolean,
+    useMonet: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -461,6 +514,7 @@ private fun HyperOSTimersSection(
             maxMinutes = 480, // 8 hours
             activeColor = Color(0xFFFF3B30),
             isLandscape = isLandscape,
+            useMonet = useMonet,
             onToggle = { isActive ->
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 try {
@@ -484,6 +538,7 @@ private fun HyperOSTimersSection(
             maxMinutes = 480, // 8 hours
             activeColor = Color(0xFF7C4DFF),
             isLandscape = isLandscape,
+            useMonet = useMonet,
             onToggle = { isActive ->
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 try {
@@ -514,6 +569,7 @@ private fun HyperOSTimerRow(
     maxMinutes: Int,
     activeColor: Color,
     isLandscape: Boolean,
+    useMonet: Boolean,
     onToggle: (Boolean) -> Unit,
     onTimerChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -703,14 +759,21 @@ private fun HyperOSTimerRow(
                 },
             contentAlignment = Alignment.CenterStart
         ) {
-            // Dynamic Monet Fill Level (Progressively shrinks from right to left as countdown proceeds)
+            val timerFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color(0xFF2A72E5)
+            val timerTextColor = if (animatedLiveFraction > 0.2f) {
+                if (useMonet) MaterialTheme.colorScheme.onPrimary else Color.White
+            } else {
+                Color.White
+            }
+
+            // Dynamic Fill Level (Progressively shrinks from right to left as countdown proceeds)
             if (animatedLiveFraction > 0.005f) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .fillMaxHeight()
                         .fillMaxWidth(animatedLiveFraction)
-                        .background(monetPrimary)
+                        .background(timerFillColor)
                 )
             }
 
@@ -720,7 +783,7 @@ private fun HyperOSTimerRow(
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontSize = if (isLandscape) 11.sp else 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (animatedLiveFraction > 0.2f) monetOnPrimary else Color.White
+                    color = timerTextColor
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

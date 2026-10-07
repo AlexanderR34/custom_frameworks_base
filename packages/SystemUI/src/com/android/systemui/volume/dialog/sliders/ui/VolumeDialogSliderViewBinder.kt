@@ -123,7 +123,7 @@ constructor(
         val isHyperOS = Settings.System.getIntForUser(
             view.context.contentResolver,
             Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
-            1,
+            0,
             UserHandle.USER_CURRENT
         ) == 1
         // Use horizontal volume dialog ONLY if audio tile details view is enabled AND NOT HyperOS
@@ -170,7 +170,7 @@ private fun VolumeDialogSlider(
             Settings.System.getIntForUser(
                 context.contentResolver,
                 Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
-                1,
+                0,
                 UserHandle.USER_CURRENT
             ) == 1
         )
@@ -182,7 +182,7 @@ private fun VolumeDialogSlider(
                 isHyperOS = Settings.System.getIntForUser(
                     context.contentResolver,
                     Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
-                    1,
+                    0,
                     UserHandle.USER_CURRENT
                 ) == 1
             }

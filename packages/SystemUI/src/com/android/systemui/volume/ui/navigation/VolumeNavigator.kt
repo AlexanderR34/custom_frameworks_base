@@ -122,10 +122,10 @@ constructor(
             android.provider.Settings.System.getInt(
                 dialogFactory.applicationContext.contentResolver,
                 "hyperos_volume_panel_style",
-                1
+                0
             ) == 1
         } catch (e: Exception) {
-            true
+            false
         }
 
         val dialog = dialogFactory.createBottomSheet(
