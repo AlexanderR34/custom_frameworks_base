@@ -155,6 +155,8 @@ import com.android.systemui.media.remedia.ui.viewmodel.MediaViewModel
 import com.android.systemui.notifications.ui.composable.SnoozableHeadsUpNotificationPlaceholder
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import com.android.systemui.qs.composefragment.ui.GridAnchor
 import com.android.systemui.qs.flags.QsDetailedView
 import com.android.systemui.qs.panels.ui.compose.EditMode
