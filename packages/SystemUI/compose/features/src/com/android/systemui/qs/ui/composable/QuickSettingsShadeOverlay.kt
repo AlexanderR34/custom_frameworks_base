@@ -1571,8 +1571,90 @@ private fun HyperOSMediaCard(
         viewModelFactory.create(context, MediaCarouselVisibility.WhenNotEmpty)
     }
     val cards = mediaViewModel.cards
-    val activeController = remember(cards) { getActiveMediaController(context, null) }
-    val currentCard = remember(cards, activeController) {
+
+    var activeController by remember { mutableStateOf<android.media.session.MediaController?>(null) }
+    var liveMetadata by remember { mutableStateOf<android.media.MediaMetadata?>(null) }
+    var livePlaybackState by remember { mutableStateOf<android.media.session.PlaybackState?>(null) }
+
+    // Real-time listener for MediaSession and active controller changes
+    DisposableEffect(context) {
+        val msm = context.getSystemService(android.content.Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
+        val sessionsListener = android.media.session.MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
+            val playing = controllers?.firstOrNull { it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
+                ?: controllers?.firstOrNull()
+            activeController = playing
+            liveMetadata = playing?.metadata
+            livePlaybackState = playing?.playbackState
+        }
+        try {
+            msm?.addOnActiveSessionsChangedListener(sessionsListener, null)
+        } catch (_: Exception) {}
+
+        // Initial fetch
+        val initialController = getActiveMediaController(context, null)
+        activeController = initialController
+        liveMetadata = initialController?.metadata
+        livePlaybackState = initialController?.playbackState
+
+        onDispose {
+            try {
+                msm?.removeOnActiveSessionsChangedListener(sessionsListener)
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Register callback on active controller to catch real-time track changes immediately
+    DisposableEffect(activeController) {
+        val controller = activeController
+        if (controller == null) {
+            onDispose {}
+        } else {
+            val callback = object : android.media.session.MediaController.Callback() {
+                override fun onMetadataChanged(metadata: android.media.MediaMetadata?) {
+                    liveMetadata = metadata
+                }
+                override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) {
+                    livePlaybackState = state
+                }
+                override fun onSessionDestroyed() {
+                    val fallback = getActiveMediaController(context, null)
+                    activeController = fallback
+                    liveMetadata = fallback?.metadata
+                    livePlaybackState = fallback?.playbackState
+                }
+            }
+            try {
+                controller.registerCallback(callback)
+            } catch (_: Exception) {}
+            onDispose {
+                try {
+                    controller.unregisterCallback(callback)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // Failsafe periodic sync while QS shade is open
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            val current = getActiveMediaController(context, null)
+            if (current?.sessionToken != activeController?.sessionToken) {
+                activeController = current
+                liveMetadata = current?.metadata
+                livePlaybackState = current?.playbackState
+            } else if (current != null) {
+                if (current.metadata != liveMetadata) {
+                    liveMetadata = current.metadata
+                }
+                if (current.playbackState?.state != livePlaybackState?.state) {
+                    livePlaybackState = current.playbackState
+                }
+            }
+            delay(500)
+        }
+    }
+
+    val currentCard = remember(cards, activeController, livePlaybackState) {
         val byPlayingState = cards.firstOrNull {
             it.playPauseAction?.state == com.android.systemui.media.remedia.shared.model.MediaSessionState.Playing
         }
@@ -1580,7 +1662,7 @@ private fun HyperOSMediaCard(
         val byActiveController = if (activeController != null) {
             cards.firstOrNull { card ->
                 val keyStr = (card.key as? String) ?: ""
-                keyStr.startsWith(activeController.packageName) || keyStr.contains(activeController.packageName)
+                keyStr.startsWith(activeController!!.packageName) || keyStr.contains(activeController!!.packageName)
             }
         } else null
 
@@ -1592,7 +1674,7 @@ private fun HyperOSMediaCard(
         when {
             keyStr.contains(":") -> keyStr.substringBefore(":")
             keyStr.contains(".") -> keyStr
-            activeController != null -> activeController.packageName
+            activeController != null -> activeController!!.packageName
             else -> ""
         }
     }
@@ -1602,9 +1684,10 @@ private fun HyperOSMediaCard(
     var lastCoverKey by remember { mutableStateOf<String?>(null) }
     var lastIconPkg by remember { mutableStateOf<String?>(null) }
 
-    // Update artwork only when track or background source actually changes, preventing constant recomposition crossfades
-    LaunchedEffect(currentCard?.background, currentCard?.title, currentCard?.subtitle, cardPkg) {
-        val currentTrackKey = "${currentCard?.key ?: ""}_${currentCard?.title ?: ""}_${currentCard?.subtitle ?: ""}_${cardPkg}"
+    // Update artwork in real-time whenever track metadata or background source changes
+    LaunchedEffect(currentCard?.background, currentCard?.title, currentCard?.subtitle, liveMetadata, cardPkg) {
+        val metaTitle = liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: ""
+        val currentTrackKey = "${currentCard?.key ?: ""}_${currentCard?.title ?: ""}_${currentCard?.subtitle ?: ""}_${metaTitle}_${cardPkg}"
         if (currentTrackKey != lastCoverKey || cachedImageBitmap == null) {
             val loadedBmp = (currentCard?.background as? com.android.systemui.common.shared.model.Icon.Loaded)?.let { loaded ->
                 val drawable = loaded.drawable
@@ -1612,16 +1695,18 @@ private fun HyperOSMediaCard(
                     drawable.bitmap
                 } else null
             }
-            val bmp = loadedBmp ?: if (cardPkg.isNotBlank()) {
-                try {
-                    val controller = getActiveMediaController(context, cardPkg)
-                    val meta = controller?.metadata
-                    meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
-                        ?: meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
-                } catch (e: Exception) {
-                    null
-                }
-            } else null
+            val bmp = loadedBmp ?: (if (cardPkg.isNotBlank()) {
+                liveMetadata?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ?: liveMetadata?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
+                    ?: try {
+                        val controller = getActiveMediaController(context, cardPkg)
+                        val meta = controller?.metadata
+                        meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
+                            ?: meta?.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
+                    } catch (e: Exception) {
+                        null
+                    }
+            } else null)
 
             cachedImageBitmap = bmp?.asImageBitmap()
             lastCoverKey = currentTrackKey
@@ -1789,15 +1874,15 @@ private fun HyperOSMediaCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                val activeTitle = remember(activeController?.metadata) {
-                    activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
-                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+                val activeTitle = remember(liveMetadata) {
+                    liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
+                        ?: liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
                 }
-                val activeArtist = remember(activeController?.metadata) {
-                    activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
-                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
-                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_AUTHOR)
-                        ?: activeController?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
+                val activeArtist = remember(liveMetadata) {
+                    liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
+                        ?: liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+                        ?: liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_AUTHOR)
+                        ?: liveMetadata?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
                 }
 
                 val emptyTitle = stringResource(R.string.hyperos_qs_media_empty_title)
@@ -1893,7 +1978,7 @@ private fun HyperOSMediaCard(
                 val isPlaying = if (currentCard != null) {
                     currentCard.playPauseAction?.state != com.android.systemui.media.remedia.shared.model.MediaSessionState.Paused
                 } else {
-                    activeController?.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
+                    livePlaybackState?.state == android.media.session.PlaybackState.STATE_PLAYING
                 }
                 val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 val isPlayPressed by playInteraction.collectIsPressedAsState()
