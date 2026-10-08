@@ -35,16 +35,39 @@ constructor(
         val showAppVolume = Settings.System.getIntForUser(
             context.contentResolver,
             Settings.System.SHOW_APP_VOLUME,
-            0,
+            1,
             UserHandle.USER_CURRENT
         )
         if (showAppVolume == 1) {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            for (appVolume in audioManager.listAppVolumes()) {
-                if (appVolume.isActive && appVolume.packageName != "android") {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+            val list = try { audioManager.listAppVolumes() } catch (_: Exception) { null }
+            if (list != null && list.any { it.packageName != "android" && it.packageName != "com.android.systemui" }) {
+                return true
+            }
+            if (audioManager.isMusicActive) {
+                return true
+            }
+            try {
+                if (audioManager.activePlaybackConfigurations.isNotEmpty()) {
                     return true
                 }
-            }
+            } catch (_: Exception) {}
+            try {
+                val mediaSessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
+                if (mediaSessionManager != null && mediaSessionManager.getActiveSessions(null).isNotEmpty()) {
+                    return true
+                }
+            } catch (_: Exception) {}
+            try {
+                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                val runningTasks = activityManager?.getRunningTasks(1)
+                if (runningTasks != null && runningTasks.isNotEmpty()) {
+                    val topPkg = runningTasks[0].topActivity?.packageName
+                    if (topPkg != null && topPkg != "android" && topPkg != "com.android.systemui" && !topPkg.contains("launcher")) {
+                        return true
+                    }
+                }
+            } catch (_: Exception) {}
         }
         return false
     }

@@ -151,11 +151,11 @@ fun HyperOSAppVolumeContent(
         isVisible = true
     }
 
-    // Active apps playing volume - periodically polled for real-time reactivity
+    // Registered apps playing volume - periodically polled for real-time reactivity
     var activeAppVolumes by remember {
         mutableStateOf(
             try {
-                audioManager.listAppVolumes().filter { it.isActive && it.packageName != "android" }
+                audioManager.listAppVolumes().filter { it.packageName != "android" && it.packageName != "com.android.systemui" }
             } catch (_: Exception) {
                 emptyList<AppVolume>()
             }
@@ -165,13 +165,13 @@ fun HyperOSAppVolumeContent(
     LaunchedEffect(Unit) {
         while (isActive) {
             try {
-                val currentList = audioManager.listAppVolumes().filter { it.isActive && it.packageName != "android" }
-                if (currentList.map { "${it.packageName}:${it.volume}:${it.isActive}" } != 
-                    activeAppVolumes.map { "${it.packageName}:${it.volume}:${it.isActive}" }) {
+                val currentList = audioManager.listAppVolumes().filter { it.packageName != "android" && it.packageName != "com.android.systemui" }
+                if (currentList.map { "${it.packageName}:${it.volume}:${it.isMuted}" } != 
+                    activeAppVolumes.map { "${it.packageName}:${it.volume}:${it.isMuted}" }) {
                     activeAppVolumes = currentList
                 }
             } catch (_: Exception) {}
-            delay(150)
+            delay(200)
         }
     }
 

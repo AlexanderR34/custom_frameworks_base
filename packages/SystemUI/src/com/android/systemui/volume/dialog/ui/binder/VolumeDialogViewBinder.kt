@@ -275,25 +275,38 @@ constructor(
         val showAppVolume = Settings.System.getIntForUser(
             context.contentResolver,
             Settings.System.SHOW_APP_VOLUME,
-            0,
+            1,
             android.os.UserHandle.USER_CURRENT
         ) == 1
         if (!showAppVolume) return false
 
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return false
         val list = try { audioManager.listAppVolumes() } catch (_: Exception) { null }
-        if (list != null && list.any { it.isActive && it.packageName != "android" }) {
+        if (list != null && list.any { it.packageName != "android" && it.packageName != "com.android.systemui" }) {
             return true
         }
-        if (list != null && list.filter { it.packageName != "android" }.size >= 2) {
-            return true
-        }
-        if (audioManager.isMusicActive && list != null && list.any { it.packageName != "android" }) {
+        if (audioManager.isMusicActive) {
             return true
         }
         try {
-            if (audioManager.activePlaybackConfigurations.any { it.isActive }) {
+            if (audioManager.activePlaybackConfigurations.isNotEmpty()) {
                 return true
+            }
+        } catch (_: Exception) {}
+        try {
+            val mediaSessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
+            if (mediaSessionManager != null && mediaSessionManager.getActiveSessions(null).isNotEmpty()) {
+                return true
+            }
+        } catch (_: Exception) {}
+        try {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val runningTasks = activityManager?.getRunningTasks(1)
+            if (runningTasks != null && runningTasks.isNotEmpty()) {
+                val topPkg = runningTasks[0].topActivity?.packageName
+                if (topPkg != null && topPkg != "android" && topPkg != "com.android.systemui" && !topPkg.contains("launcher")) {
+                    return true
+                }
             }
         } catch (_: Exception) {}
         return false
