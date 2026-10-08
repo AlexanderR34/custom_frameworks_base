@@ -124,7 +124,7 @@ constructor(
             )
             true
         }
-        animateVisibility(root, dialog, viewModel.dialogVisibilityModel)
+        animateVisibility(root, dialog, viewModel.dialogVisibilityModel, isVolumeDialogVertical)
 
         viewModel.dialogTitle
             .filter { it.isNotEmpty() }
@@ -288,8 +288,11 @@ constructor(
         if (list != null && list.filter { it.packageName != "android" }.size >= 2) {
             return true
         }
+        if (audioManager.isMusicActive && list != null && list.any { it.packageName != "android" }) {
+            return true
+        }
         try {
-            if (audioManager.activePlaybackConfigurations.any { it.isActive && it.clientPackageName != "android" }) {
+            if (audioManager.activePlaybackConfigurations.any { it.isActive }) {
                 return true
             }
         } catch (_: Exception) {}
@@ -300,6 +303,7 @@ constructor(
         view: View,
         dialog: Dialog,
         visibilityModel: Flow<VolumeDialogVisibilityModel>,
+        isVolumeDialogVertical: Boolean,
     ) {
         view.applyAnimationProgress(FRACTION_HIDE)
         val animationValueHolder = FloatValueHolder(FRACTION_HIDE)
