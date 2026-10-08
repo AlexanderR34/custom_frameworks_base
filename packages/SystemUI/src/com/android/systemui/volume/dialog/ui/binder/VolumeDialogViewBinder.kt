@@ -247,33 +247,21 @@ constructor(
                 marginEnd = 0
             }
 
-            val showAppVolume = Settings.System.getIntForUser(
-                root.context.contentResolver,
-                Settings.System.SHOW_APP_VOLUME,
-                0,
-                android.os.UserHandle.USER_CURRENT
-            ) == 1
-
-            val audioManager = root.context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            val hasActiveApp = audioManager?.listAppVolumes()?.any { it.isActive && it.packageName != "android" } ?: false
-
-            if (showAppVolume && hasActiveApp) {
-                soundAssistantContainer?.visibility = View.VISIBLE
-                if (soundAssistantButton is android.widget.ImageView) {
-                    soundAssistantButton.setImageResource(R.drawable.ic_hyperos_speaker_mid)
-                }
-                soundAssistantContainer?.let {
-                    launchTraced("VDVB#soundAssistantTouchableBounds") {
-                        viewModel.addTouchableBounds(it)
-                    }
-                }
-                soundAssistantButton?.setOnClickListener {
-                    volumeNavigator.openVolumePanel(com.android.systemui.volume.domain.model.VolumePanelRoute.APP_VOLUME_PANEL)
-                    dialog.dismiss()
-                }
-            } else {
-                soundAssistantContainer?.visibility = View.GONE
+            if (soundAssistantButton is android.widget.ImageView) {
+                soundAssistantButton.setImageResource(R.drawable.ic_hyperos_speaker_mid)
             }
+            soundAssistantContainer?.let {
+                launchTraced("VDVB#soundAssistantTouchableBounds") {
+                    viewModel.addTouchableBounds(it)
+                }
+            }
+            soundAssistantButton?.setOnClickListener {
+                volumeNavigator.openVolumePanel(com.android.systemui.volume.domain.model.VolumePanelRoute.APP_VOLUME_PANEL)
+                dialog.dismiss()
+            }
+
+            val shouldShow = shouldShowSoundAssistant(root.context)
+            soundAssistantContainer?.visibility = if (shouldShow) View.VISIBLE else View.GONE
         } else {
             soundAssistantContainer?.visibility = View.GONE
         }
@@ -281,6 +269,31 @@ constructor(
         for (viewBinder in viewBinders) {
             with(viewBinder) { bind(root) }
         }
+    }
+
+    private fun shouldShowSoundAssistant(context: Context): Boolean {
+        val showAppVolume = Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.SHOW_APP_VOLUME,
+            0,
+            android.os.UserHandle.USER_CURRENT
+        ) == 1
+        if (!showAppVolume) return false
+
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return false
+        val list = try { audioManager.listAppVolumes() } catch (_: Exception) { null }
+        if (list != null && list.any { it.isActive && it.packageName != "android" }) {
+            return true
+        }
+        if (list != null && list.filter { it.packageName != "android" }.size >= 2) {
+            return true
+        }
+        try {
+            if (audioManager.activePlaybackConfigurations.any { it.isActive && it.clientPackageName != "android" }) {
+                return true
+            }
+        } catch (_: Exception) {}
+        return false
     }
 
     private fun CoroutineScope.animateVisibility(
@@ -303,11 +316,26 @@ constructor(
                 }
         var junkListener: DynamicAnimation.OnAnimationUpdateListener? = null
 
+        val soundAssistantContainer = view.findViewById<View?>(R.id.volume_dialog_sound_assistant_container)
+
         visibilityModel
             .conflate()
             .onEach {
                 when (it) {
                     is VolumeDialogVisibilityModel.Visible -> {
+                        val isHyperOS = Settings.System.getIntForUser(
+                            view.context.contentResolver,
+                            Settings.System.HYPEROS_VOLUME_PANEL_STYLE,
+                            0,
+                            android.os.UserHandle.USER_CURRENT
+                        ) == 1
+                        if (isHyperOS && isVolumeDialogVertical) {
+                            val shouldShow = shouldShowSoundAssistant(view.context)
+                            soundAssistantContainer?.visibility = if (shouldShow) View.VISIBLE else View.GONE
+                        } else {
+                            soundAssistantContainer?.visibility = View.GONE
+                        }
+
                         tracer.traceVisibilityEnd(it)
                         junkListener?.let(animation::removeUpdateListener)
                         junkListener =
