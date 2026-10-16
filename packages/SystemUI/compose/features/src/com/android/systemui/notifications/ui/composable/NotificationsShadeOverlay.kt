@@ -74,6 +74,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -136,6 +137,7 @@ import com.android.systemui.shade.ui.composable.OverlayShade
 import com.android.systemui.shade.ui.composable.OverlayShadeHeader
 import com.android.systemui.statusbar.notification.stack.NotificationStackScrollLayout
 import com.android.systemui.statusbar.notification.stack.ui.view.NotificationScrollView
+import com.android.systemui.statusbar.notification.stack.ui.view.SharedNotificationContainer
 import dagger.Lazy
 import javax.inject.Inject
 import kotlinx.coroutines.delay
@@ -447,75 +449,99 @@ constructor(
 
                 if (isHyperOS) {
                     val nsslView = stackScrollViewInstance.asView()
-                    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                    val navBarEnd = WindowInsets.navigationBars.asPaddingValues().calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+                    val sharedContainer = (nsslView.parent as? SharedNotificationContainer)
+                        ?: (nsslView.rootView.findViewById(R.id.shared_notification_container) as? SharedNotificationContainer)
+                    val compositionContext = rememberCompositionContext()
                     val isDark = isSystemInDarkTheme()
 
-                    var hasClearableNotifs by remember { mutableStateOf(false) }
-                    LaunchedEffect(nsslView) {
-                        while (true) {
-                            val nssl = nsslView as? NotificationStackScrollLayout
-                            val count = nssl?.childCount ?: 0
-                            var found = false
-                            for (i in 0 until count) {
-                                val child = nssl?.getChildAt(i)
-                                if (child is com.android.systemui.statusbar.notification.row.ExpandableNotificationRow && child.canViewBeDismissed()) {
-                                    found = true
-                                    break
-                                }
-                            }
-                            hasClearableNotifs = found
-                            delay(300)
+                    val composeView = remember {
+                        ComposeView(context).apply {
+                            setParentCompositionContext(compositionContext)
+                            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
                         }
                     }
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = hasClearableNotifs,
-                        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(initialScale = 0.8f),
-                        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)) + androidx.compose.animation.scaleOut(targetScale = 0.8f),
-                        modifier = Modifier
-                            .align(if (isLandscape) Alignment.CenterEnd else Alignment.BottomCenter)
-                            .padding(
-                                bottom = if (isLandscape) 0.dp else navBarBottom + 28.dp,
-                                end = if (isLandscape) navBarEnd + 36.dp else 0.dp,
-                            )
-                    ) {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val scale by animateFloatAsState(
-                            targetValue = if (isPressed) 0.88f else 1.0f,
-                            animationSpec = androidx.compose.animation.core.spring(
-                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-                            ),
-                            label = "ClearAllButtonScale"
-                        )
+                    DisposableEffect(sharedContainer, composeView) {
+                        sharedContainer?.setFloatingClearAllButton(composeView)
+                        onDispose {
+                            sharedContainer?.setFloatingClearAllButton(null)
+                        }
+                    }
 
-                        Box(
-                            modifier = Modifier
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
+                    LaunchedEffect(composeView, isDark, nsslView) {
+                        composeView.setContent {
+                            var hasClearableNotifs by remember { mutableStateOf(false) }
+                            LaunchedEffect(nsslView) {
+                                while (true) {
+                                    val nssl = nsslView as? NotificationStackScrollLayout
+                                    val count = nssl?.childCount ?: 0
+                                    var found = false
+                                    for (i in 0 until count) {
+                                        val child = nssl?.getChildAt(i)
+                                        if (child is com.android.systemui.statusbar.notification.row.ExpandableNotificationRow && child.canViewBeDismissed()) {
+                                            found = true
+                                            break
+                                        }
+                                    }
+                                    hasClearableNotifs = found
+                                    delay(300)
                                 }
-                                .shadow(elevation = 8.dp, shape = CircleShape)
-                                .size(54.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f) else Color.White)
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = null
+                            }
+
+                            LaunchedEffect(hasClearableNotifs) {
+                                if (hasClearableNotifs) {
+                                    composeView.visibility = android.view.View.VISIBLE
+                                } else {
+                                    delay(200)
+                                    if (!hasClearableNotifs) {
+                                        composeView.visibility = android.view.View.GONE
+                                    }
+                                }
+                            }
+
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = hasClearableNotifs,
+                                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(initialScale = 0.8f),
+                                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)) + androidx.compose.animation.scaleOut(targetScale = 0.8f),
+                            ) {
+                                val interactionSource = remember { MutableInteractionSource() }
+                                val isPressed by interactionSource.collectIsPressedAsState()
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isPressed) 0.88f else 1.0f,
+                                    animationSpec = androidx.compose.animation.core.spring(
+                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                                    ),
+                                    label = "ClearAllButtonScale"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                        .shadow(elevation = 8.dp, shape = CircleShape)
+                                        .size(54.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f) else Color.White)
+                                        .clickable(
+                                            interactionSource = interactionSource,
+                                            indication = null
+                                        ) {
+                                            nsslView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                            (nsslView as? NotificationStackScrollLayout)?.clearAllNotifications(false)
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    nsslView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                    (nsslView as? NotificationStackScrollLayout)?.clearAllNotifications(false)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_close),
-                                contentDescription = stringResource(R.string.hyperos_qs_close),
-                                tint = if (isDark) Color.White else Color(0xFF1C1B1F),
-                                modifier = Modifier.size(24.dp)
-                            )
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_close),
+                                        contentDescription = stringResource(R.string.hyperos_qs_close),
+                                        tint = if (isDark) Color.White else Color(0xFF1C1B1F),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
