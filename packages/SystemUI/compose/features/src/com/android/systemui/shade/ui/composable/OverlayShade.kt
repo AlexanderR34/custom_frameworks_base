@@ -37,6 +37,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.approachLayout
@@ -103,7 +104,11 @@ fun ContentScope.OverlayShade(
         }
 
     Box(modifier) {
-        OverlayScrim(showBackgroundColor = enableTransparency, onClicked = onScrimClicked)
+        OverlayScrim(
+            showBackgroundColor = enableTransparency,
+            onClicked = onScrimClicked,
+            isHyperOS = isHyperOS,
+        )
 
         Box(
             modifier =
@@ -145,6 +150,7 @@ fun ContentScope.OverlayShade(
                             onBackgroundPlaced(bounds, topCornerRadius, bottomCornerRadius)
                         },
                 header = header.takeIf { isFullWidth },
+                isHyperOS = isHyperOS,
                 content = {
                     Box(
                         Modifier
@@ -189,13 +195,20 @@ private fun ContentScope.Panel(
     spec: VerticalExpandContainerSpec,
     modifier: Modifier = Modifier,
     header: (@Composable () -> Unit)?,
+    isHyperOS: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Box(
         modifier =
             modifier
                 .disableSwipesWhenScrolling()
-                .verticalExpandContainerBackground(Colors.panelBackground(enableTransparency), spec)
+                .then(
+                    if (isHyperOS) {
+                        Modifier.clipToBounds()
+                    } else {
+                        Modifier.verticalExpandContainerBackground(Colors.panelBackground(enableTransparency), spec)
+                    }
+                )
     ) {
         Column {
             header?.invoke()
