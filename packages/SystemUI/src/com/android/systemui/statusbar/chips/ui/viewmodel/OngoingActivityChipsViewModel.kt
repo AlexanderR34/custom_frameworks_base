@@ -584,20 +584,37 @@ constructor(
         val downloadChip = if (isChipEnabled(SETTING_ENABLE_DOWNLOAD)) bundle.download else OngoingActivityChipModel.Inactive()
         val mediaChip = if (isChipEnabled(SETTING_ENABLE_MEDIA)) bundle.media else OngoingActivityChipModel.Inactive()
         val btChip = if (isChipEnabled(SETTING_ENABLE_BLUETOOTH)) bundle.bluetooth else OngoingActivityChipModel.Inactive()
+        val isBtLowBattery = (btChip as? OngoingActivityChipModel.Active)?.colors is ColorsModel.Red
         val specializedChips =
-            listOf(
-                privacyChip,
-                callChip,
-                mediaChip,
-                screenRecordChip,
-                shareToAppChip,
-                castChip,
-                timerChip,
-                navChip,
-                downloadChip,
-                hotspotChip,
-                btChip,
-            )
+            if (isBtLowBattery) {
+                listOf(
+                    privacyChip,
+                    callChip,
+                    btChip,
+                    mediaChip,
+                    screenRecordChip,
+                    shareToAppChip,
+                    castChip,
+                    timerChip,
+                    navChip,
+                    downloadChip,
+                    hotspotChip,
+                )
+            } else {
+                listOf(
+                    privacyChip,
+                    callChip,
+                    mediaChip,
+                    screenRecordChip,
+                    shareToAppChip,
+                    castChip,
+                    timerChip,
+                    navChip,
+                    downloadChip,
+                    hotspotChip,
+                    btChip,
+                )
+            }
 
         // Deduplicate: filter out notification chips whose package or notification key is already covered by an active specialized chip
         val activeSpecializedPackages = specializedChips

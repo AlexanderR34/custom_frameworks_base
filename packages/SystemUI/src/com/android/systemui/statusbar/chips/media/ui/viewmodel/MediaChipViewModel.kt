@@ -149,10 +149,22 @@ constructor(
                 }
             }
 
-        // Show elapsed playback time chronometer
-        val cleanTitle = state.title?.toString()?.takeUnless { isWebDomain(it) }
+        val cleanTitle = state.title?.toString()?.takeUnless { isWebDomain(it) }?.trim()
+        val cleanArtist = state.artist?.toString()?.takeUnless { isWebDomain(it) }?.trim()
+
         val content =
-            if (state.isPlaying) {
+            if (!cleanTitle.isNullOrBlank()) {
+                val variants = mutableListOf<String>()
+                if (!cleanArtist.isNullOrBlank()) {
+                    variants.add("$cleanTitle • $cleanArtist")
+                }
+                variants.add(cleanTitle)
+                if (variants.size > 1) {
+                    OngoingActivityChipModel.Content.TextVariants(variants)
+                } else {
+                    OngoingActivityChipModel.Content.Text(cleanTitle)
+                }
+            } else if (state.isPlaying) {
                 val pos = if (state.playbackPositionMs >= 0) state.playbackPositionMs else 0L
                 val startTimeInElapsedRealtime =
                     systemClock.elapsedRealtime() - pos
@@ -168,8 +180,6 @@ constructor(
                     value = Chronometer.Paused(java.time.Duration.ofMillis(state.playbackPositionMs)),
                     timeSource = systemClock,
                 )
-            } else if (!cleanTitle.isNullOrBlank()) {
-                OngoingActivityChipModel.Content.Text(cleanTitle)
             } else {
                 OngoingActivityChipModel.Content.Text(context.getString(R.string.media_chip_paused))
             }

@@ -34,15 +34,12 @@ import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /** Interactor for tracking connected Bluetooth accessories and earbuds battery in the status bar. */
 @SysUISingleton
@@ -59,7 +56,6 @@ constructor(
 
     val bluetoothState: StateFlow<BluetoothChipModel> =
         conflatedCallbackFlow {
-            var hideJob: Job? = null
             val registeredDevices = mutableSetOf<CachedBluetoothDevice>()
 
             fun cleanRegisteredDevices(cb: CachedBluetoothDevice.Callback) {
@@ -69,11 +65,17 @@ constructor(
                 registeredDevices.clear()
             }
 
+            fun getDeviceBattery(dev: CachedBluetoothDevice): Int {
+                var b = dev.minBatteryLevelWithMemberDevices
+                if (b < 0 || b == BluetoothDevice.BATTERY_LEVEL_UNKNOWN) {
+                    b = dev.batteryLevel
+                }
+                return b
+            }
+
             fun updateChip(cb: CachedBluetoothDevice.Callback) {
                 if (!controller.isBluetoothEnabled || !controller.isBluetoothConnected) {
                     cleanRegisteredDevices(cb)
-                    hideJob?.cancel()
-                    hideJob = null
                     trySend(BluetoothChipModel.Inactive)
                     return
                 }
@@ -81,8 +83,6 @@ constructor(
                 val connectedDevices = controller.connectedDevices
                 if (connectedDevices.isNullOrEmpty()) {
                     cleanRegisteredDevices(cb)
-                    hideJob?.cancel()
-                    hideJob = null
                     trySend(BluetoothChipModel.Inactive)
                     return
                 }
@@ -98,9 +98,20 @@ constructor(
                 registeredDevices.clear()
                 registeredDevices.addAll(currentSet)
 
-                // Pick the most relevant connected device (audio/earbuds or first)
+                // Pick the most relevant connected device:
+                // 1) Audio/earbuds device with known battery
+                // 2) Any device with known battery
+                // 3) Audio/earbuds device
+                // 4) First connected device
                 val primaryDevice =
                     connectedDevices.firstOrNull { dev ->
+                        getDeviceBattery(dev) in 0..100 && (dev.isHearingDevice ||
+                            BluetoothUtils.isAdvancedUntetheredDevice(dev.device) ||
+                            (dev.btClass?.doesClassMatch(BluetoothClass.PROFILE_A2DP) == true) ||
+                            (dev.btClass?.doesClassMatch(BluetoothClass.PROFILE_HEADSET) == true))
+                    } ?: connectedDevices.firstOrNull { dev ->
+                        getDeviceBattery(dev) in 0..100
+                    } ?: connectedDevices.firstOrNull { dev ->
                         dev.isHearingDevice ||
                             BluetoothUtils.isAdvancedUntetheredDevice(dev.device) ||
                             (dev.btClass?.doesClassMatch(BluetoothClass.PROFILE_A2DP) == true) ||
@@ -110,10 +121,7 @@ constructor(
                 val deviceName = primaryDevice.name ?: controller.connectedDeviceName ?: "Bluetooth"
 
                 // Determine battery level
-                var battery = primaryDevice.minBatteryLevelWithMemberDevices
-                if (battery < 0 || battery == BluetoothDevice.BATTERY_LEVEL_UNKNOWN) {
-                    battery = primaryDevice.batteryLevel
-                }
+                var battery = getDeviceBattery(primaryDevice)
                 if (battery < 0 || battery == BluetoothDevice.BATTERY_LEVEL_UNKNOWN) {
                     battery = controller.batteryLevel
                 }
@@ -145,15 +153,6 @@ constructor(
                     )
 
                 trySend(activeModel)
-
-                // Reset temporary auto-hide timer (keep active for 12 seconds, or indefinitely if low battery <= 20%)
-                hideJob?.cancel()
-                if (battery !in 0..20) {
-                    hideJob = launch {
-                        delay(TEMPORARY_DISPLAY_MS)
-                        trySend(BluetoothChipModel.Inactive)
-                    }
-                }
             }
 
             val deviceCallback =
@@ -180,7 +179,6 @@ constructor(
             awaitClose {
                 controller.removeCallback(bluetoothCallback)
                 cleanRegisteredDevices(deviceCallback)
-                hideJob?.cancel()
             }
         }
         .flowOn(bgDispatcher)
@@ -188,8 +186,4 @@ constructor(
             logger.d({ "Bluetooth chip state updated: newState=$str1" }) { str1 = it.logString() }
         }
         .stateIn(scope, SharingStarted.Lazily, BluetoothChipModel.Inactive)
-
-    companion object {
-        private const val TEMPORARY_DISPLAY_MS = 12000L
-    }
 }

@@ -116,8 +116,11 @@ fun OngoingActivityChip(
     val isClickable = onClick != null
 
     val chipSidePaddingTotal = 20.dp
+    val isIconOnly = model.content is OngoingActivityChipModel.Content.IconOnly
     val minWidth =
-        if (isClickable) {
+        if (isIconOnly) {
+            dimensionResource(id = R.dimen.ongoing_appops_chip_height)
+        } else if (isClickable) {
             dimensionResource(id = R.dimen.min_clickable_item_size)
         } else if (model.icon != null) {
             dimensionResource(id = R.dimen.ongoing_activity_chip_icon_size) + chipSidePaddingTotal

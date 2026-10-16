@@ -89,14 +89,21 @@ constructor(
             }
 
         val content =
-            OngoingActivityChipModel.Content.Timer(
-                value =
-                    Chronometer.Running(
-                        EventTime.ElapsedRealtime(state.eventTimeRealtimeMs),
-                        isCountdown = state.isCountdown,
-                    ),
-                timeSource = systemClock,
-            )
+            if (state.isPaused) {
+                OngoingActivityChipModel.Content.Timer(
+                    value = Chronometer.Paused(java.time.Duration.ofMillis(state.pausedDurationMs.coerceAtLeast(0L))),
+                    timeSource = systemClock,
+                )
+            } else {
+                OngoingActivityChipModel.Content.Timer(
+                    value =
+                        Chronometer.Running(
+                            EventTime.ElapsedRealtime(state.eventTimeRealtimeMs),
+                            isCountdown = state.isCountdown,
+                        ),
+                    timeSource = systemClock,
+                )
+            }
 
         val colors = ColorsModel.DynamicThemed()
 

@@ -131,6 +131,15 @@ constructor(
                 val nowTime = systemClock.currentTimeMillis()
                 val whenTime = notif.`when`
 
+                val isPausedAction = actionTitles.any {
+                    it.contains("resume") || it.contains("reanudar") || it.contains("iniciar") || it.contains("start") || it.contains("continuar")
+                }
+                val hasPauseAction = actionTitles.any {
+                    it.contains("paus") || it.contains("pause")
+                }
+                val isPaused = isPausedAction && !hasPauseAction
+                var pausedDurationMs = 0L
+
                 if (isTimer) {
                     isCountdown = true
                     val remainingMs = if (whenTime > nowTime) {
@@ -147,6 +156,9 @@ constructor(
                             0L
                         }
                     }
+                    if (isPaused) {
+                        pausedDurationMs = remainingMs
+                    }
                     eventTimeRealtime = systemClock.elapsedRealtime() + remainingMs
                     candidate = entry
                     break
@@ -154,6 +166,9 @@ constructor(
                     isCountdown = false
                     val baseWhen = if (whenTime in 1..nowTime) whenTime else sbn.postTime
                     val elapsedMs = (nowTime - baseWhen).coerceAtLeast(0L)
+                    if (isPaused) {
+                        pausedDurationMs = elapsedMs
+                    }
                     eventTimeRealtime = systemClock.elapsedRealtime() - elapsedMs
                     candidate = entry
                     break
@@ -176,13 +191,28 @@ constructor(
             null
         }
 
+        val actionTitles = notif.actions?.mapNotNull { it.title?.toString()?.lowercase() } ?: emptyList()
+        val isPausedAction = actionTitles.any {
+            it.contains("resume") || it.contains("reanudar") || it.contains("iniciar") || it.contains("start") || it.contains("continuar")
+        }
+        val hasPauseAction = actionTitles.any {
+            it.contains("paus") || it.contains("pause")
+        }
+        val isPausedCandidate = isPausedAction && !hasPauseAction
+        val pausedDuration = if (isPausedCandidate) {
+            if (isCountdown) (eventTimeRealtime - systemClock.elapsedRealtime()).coerceAtLeast(0L)
+            else (systemClock.elapsedRealtime() - eventTimeRealtime).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+
         _timerState.value = TimerChipModel.Active(
             notificationKey = candidate.key,
             packageName = packageName,
             eventTimeRealtimeMs = eventTimeRealtime,
             isCountdown = isCountdown,
-            isPaused = false,
-            pausedDurationMs = 0L,
+            isPaused = isPausedCandidate,
+            pausedDurationMs = pausedDuration,
             appIcon = appIcon,
             intent = notif.contentIntent,
         )

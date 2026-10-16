@@ -88,11 +88,11 @@ constructor(
 
         val variants = mutableListOf<String>()
         if (state.batteryLevel in 0..100) {
-            variants.add("${state.batteryLevel}%")
             variants.add("${state.deviceName} ${state.batteryLevel}%")
+            variants.add("${state.batteryLevel}%")
         } else {
-            variants.add("BT")
             variants.add(state.deviceName)
+            variants.add("BT")
         }
 
         val content =

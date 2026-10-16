@@ -79,11 +79,12 @@ constructor(
 
         val variants = mutableListOf<String>()
         if (state.numConnectedDevices > 0) {
-            variants.add("${state.numConnectedDevices}")
             variants.add("${state.numConnectedDevices} disp.")
+            variants.add("${state.numConnectedDevices}")
         } else {
+            variants.add(context.getString(R.string.quick_settings_hotspot_label))
+            variants.add("Hotspot")
             variants.add("0")
-            variants.add("Activo")
         }
 
         val content =
