@@ -151,9 +151,9 @@ fun HyperOSVolumePanel(
 
     val topPadding = if (isLandscape) 10.dp else 64.dp
     val bottomPadding = if (isLandscape) 10.dp else 24.dp
-    val verticalInnerPadding = if (isLandscape) 12.dp else 20.dp
-    val cardCornerRadius = if (isLandscape) 28.dp else 36.dp
-    val cardWidth = if (isLandscape) 360.dp else 340.dp
+    val verticalInnerPadding = if (isLandscape) 10.dp else 20.dp
+    val cardCornerRadius = if (isLandscape) 24.dp else 36.dp
+    val cardWidth = if (isLandscape) 264.dp else 340.dp
 
     val cardBg = if (useMonet) {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
@@ -200,7 +200,7 @@ fun HyperOSVolumePanel(
                     ) {
                         // Consume taps inside the card so tapping inside does NOT dismiss
                     }
-                    .padding(horizontal = 16.dp, vertical = verticalInnerPadding)
+                    .padding(horizontal = if (isLandscape) 14.dp else 16.dp, vertical = verticalInnerPadding)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -215,7 +215,7 @@ fun HyperOSVolumePanel(
                         useMonet = useMonet
                     )
 
-                    Spacer(modifier = Modifier.height(if (isLandscape) 10.dp else 18.dp))
+                    Spacer(modifier = Modifier.height(if (isLandscape) 8.dp else 18.dp))
 
                     // Bottom Timers: Silent Mode & DND
                     HyperOSTimersSection(
@@ -240,6 +240,8 @@ private fun HyperOSVerticalSlidersRow(
     useMonet: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val spacerWidth = if (isLandscape) 8.dp else 10.dp
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -256,7 +258,7 @@ private fun HyperOSVerticalSlidersRow(
             modifier = Modifier.weight(1f)
         )
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(spacerWidth))
 
         // 2. Notificaciones (STREAM_NOTIFICATION)
         HyperOSVerticalStreamSlider(
@@ -269,7 +271,7 @@ private fun HyperOSVerticalSlidersRow(
             modifier = Modifier.weight(1f)
         )
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(spacerWidth))
 
         // 3. Alarma (STREAM_ALARM)
         HyperOSVerticalStreamSlider(
@@ -282,7 +284,7 @@ private fun HyperOSVerticalSlidersRow(
             modifier = Modifier.weight(1f)
         )
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(spacerWidth))
 
         // 4. Timbre / Llamada (STREAM_RING)
         HyperOSVerticalStreamSlider(
@@ -367,15 +369,16 @@ private fun HyperOSVerticalStreamSlider(
         label = "HyperOSVolumeFraction_$streamType"
     )
 
-    val sliderHeight = if (isLandscape) 140.dp else 210.dp
+    val sliderHeight = if (isLandscape) 156.dp else 210.dp
     val bottomPadding = if (isLandscape) 8.dp else 14.dp
-    val iconBadgeSize = if (isLandscape) 34.dp else 44.dp
+    val iconBadgeSize = if (isLandscape) 32.dp else 44.dp
     val iconSize = if (isLandscape) 18.dp else 24.dp
+    val sliderCornerRadius = if (isLandscape) 18.dp else 26.dp
 
     Column(
         modifier = modifier
             .height(sliderHeight)
-            .clip(RoundedCornerShape(if (isLandscape) 20.dp else 26.dp))
+            .clip(RoundedCornerShape(sliderCornerRadius))
             .background(Color(0x597F7F7F)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -415,7 +418,7 @@ private fun HyperOSVerticalStreamSlider(
                     detectTapGestures { offset ->
                         val height = size.height
                         // Only handle tap if not touching the bottom icon area
-                        if (offset.y < (height - 38f)) {
+                        if (offset.y < (height - (if (isLandscape) 36f else 48f))) {
                             val calculatedFraction = 1f - (offset.y / height).coerceIn(0f, 1f)
                             val targetVol = (minVolume + calculatedFraction * (maxVolume - minVolume)).roundToInt()
                             if (targetVol != currentVolume) {
@@ -500,7 +503,7 @@ private fun HyperOSTimersSection(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 10.dp else 12.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 8.dp else 12.dp)
     ) {
         // 1. Silent Mode Timer Row (30m to 8h) with Monet adaptive fill
         HyperOSTimerRow(
@@ -634,32 +637,32 @@ private fun HyperOSTimerRow(
         label = "TimerProgressFraction_$settingKey"
     )
 
-    val displayTimerText = remember(isCountingDown, remainingSeconds, dragProgress, defaultTimerText) {
+    val displayTimerText = remember(isCountingDown, remainingSeconds, dragProgress, defaultTimerText, isLandscape) {
         if (isCountingDown && remainingSeconds > 0L) {
             val hours = remainingSeconds / 3600L
             val mins = (remainingSeconds % 3600L) / 60L
             val secs = remainingSeconds % 60L
             when {
-                hours > 0L -> "Temporizador: ${hours}h ${mins}m ${secs}s"
-                mins > 0L -> "Temporizador: ${mins}m ${secs}s"
-                else -> "Temporizador: ${secs}s"
+                hours > 0L -> if (isLandscape) "Temp: ${hours}h ${mins}m" else "Temporizador: ${hours}h ${mins}m ${secs}s"
+                mins > 0L -> if (isLandscape) "Temp: ${mins}m ${secs}s" else "Temporizador: ${mins}m ${secs}s"
+                else -> if (isLandscape) "Temp: ${secs}s" else "Temporizador: ${secs}s"
             }
         } else if (dragProgress > 0.02f) {
             val totalMins = (((minMinutes + dragProgress * (maxMinutes - minMinutes)) / 15).roundToInt() * 15).coerceIn(minMinutes, maxMinutes)
             val hours = totalMins / 60
             val mins = totalMins % 60
             when {
-                hours > 0 -> "Temporizador: ${hours}h ${mins}m 00s"
-                else -> "Temporizador: ${mins}m 00s"
+                hours > 0 -> if (isLandscape) "Temp: ${hours}h ${mins}m" else "Temporizador: ${hours}h ${mins}m 00s"
+                else -> if (isLandscape) "Temp: ${mins}m 00s" else "Temporizador: ${mins}m 00s"
             }
         } else {
-            defaultTimerText
+            if (isLandscape) "Deslice para temporizador" else defaultTimerText
         }
     }
 
-    val rowHeight = if (isLandscape) 40.dp else 56.dp
-    val buttonSize = if (isLandscape) 40.dp else 56.dp
-    val iconSize = if (isLandscape) 18.dp else 24.dp
+    val rowHeight = if (isLandscape) 36.dp else 56.dp
+    val buttonSize = if (isLandscape) 36.dp else 56.dp
+    val iconSize = if (isLandscape) 17.dp else 24.dp
 
     val monetPrimary = MaterialTheme.colorScheme.primary
     val monetOnPrimary = MaterialTheme.colorScheme.onPrimary
@@ -781,7 +784,7 @@ private fun HyperOSTimerRow(
             Text(
                 text = displayTimerText,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = if (isLandscape) 11.sp else 12.5.sp,
+                    fontSize = if (isLandscape) 10.5.sp else 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = timerTextColor
                 ),
@@ -789,7 +792,7 @@ private fun HyperOSTimerRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
+                    .padding(horizontal = if (isLandscape) 10.dp else 14.dp)
             )
         }
     }
