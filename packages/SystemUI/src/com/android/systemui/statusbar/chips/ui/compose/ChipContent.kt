@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.res.R
@@ -127,6 +128,8 @@ fun ChipContent(
                     color = textColor,
                     style = textStyle,
                     softWrap = false,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier =
                         modifier.hideTextIfDoesNotFit(
                             text = text,
@@ -172,6 +175,7 @@ fun ChipContent(
                         style = textStyle,
                         softWrap = false,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = startPadding, end = endPadding),
                     )
                 }

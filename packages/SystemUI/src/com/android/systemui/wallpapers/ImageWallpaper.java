@@ -352,8 +352,8 @@ public class ImageWallpaper extends WallpaperService {
                     float targetRoll = Math.max(-1.0f, Math.min(1.0f, mRotationMatrix[6]));
                     float targetPitch = Math.max(-1.0f, Math.min(1.0f, -(mRotationMatrix[7] - 0.70f) * 1.6f));
 
-                    // Filtro exponencial de alta respuesta para tracking en tiempo real
-                    float alpha = 0.35f;
+                    // Filtro exponencial balanceado para tracking en tiempo real suave
+                    float alpha = 0.20f;
                     mSmoothRoll += (targetRoll - mSmoothRoll) * alpha;
                     mSmoothPitch += (targetPitch - mSmoothPitch) * alpha;
 
@@ -392,7 +392,8 @@ public class ImageWallpaper extends WallpaperService {
                     float targetRoll = Math.max(-1.0f, Math.min(1.0f, gx));
                     float targetPitch = Math.max(-1.0f, Math.min(1.0f, -(gy - 0.70f) * 1.6f));
 
-                    float alpha = 0.35f;
+                    // Filtro exponencial balanceado para tracking en tiempo real suave
+                    float alpha = 0.20f;
                     mSmoothRoll += (targetRoll - mSmoothRoll) * alpha;
                     mSmoothPitch += (targetPitch - mSmoothPitch) * alpha;
 

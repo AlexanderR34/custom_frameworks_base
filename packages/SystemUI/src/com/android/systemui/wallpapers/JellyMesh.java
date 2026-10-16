@@ -170,8 +170,8 @@ public class JellyMesh {
     }
 
     public void applyShakeImpulse(float impulseX, float impulseY) {
-        float maxImpulse = mWidth * 0.30f;
-        float baseScale = mWidth * 0.08f;
+        float maxImpulse = mWidth * 0.22f;
+        float baseScale = mWidth * 0.05f;
         float kickX = impulseX * baseScale;
         float kickY = impulseY * baseScale;
         float clampedX = Math.max(-maxImpulse, Math.min(maxImpulse, kickX));
@@ -184,10 +184,10 @@ public class JellyMesh {
                 int idx = r * (COLS + 1) + c;
                 float fracX = c / (float) COLS;
                 float edgeX = (float) Math.sin(fracX * Math.PI);
-                float edgeFactor = (float) Math.pow(edgeX * edgeY, 0.45);
+                float edgeFactor = (float) Math.pow(edgeX * edgeY, 0.50);
 
-                mVelX[idx] += clampedX * edgeFactor * 10.0f;
-                mVelY[idx] += clampedY * edgeFactor * 10.0f;
+                mVelX[idx] += clampedX * edgeFactor * 2.8f;
+                mVelY[idx] += clampedY * edgeFactor * 2.8f;
             }
         }
         mIsAsleep = false;
@@ -201,7 +201,8 @@ public class JellyMesh {
         float pulseStrength = Math.min(1.0f, Math.max(0.05f, strength));
         float centerX = mWidth * 0.5f;
         float centerY = mHeight * 0.5f;
-        float maxKick = mWidth * pulseStrength * 0.05f;
+        float maxKick = mWidth * pulseStrength * 0.045f;
+        float maxVelocityLimit = mWidth * 0.35f;
 
         switch (pattern) {
             case 1: { // Subwoofer / Vertical Bounce
@@ -211,7 +212,8 @@ public class JellyMesh {
                         int idx = r * (COLS + 1) + c;
                         float edgeX = (float) Math.sin(Math.PI * c / (float) COLS);
                         float edgeFactor = edgeX * edgeY;
-                        mVelY[idx] += maxKick * edgeFactor * 1.8f;
+                        float kick = maxKick * edgeFactor * 1.5f;
+                        mVelY[idx] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelY[idx] * 0.65f + kick));
                     }
                 }
                 break;
@@ -224,20 +226,23 @@ public class JellyMesh {
                     float dy = mPosY[i] - centerY;
                     float distSq = dx * dx + dy * dy;
                     float factor = (float) Math.exp(-distSq / twoSigmaSq);
-                    mVelX[i] += (dx / mWidth) * maxKick * factor * 1.5f;
-                    mVelY[i] += (dy / mHeight) * maxKick * factor * 1.5f;
+                    float kickX = (dx / mWidth) * maxKick * factor * 1.4f;
+                    float kickY = (dy / mHeight) * maxKick * factor * 1.4f;
+                    mVelX[i] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelX[i] * 0.65f + kickX));
+                    mVelY[i] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelY[i] * 0.65f + kickY));
                 }
                 break;
             }
             case 3: { // Wave Cascade / Horizontal Sine
                 for (int r = 0; r <= ROWS; r++) {
                     float phase = (float) (r / (float) ROWS * Math.PI * 3.0);
-                    float waveKick = (float) Math.sin(phase) * maxKick * 1.4f;
+                    float waveKick = (float) Math.sin(phase) * maxKick * 1.2f;
                     float edgeY = (float) Math.sin(Math.PI * r / (float) ROWS);
                     for (int c = 0; c <= COLS; c++) {
                         int idx = r * (COLS + 1) + c;
                         float edgeX = (float) Math.sin(Math.PI * c / (float) COLS);
-                        mVelX[idx] += waveKick * edgeX * edgeY;
+                        float kickX = waveKick * edgeX * edgeY;
+                        mVelX[idx] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelX[idx] * 0.65f + kickX));
                     }
                 }
                 break;
@@ -255,13 +260,13 @@ public class JellyMesh {
                         float distSq = dx * dx + dy * dy;
                         float dist = (float) Math.sqrt(distSq);
                         if (dist > 1.0f) {
-                            float wave = (float) Math.exp(-distSq / twoSigmaSq) * (maxKick * 0.6f);
+                            float wave = (float) Math.exp(-distSq / twoSigmaSq) * (maxKick * 0.55f);
                             totalVx += (dx / dist) * wave;
                             totalVy += (dy / dist) * wave;
                         }
                     }
-                    mVelX[i] += totalVx;
-                    mVelY[i] += totalVy;
+                    mVelX[i] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelX[i] * 0.65f + totalVx));
+                    mVelY[i] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelY[i] * 0.65f + totalVy));
                 }
                 break;
             }
@@ -278,8 +283,10 @@ public class JellyMesh {
                         float normX = dx / dist;
                         float normY = dy / dist;
                         float wave = (float) Math.exp(-distSq / twoSigmaSq) * maxKick;
-                        mVelX[i] += normX * wave;
-                        mVelY[i] += normY * wave;
+                        float kickX = normX * wave;
+                        float kickY = normY * wave;
+                        mVelX[i] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelX[i] * 0.65f + kickX));
+                        mVelY[i] = Math.max(-maxVelocityLimit, Math.min(maxVelocityLimit, mVelY[i] * 0.65f + kickY));
                     }
                 }
                 break;
@@ -440,10 +447,10 @@ public class JellyMesh {
     }
 
     public void triggerTapShockwave(float originX, float originY, float intensity) {
-        float wavelength = mWidth * 0.18f;
-        float sigma = mWidth * 0.45f;
+        float wavelength = mWidth * 0.22f;
+        float sigma = mWidth * 0.38f;
         float twoSigmaSq = 2.0f * sigma * sigma;
-        float maxAmp = mWidth * 0.055f * intensity;
+        float maxAmp = mWidth * 0.040f * Math.min(1.0f, Math.max(0.1f, intensity));
 
         for (int i = 0; i < NUM_VERTICES; i++) {
             float dx = mPosX[i] - originX;
@@ -455,8 +462,8 @@ public class JellyMesh {
                 float sinPhase = (float) Math.sin((dist / wavelength) * Math.PI * 2.0);
                 float envelope = (float) Math.exp(-(dist * dist) / twoSigmaSq);
                 float pulse = sinPhase * envelope * maxAmp;
-                mVelX[i] += normX * pulse * 8.0f;
-                mVelY[i] += normY * pulse * 8.0f;
+                mVelX[i] += normX * pulse * 2.4f;
+                mVelY[i] += normY * pulse * 2.4f;
             }
         }
         mIsAsleep = false;
@@ -511,20 +518,20 @@ public class JellyMesh {
                 mHapticListener.onStretchTick();
             }
         } else if (totalDist >= 16.0f) {
-            // Potente impulso elástico de retroceso al soltar (Slingshot Snap Recoil)
+            // Impulso elástico de retroceso balanceado al soltar (Slingshot Snap Recoil)
             float normX = dragVecX / totalDist;
             float normY = dragVecY / totalDist;
-            float recoilSpeed = Math.min(mWidth * 0.65f, totalDist * 3.2f) * mSnapBackRecoilRatio;
-            float twoSigmaSq = 2.0f * mDragRadius * mDragRadius * 2.2f;
+            float recoilSpeed = Math.min(mWidth * 0.35f, totalDist * 1.6f) * mSnapBackRecoilRatio;
+            float twoSigmaSq = 2.0f * mDragRadius * mDragRadius * 2.0f;
 
             for (int i = 0; i < NUM_VERTICES; i++) {
                 float dx = mPosX[i] - mTouchX;
                 float dy = mPosY[i] - mTouchY;
                 float distSq = dx * dx + dy * dy;
-                if (distSq < mDragRadius * mDragRadius * 3.5f) {
+                if (distSq < mDragRadius * mDragRadius * 3.0f) {
                     float weight = (float) Math.exp(-distSq / twoSigmaSq);
-                    mVelX[i] += normX * recoilSpeed * weight * 10.0f;
-                    mVelY[i] += normY * recoilSpeed * weight * 10.0f;
+                    mVelX[i] += normX * recoilSpeed * weight * 2.2f;
+                    mVelY[i] += normY * recoilSpeed * weight * 2.2f;
                 }
             }
 
@@ -609,17 +616,18 @@ public class JellyMesh {
 
         dt = Math.min(dt, 0.033f);
 
-        // 3D Perspective Projection Parallax (Responsive real-time optical shift)
+        // 3D Perspective Projection Parallax (Smooth and balanced real-time optical shift)
         float deltaRoll = mTargetRoll - mCurrentRoll;
         float deltaPitch = mTargetPitch - mCurrentPitch;
-        mCurrentRoll += deltaRoll * Math.min(1.0f, dt * 25.0f);
-        mCurrentPitch += deltaPitch * Math.min(1.0f, dt * 25.0f);
+        float gyroSmoothSpeed = Math.min(1.0f, dt * 14.0f);
+        mCurrentRoll += deltaRoll * gyroSmoothSpeed;
+        mCurrentPitch += deltaPitch * gyroSmoothSpeed;
 
         boolean gyroMoving = Math.abs(deltaRoll) > 0.0005f || Math.abs(deltaPitch) > 0.0005f;
 
         // Desplazamiento de profundidad cinemática (Parallax 3D suave sin efecto de doblado de página)
-        float maxParallaxX = mWidth * 0.060f;
-        float maxParallaxY = mHeight * 0.045f;
+        float maxParallaxX = mWidth * 0.055f;
+        float maxParallaxY = mHeight * 0.040f;
         float transX = -mCurrentRoll * maxParallaxX;
         float transY = mCurrentPitch * maxParallaxY;
 
@@ -731,8 +739,8 @@ public class JellyMesh {
                         float weight0 = (float) Math.exp(-distSq0 / twoSigmaSq);
                         float targetX = mRestX[idx] + totalDragX * weight0;
                         float targetY = mRestY[idx] + totalDragY * weight0;
-                        fx += (targetX - px) * (mKAnchor * 4.5f) * weight0;
-                        fy += (targetY - py) * (mKAnchor * 4.5f) * weight0;
+                        fx += (targetX - px) * (mKAnchor * 2.8f) * weight0;
+                        fy += (targetY - py) * (mKAnchor * 2.8f) * weight0;
                     }
 
                     if (mActivePointerCount >= 2 && mMultiTouchEnabled) {
@@ -743,8 +751,8 @@ public class JellyMesh {
                             float weight1 = (float) Math.exp(-distSq1 / twoSigmaSq);
                             float targetX1 = mRestX[idx] + totalDragX1 * weight1;
                             float targetY1 = mRestY[idx] + totalDragY1 * weight1;
-                            fx += (targetX1 - px) * (mKAnchor * 4.5f) * weight1;
-                            fy += (targetY1 - py) * (mKAnchor * 4.5f) * weight1;
+                            fx += (targetX1 - px) * (mKAnchor * 2.8f) * weight1;
+                            fy += (targetY1 - py) * (mKAnchor * 2.8f) * weight1;
                         }
 
                         // Tensión y deformación de pellizco / estiramiento entre ambos dedos
@@ -765,17 +773,18 @@ public class JellyMesh {
                                     float midDragY = (totalDragY + totalDragY1) * 0.5f + unitPinchY * stretchFactor;
                                     float targetMidX = mRestX[idx] + midDragX * bridgeWeight;
                                     float targetMidY = mRestY[idx] + midDragY * bridgeWeight;
-                                    fx += (targetMidX - px) * (mKAnchor * 3.5f) * bridgeWeight;
-                                    fy += (targetMidY - py) * (mKAnchor * 3.5f) * bridgeWeight;
+                                    fx += (targetMidX - px) * (mKAnchor * 2.4f) * bridgeWeight;
+                                    fy += (targetMidY - py) * (mKAnchor * 2.4f) * bridgeWeight;
                                 }
                             }
                         }
                     }
                 }
 
-                // 4. Amortiguamiento
-                fx -= mDamping * mVelX[idx];
-                fy -= mDamping * mVelY[idx];
+                // 4. Amortiguamiento armónico balanceado (evita temblores parásitos o oscilación descontrolada)
+                float effectiveDamping = mDamping * (1.0f + 0.15f * mInternalTensionRatio);
+                fx -= effectiveDamping * mVelX[idx];
+                fy -= effectiveDamping * mVelY[idx];
 
                 // 5. Integración numérica con masa superficial
                 mVelX[idx] += fx * dt * invMass;
@@ -893,8 +902,7 @@ public class JellyMesh {
 
                 float baseShade = 255.0f;
                 if (mAmbientOcclusionEnabled && mAoIntensity > 0.001f) {
-                    float dispMag = (float) Math.sqrt(dispX * dispX + dispY * dispY);
-                    // Detección de concavidad y pliegues (Laplaciano discreto 2D) para oclusión ambiental realista
+                    // Detección de concavidad y pliegues con Laplaciano discreto 2D
                     float lapX = 0f;
                     float lapY = 0f;
                     if (c > 0 && c < COLS) {
@@ -904,9 +912,10 @@ public class JellyMesh {
                         lapY = (mPosY[i + (COLS + 1)] - mRestY[i + (COLS + 1)]) + (mPosY[i - (COLS + 1)] - mRestY[i - (COLS + 1)]) - 2.0f * dispY;
                     }
                     // Pliegues y depresiones cóncavas donde la luz ambiental no penetra
-                    float crease = Math.max(0.0f, -(lapX + lapY) * 0.08f);
-                    float strainFactor = Math.min(1.0f, (dispMag / maxOffset) * 0.35f + crease * 0.65f);
-                    baseShade = 255.0f - strainFactor * (55.0f * mAoIntensity);
+                    float crease = Math.max(0.0f, -(lapX + lapY) * 0.065f);
+                    float compFactor = Math.min(1.0f, crease * 0.85f);
+                    float shadowDrop = (compFactor * compFactor) * (52.0f * mAoIntensity);
+                    baseShade = Math.max(165.0f, 255.0f - shadowDrop);
                 }
 
                 if (mLightSourceEnabled && mLightIntensity > 0.001f) {
