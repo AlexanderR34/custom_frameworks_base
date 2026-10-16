@@ -38,37 +38,47 @@ constructor(
             1,
             UserHandle.USER_CURRENT
         )
-        if (showAppVolume == 1) {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
-            val list = try { audioManager.listAppVolumes() } catch (_: Exception) { null }
-            if (list != null && list.any { it.packageName != "android" && it.packageName != "com.android.systemui" }) {
-                return true
-            }
-            if (audioManager.isMusicActive) {
-                return true
-            }
-            try {
-                if (audioManager.activePlaybackConfigurations.isNotEmpty()) {
-                    return true
-                }
-            } catch (_: Exception) {}
-            try {
-                val mediaSessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
-                if (mediaSessionManager != null && mediaSessionManager.getActiveSessions(null).isNotEmpty()) {
-                    return true
-                }
-            } catch (_: Exception) {}
-            try {
-                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-                val runningTasks = activityManager?.getRunningTasks(1)
-                if (runningTasks != null && runningTasks.isNotEmpty()) {
-                    val topPkg = runningTasks[0].topActivity?.packageName
-                    if (topPkg != null && topPkg != "android" && topPkg != "com.android.systemui" && !topPkg.contains("launcher")) {
+        if (showAppVolume != 1) return false
+
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+
+        // 1. Check AudioFlinger active tracks
+        val list = try { audioManager.listAppVolumes() } catch (_: Exception) { null }
+        if (list != null && list.any { it.isActive && it.packageName != "android" && it.packageName != "com.android.systemui" }) {
+            return true
+        }
+
+        // 2. Check active playback configurations (players in STARTED state, not muted)
+        try {
+            val packageManager = context.packageManager
+            val activeConfigs = audioManager.activePlaybackConfigurations.filter { it.isActive }
+            for (config in activeConfigs) {
+                if (config.clientUid > android.os.Process.FIRST_APPLICATION_UID) {
+                    val pkgs = packageManager.getPackagesForUid(config.clientUid)
+                    if (pkgs != null && pkgs.any { it != "android" && it != "com.android.systemui" }) {
                         return true
                     }
                 }
-            } catch (_: Exception) {}
-        }
+            }
+        } catch (_: Exception) {}
+
+        // 3. Check active media sessions (controllers in PLAYING / active playback state)
+        try {
+            val mediaSessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
+            if (mediaSessionManager != null) {
+                val sessions = mediaSessionManager.getActiveSessions(null)
+                for (controller in sessions) {
+                    val playbackState = controller.playbackState
+                    if (playbackState != null && playbackState.isActive) {
+                        val pkg = controller.packageName
+                        if (pkg != null && pkg != "android" && pkg != "com.android.systemui") {
+                            return true
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
         return false
     }
 

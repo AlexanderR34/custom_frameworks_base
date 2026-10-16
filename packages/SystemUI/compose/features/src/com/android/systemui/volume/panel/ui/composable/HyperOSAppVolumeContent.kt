@@ -151,21 +151,17 @@ fun HyperOSAppVolumeContent(
         isVisible = true
     }
 
-    // Registered apps playing volume - periodically polled for real-time reactivity
+    val lastActiveTime = remember { mutableMapOf<String, Long>() }
+
+    // Active apps with real playing audio sessions - periodically polled for real-time reactivity
     var activeAppVolumes by remember {
-        mutableStateOf(
-            try {
-                audioManager.listAppVolumes().filter { it.packageName != "android" && it.packageName != "com.android.systemui" }
-            } catch (_: Exception) {
-                emptyList<AppVolume>()
-            }
-        )
+        mutableStateOf(getRealActiveAppVolumes(audioManager, context, lastActiveTime))
     }
 
     LaunchedEffect(Unit) {
         while (isActive) {
             try {
-                val currentList = audioManager.listAppVolumes().filter { it.packageName != "android" && it.packageName != "com.android.systemui" }
+                val currentList = getRealActiveAppVolumes(audioManager, context, lastActiveTime)
                 if (currentList.map { "${it.packageName}:${it.volume}:${it.isMuted}" } != 
                     activeAppVolumes.map { "${it.packageName}:${it.volume}:${it.isMuted}" }) {
                     activeAppVolumes = currentList
@@ -231,16 +227,18 @@ fun HyperOSAppVolumeContent(
 
                     // 2. Individual App Volume Sliders (Vertical Capsule)
                     for (appVol in activeAppVolumes) {
-                        HyperOSSingleAppVolumeSlider(
-                            appVolume = appVol,
-                            audioManager = audioManager,
-                            packageManager = packageManager,
-                            sliderWidth = sliderWidth,
-                            sliderHeight = sliderHeight,
-                            isLandscape = isLandscape,
-                            useMonet = useMonet,
-                            view = view
-                        )
+                        androidx.compose.runtime.key(appVol.packageName) {
+                            HyperOSSingleAppVolumeSlider(
+                                appVolume = appVol,
+                                audioManager = audioManager,
+                                packageManager = packageManager,
+                                sliderWidth = sliderWidth,
+                                sliderHeight = sliderHeight,
+                                isLandscape = isLandscape,
+                                useMonet = useMonet,
+                                view = view
+                            )
+                        }
                     }
                 }
             }
@@ -611,4 +609,71 @@ private fun drawableToBitmap(drawable: Drawable): Bitmap {
     drawable.setBounds(0, 0, canvas.width, canvas.height)
     drawable.draw(canvas)
     return bitmap
+}
+
+private fun getRealActiveAppVolumes(
+    audioManager: AudioManager,
+    context: Context,
+    lastActiveTime: MutableMap<String, Long>
+): List<AppVolume> {
+    val rawList = try {
+        audioManager.listAppVolumes()
+    } catch (_: Exception) {
+        return emptyList()
+    }
+    if (rawList.isNullOrEmpty()) return emptyList()
+
+    val candidates = rawList.filter {
+        it.packageName != "android" && it.packageName != "com.android.systemui"
+    }
+    if (candidates.isEmpty()) return emptyList()
+
+    val now = android.os.SystemClock.uptimeMillis()
+
+    // 1. AudioPlaybackConfiguration active players (PLAYER_STATE_STARTED)
+    val activeConfigPackages = mutableSetOf<String>()
+    try {
+        val pm = context.packageManager
+        for (config in audioManager.activePlaybackConfigurations) {
+            if (config.isActive && config.clientUid > android.os.Process.FIRST_APPLICATION_UID) {
+                val pkgs = pm.getPackagesForUid(config.clientUid)
+                if (pkgs != null) {
+                    for (pkg in pkgs) {
+                        if (pkg != "android" && pkg != "com.android.systemui") {
+                            activeConfigPackages.add(pkg)
+                        }
+                    }
+                }
+            }
+        }
+    } catch (_: Exception) {}
+
+    // 2. MediaSession active playback (PLAYING / BUFFERING, etc.)
+    val activeMediaPackages = mutableSetOf<String>()
+    try {
+        val mediaSessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? android.media.session.MediaSessionManager
+        if (mediaSessionManager != null) {
+            val sessions = mediaSessionManager.getActiveSessions(null)
+            for (controller in sessions) {
+                val playbackState = controller.playbackState
+                if (playbackState != null && playbackState.isActive) {
+                    val pkg = controller.packageName
+                    if (pkg != null && pkg != "android" && pkg != "com.android.systemui") {
+                        activeMediaPackages.add(pkg)
+                    }
+                }
+            }
+        }
+    } catch (_: Exception) {}
+
+    return candidates.filter { appVol ->
+        val isActivelyPlaying = appVol.isActive || activeConfigPackages.contains(appVol.packageName) || activeMediaPackages.contains(appVol.packageName)
+        if (isActivelyPlaying) {
+            lastActiveTime[appVol.packageName] = now
+            true
+        } else {
+            val lastSeen = lastActiveTime[appVol.packageName] ?: 0L
+            now - lastSeen < 3000L
+        }
+    }
 }
