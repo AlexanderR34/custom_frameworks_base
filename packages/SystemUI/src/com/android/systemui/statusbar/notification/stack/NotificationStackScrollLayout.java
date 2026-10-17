@@ -960,6 +960,7 @@ public class NotificationStackScrollLayout
 
         setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
         setClipChildren(false);
+        setClipToPadding(false);
         final ViewConfiguration configuration = ViewConfiguration.get(context);
         mTouchSlop = configuration.getScaledTouchSlop();
         mSlopMultiplier = configuration.getScaledAmbiguousGestureMultiplier();
@@ -6889,11 +6890,8 @@ public class NotificationStackScrollLayout
                 }
             }
         } else {
-            if (!mLaunchingNotification) {
-                // When launching notifications, we're clipping the children individually instead
-                //  of in dispatchDraw
-                applyClipToCanvas(canvas);
-            }
+            // Clip children individually in drawChild so swiped notifications can translate
+            // across screen boundaries without being sliced horizontally.
             super.dispatchDraw(canvas);
         }
     }
@@ -6909,6 +6907,41 @@ public class NotificationStackScrollLayout
         }
     }
 
+    private boolean isChildSwipingOrDismissing(View child) {
+        if (child == null) {
+            return false;
+        }
+        if (Math.abs(child.getTranslationX()) > 0.1f) {
+            return true;
+        }
+        if (mSwipeHelper != null) {
+            if (child == mSwipeHelper.getTranslatingParentView()
+                    || child == mSwipeHelper.getSwipedView()) {
+                return true;
+            }
+        }
+        if (child instanceof ExpandableNotificationRow) {
+            ExpandableNotificationRow row = (ExpandableNotificationRow) child;
+            if (row.isDismissed() || row.isRemoved()) {
+                return true;
+            }
+            if (row.isSummaryWithChildren()) {
+                List<ExpandableNotificationRow> attached = row.getAttachedChildren();
+                if (attached != null) {
+                    for (int j = 0; j < attached.size(); j++) {
+                        ExpandableNotificationRow ch = attached.get(j);
+                        if (ch != null && (Math.abs(ch.getTranslationX()) > 0.1f
+                                || (mSwipeHelper != null && (ch == mSwipeHelper.getTranslatingParentView()
+                                        || ch == mSwipeHelper.getSwipedView())))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
     protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
         boolean shouldUseClipping =
@@ -6922,28 +6955,33 @@ public class NotificationStackScrollLayout
                 // affected by clipping either
                 return super.drawChild(canvas, child, drawingTime);
             }
-        } else if (mLaunchingNotification && shouldUseClipping) {
-            // Let's clip children individually during notification launch
+        } else if (shouldUseClipping) {
             canvas.save();
-            ExpandableView expandableView = (ExpandableView) child;
-            Path clipPath;
-            Path clipOutPath;
-            if (expandableView.isExpandAnimationRunning()
-                    || ((ExpandableView) child).hasExpandingChild()) {
+            boolean isSwiping = isChildSwipingOrDismissing(child);
+            boolean isExpanding = mLaunchingNotification && (child instanceof ExpandableView)
+                    && (((ExpandableView) child).isExpandAnimationRunning()
+                            || ((ExpandableView) child).hasExpandingChild());
+
+            if (isExpanding) {
                 // When launching the notification, it is not clipped by this layout, but by the
                 // view itself. This is because the view is Translating in Z, where this clipPath
                 // wouldn't apply.
-                clipPath = null;
-                clipOutPath = null;
+            } else if (isSwiping) {
+                // When a notification is swiped or dismissed, clip vertically only so that it
+                // can translate smoothly across the screen without being clipped at the panel
+                // boundaries, while still respecting top and bottom bounds (status bar / nav bar).
+                int top = mRoundedRectClippingTop + mRoundedRectClippingYTranslation;
+                int bottom = mRoundedRectClippingBottom + mRoundedRectClippingYTranslation;
+                if (bottom > top) {
+                    canvas.clipRect(-50000f, top, 50000f, bottom);
+                }
             } else {
-                clipPath = mRoundedClipPath;
-                clipOutPath = mNegativeRoundedClipPath;
-            }
-            if (mShouldUseRoundedRectClipping && clipPath != null) {
-                canvas.clipPath(clipPath);
-            }
-            if (mShouldUseNegativeRoundedRectClipping && clipOutPath != null) {
-                canvas.clipOutPath(clipOutPath);
+                if (mShouldUseRoundedRectClipping && mRoundedClipPath != null) {
+                    canvas.clipPath(mRoundedClipPath);
+                }
+                if (mShouldUseNegativeRoundedRectClipping && mNegativeRoundedClipPath != null) {
+                    canvas.clipOutPath(mNegativeRoundedClipPath);
+                }
             }
             boolean result = super.drawChild(canvas, child, drawingTime);
             canvas.restore();

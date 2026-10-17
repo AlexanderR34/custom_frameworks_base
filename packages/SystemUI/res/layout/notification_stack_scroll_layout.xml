@@ -20,6 +20,8 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:systemui="http://schemas.android.com/apk/res-auto"
     android:id="@+id/notification_stack_scroller"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:layout_marginTop="@dimen/notification_panel_margin_top"
     android:layout_width="0dp"
     android:layout_height="match_parent"

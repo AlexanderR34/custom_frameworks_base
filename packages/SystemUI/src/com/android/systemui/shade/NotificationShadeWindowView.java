@@ -83,6 +83,8 @@ public class NotificationShadeWindowView extends WindowRootView {
     public NotificationShadeWindowView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setMotionEventSplittingEnabled(false);
+        setClipChildren(false);
+        setClipToPadding(false);
     }
 
     @Override
