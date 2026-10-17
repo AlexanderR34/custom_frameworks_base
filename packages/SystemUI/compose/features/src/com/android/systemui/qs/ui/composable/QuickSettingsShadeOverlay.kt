@@ -700,11 +700,10 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
     val queryMobileDataEnabled = {
         try {
             val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
-            var result = false
             if (subId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
                 val subTm = telephonyManager?.createForSubscriptionId(subId)
                 if (subTm != null) {
-                    result = subTm.isDataEnabled
+                    subTm.isDataEnabled
                 } else {
                     val subSetting = android.provider.Settings.Global.getInt(
                         context.contentResolver,
@@ -712,23 +711,23 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         -1
                     )
                     if (subSetting != -1) {
-                        result = (subSetting == 1)
+                        subSetting == 1
+                    } else {
+                        telephonyManager?.isDataEnabled ?: false
                     }
                 }
-            }
-            if (!result) {
+            } else {
                 val genericSetting = android.provider.Settings.Global.getInt(
                     context.contentResolver,
                     android.provider.Settings.Global.MOBILE_DATA,
                     -1
                 )
                 if (genericSetting != -1) {
-                    result = (genericSetting == 1)
+                    genericSetting == 1
                 } else {
-                    result = telephonyManager?.isDataEnabled ?: false
+                    telephonyManager?.isDataEnabled ?: false
                 }
             }
-            result
         } catch (e: Exception) {
             telephonyManager?.isDataEnabled ?: false
         }
@@ -920,7 +919,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         }
                         if (cellTile != null) {
                             val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
-                            val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                            val isCellActive = isDataEnabled && (tileState.state != android.service.quicksettings.Tile.STATE_UNAVAILABLE)
                             val stateOff = stringResource(R.string.hyperos_qs_state_off)
                             val stateOn = stringResource(R.string.hyperos_qs_state_on)
                             val cellSubtitle = when {
@@ -939,29 +938,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                                     val targetData = !isCellActive
                                     isDataEnabled = targetData
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                        try {
-                                            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                            if (tm != null) {
-                                                tm.setDataEnabledForReason(
-                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                    targetData
-                                                )
-                                            }
-                                        } catch (e: Exception) {
-                                            try {
-                                                val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                                val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
-                                                val subTm = tm?.createForSubscriptionId(subId)
-                                                subTm?.setDataEnabledForReason(
-                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                    targetData
-                                                )
-                                            } catch (e2: Exception) {
-                                                android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
-                                            }
-                                        }
-                                    }
+                                    executeToggleMobileData(context, telephonyManager, targetData)
                                 },
                                 onLongClick = {
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -1068,7 +1045,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                         }
                         if (cellTile != null) {
                             val tileState by cellTile.state.collectAsStateWithLifecycle(cellTile.currentState)
-                            val isCellActive = (tileState.state == android.service.quicksettings.Tile.STATE_ACTIVE) || isDataEnabled
+                            val isCellActive = isDataEnabled && (tileState.state != android.service.quicksettings.Tile.STATE_UNAVAILABLE)
                             val stateOff = stringResource(R.string.hyperos_qs_state_off)
                             val stateOn = stringResource(R.string.hyperos_qs_state_on)
                             val cellSubtitle = when {
@@ -1087,29 +1064,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                                     val targetData = !isCellActive
                                     isDataEnabled = targetData
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                        try {
-                                            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                            if (tm != null) {
-                                                tm.setDataEnabledForReason(
-                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                    targetData
-                                                )
-                                            }
-                                        } catch (e: Exception) {
-                                            try {
-                                                val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                                                val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
-                                                val subTm = tm?.createForSubscriptionId(subId)
-                                                subTm?.setDataEnabledForReason(
-                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                    targetData
-                                                )
-                                            } catch (e2: Exception) {
-                                                android.util.Log.e("HyperOS", "Error toggling mobile data", e2)
-                                            }
-                                        }
-                                    }
+                                    executeToggleMobileData(context, telephonyManager, targetData)
                                 },
                                 onLongClick = {
                                     view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
@@ -1232,23 +1187,106 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                 isDataEnabled = isDataEnabled,
                 onToggleData = { targetData ->
                     isDataEnabled = targetData
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        try {
-                            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
-                            val currentSubId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
-                            val subTm = tm?.createForSubscriptionId(currentSubId) ?: tm
-                            subTm?.setDataEnabledForReason(
-                                android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                targetData
-                            )
-                        } catch (e: Exception) {
-                            android.util.Log.e("HyperOS", "Error toggling mobile data from dialog", e)
-                        }
-                    }
+                    executeToggleMobileData(context, telephonyManager, targetData)
                 },
                 onDismiss = { showMobileDataDialog = false },
                 view = view
             )
+        }
+    }
+}
+
+private fun executeToggleMobileData(
+    context: android.content.Context,
+    telephonyManager: android.telephony.TelephonyManager?,
+    targetData: Boolean,
+) {
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        try {
+            val tm = telephonyManager ?: context.applicationContext.getSystemService(android.telephony.TelephonyManager::class.java)
+            val sm = context.applicationContext.getSystemService(android.telephony.SubscriptionManager::class.java)
+            val defaultSubId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+            val activeSubs = try {
+                sm?.activeSubscriptionInfoList ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            // 1. Update Global Settings for MOBILE_DATA so system observers trigger
+            try {
+                android.provider.Settings.Global.putInt(
+                    context.contentResolver,
+                    android.provider.Settings.Global.MOBILE_DATA,
+                    if (targetData) 1 else 0
+                )
+                if (defaultSubId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    android.provider.Settings.Global.putInt(
+                        context.contentResolver,
+                        "${android.provider.Settings.Global.MOBILE_DATA}$defaultSubId",
+                        if (targetData) 1 else 0
+                    )
+                }
+                activeSubs.forEach { sub ->
+                    android.provider.Settings.Global.putInt(
+                        context.contentResolver,
+                        "${android.provider.Settings.Global.MOBILE_DATA}${sub.subscriptionId}",
+                        if (targetData && sub.subscriptionId == defaultSubId) 1 else 0
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HyperOS", "Error writing mobile data settings", e)
+            }
+
+            // 2. Base TelephonyManager toggle
+            try {
+                tm?.setDataEnabledForReason(
+                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                    targetData
+                )
+            } catch (e: Exception) {}
+            try {
+                tm?.setDataEnabled(targetData)
+            } catch (e: Exception) {}
+
+            // 3. Default subscription toggle
+            if (defaultSubId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                try {
+                    val subTm = tm?.createForSubscriptionId(defaultSubId)
+                    subTm?.setDataEnabledForReason(
+                        android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                        targetData
+                    )
+                    subTm?.setDataEnabled(targetData)
+                } catch (e: Exception) {}
+            }
+
+            // 4. Multi-SIM toggle across all subscriptions
+            for (sub in activeSubs) {
+                try {
+                    val subTm = tm?.createForSubscriptionId(sub.subscriptionId)
+                    if (!targetData) {
+                        subTm?.setDataEnabledForReason(
+                            android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                            false
+                        )
+                        subTm?.setDataEnabled(false)
+                    } else if (sub.subscriptionId == defaultSubId || defaultSubId == android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                        subTm?.setDataEnabledForReason(
+                            android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                            true
+                        )
+                        subTm?.setDataEnabled(true)
+                    } else {
+                        subTm?.setDataEnabledForReason(
+                            android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
+                            false
+                        )
+                        subTm?.setDataEnabled(false)
+                    }
+                } catch (e: Exception) {}
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("HyperOS", "Fatal error toggling mobile data", e)
         }
     }
 }
@@ -1281,19 +1319,8 @@ private fun HyperOSMobileDataSelectorDialog(
         mutableStateOf(android.telephony.SubscriptionManager.getDefaultDataSubscriptionId())
     }
 
-    var localDataEnabled by remember {
-        mutableStateOf(
-            try {
-                val globalSetting = android.provider.Settings.Global.getInt(
-                    context.contentResolver,
-                    android.provider.Settings.Global.MOBILE_DATA,
-                    if (isDataEnabled) 1 else 0
-                ) == 1
-                globalSetting || isDataEnabled
-            } catch (e: Exception) {
-                isDataEnabled
-            }
-        )
+    var localDataEnabled by remember(isDataEnabled) {
+        mutableStateOf(isDataEnabled)
     }
 
     DisposableEffect(context, subscriptionManager) {
@@ -1398,7 +1425,6 @@ private fun HyperOSMobileDataSelectorDialog(
                                     val wasDataEnabled = localDataEnabled
                                     defaultDataSubId = sub.subscriptionId
                                     localDataEnabled = wasDataEnabled
-                                    onToggleData(wasDataEnabled)
                                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                         try {
                                             subscriptionManager?.setDefaultDataSubId(sub.subscriptionId)
@@ -1408,19 +1434,8 @@ private fun HyperOSMobileDataSelectorDialog(
                                                     "user_preferred_data_sub",
                                                     sub.subscriptionId
                                                 )
-                                                android.provider.Settings.Global.putInt(
-                                                    context.contentResolver,
-                                                    android.provider.Settings.Global.MOBILE_DATA,
-                                                    if (wasDataEnabled) 1 else 0
-                                                )
                                             } catch (e: Exception) {}
-
-                                            if (wasDataEnabled) {
-                                                telephonyManager?.createForSubscriptionId(sub.subscriptionId)?.setDataEnabledForReason(
-                                                    android.telephony.TelephonyManager.DATA_ENABLED_REASON_USER,
-                                                    true
-                                                )
-                                            }
+                                            executeToggleMobileData(context, telephonyManager, wasDataEnabled)
                                         } catch (e: Exception) {
                                             android.util.Log.e("HyperOS", "Error setting default data sub", e)
                                         }
