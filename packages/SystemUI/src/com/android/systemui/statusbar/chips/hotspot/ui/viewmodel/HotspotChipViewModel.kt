@@ -18,6 +18,9 @@ package com.android.systemui.statusbar.chips.hotspot.ui.viewmodel
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
@@ -26,6 +29,7 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.phone.island.ChipIslandPopup
 import com.android.systemui.statusbar.chips.hotspot.domain.interactor.HotspotChipInteractor
 import com.android.systemui.statusbar.chips.hotspot.domain.model.HotspotChipModel
 import com.android.systemui.statusbar.chips.ui.model.ColorsModel
@@ -51,11 +55,19 @@ constructor(
     private val uiEventLogger: StatusBarChipsUiEventLogger,
 ) : OngoingActivityChipViewModel {
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var hotspotPopup: ChipIslandPopup? = null
+
     override val chip: StateFlow<OngoingActivityChipModel> =
         interactor.hotspotState
             .map { state ->
                 when (state) {
-                    is HotspotChipModel.Inactive -> OngoingActivityChipModel.Inactive()
+                    is HotspotChipModel.Inactive -> {
+                        mainHandler.post {
+                            hotspotPopup?.dismissWithAnimation()
+                        }
+                        OngoingActivityChipModel.Inactive()
+                    }
                     is HotspotChipModel.Active -> prepareChip(state)
                 }
             }
@@ -97,13 +109,10 @@ constructor(
         val colors = ColorsModel.DynamicThemed()
 
         val clickBehavior =
-            OngoingActivityChipModel.ClickBehavior.ExpandAction {
-                try {
-                    val intent = Intent(Settings.ACTION_TETHER_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    activityStarter.postStartActivityDismissingKeyguard(intent, 0)
-                } catch (ignored: Exception) {}
+            OngoingActivityChipModel.ClickBehavior.ExpandAction { _ ->
+                mainHandler.post {
+                    showOrTogglePopup(state)
+                }
             }
 
         return OngoingActivityChipModel.Active(
@@ -113,6 +122,59 @@ constructor(
             colors = colors,
             clickBehavior = clickBehavior,
         )
+    }
+
+    private fun showOrTogglePopup(state: HotspotChipModel.Active) {
+        val popup = hotspotPopup ?: ChipIslandPopup(context, "HotspotIslandPopup").also { hotspotPopup = it }
+
+        if (popup.isShowing) {
+            popup.dismissWithAnimation()
+            return
+        }
+
+        // Left button: Connected devices / client list
+        popup.setLeftButton(
+            iconRes = R.drawable.ic_hotspot_island_devices,
+            contentDescription = "Connected Devices",
+        ) {
+            try {
+                val intent = Intent(Settings.ACTION_TETHER_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                activityStarter.postStartActivityDismissingKeyguard(intent, 0)
+                popup.dismissWithAnimation()
+            } catch (ignored: Exception) {}
+        }
+
+        // Center button: Immediate power killswitch (turns off hotspot)
+        popup.setCenterButton(
+            iconRes = R.drawable.ic_hotspot_island_power,
+            contentDescription = "Turn off Hotspot",
+            customTint = Color.parseColor("#00E5FF"), // Vibrant cyan power icon
+        ) {
+            try {
+                interactor.disableHotspot()
+                popup.dismissWithAnimation()
+            } catch (ignored: Exception) {}
+        }
+
+        // Right button: Hotspot settings
+        popup.setRightButton(
+            iconRes = R.drawable.ic_hotspot_island_settings,
+            contentDescription = "Hotspot Settings",
+        ) {
+            try {
+                val intent = Intent(Settings.ACTION_TETHER_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                activityStarter.postStartActivityDismissingKeyguard(intent, 0)
+                popup.dismissWithAnimation()
+            } catch (ignored: Exception) {}
+        }
+
+        // Apply Monet theme with cyan / teal accent
+        popup.applyMonetTheme(Color.parseColor("#00ACC1"))
+        popup.show()
     }
 
     companion object {

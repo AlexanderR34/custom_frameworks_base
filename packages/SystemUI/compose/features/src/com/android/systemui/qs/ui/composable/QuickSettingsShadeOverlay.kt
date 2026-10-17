@@ -23,6 +23,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -85,6 +87,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,6 +108,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onLayoutRectChanged
 import com.android.systemui.common.shared.model.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
@@ -117,6 +121,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -692,46 +697,89 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
     val wifiManager = remember(context) { context.getSystemService(android.net.wifi.WifiManager::class.java) }
     val telephonyManager = remember(context) { context.getSystemService(android.telephony.TelephonyManager::class.java) }
 
+    val queryMobileDataEnabled = {
+        try {
+            val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+            var result = false
+            if (subId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                val subTm = telephonyManager?.createForSubscriptionId(subId)
+                if (subTm != null) {
+                    result = subTm.isDataEnabled
+                } else {
+                    val subSetting = android.provider.Settings.Global.getInt(
+                        context.contentResolver,
+                        "${android.provider.Settings.Global.MOBILE_DATA}$subId",
+                        -1
+                    )
+                    if (subSetting != -1) {
+                        result = (subSetting == 1)
+                    }
+                }
+            }
+            if (!result) {
+                val genericSetting = android.provider.Settings.Global.getInt(
+                    context.contentResolver,
+                    android.provider.Settings.Global.MOBILE_DATA,
+                    -1
+                )
+                if (genericSetting != -1) {
+                    result = (genericSetting == 1)
+                } else {
+                    result = telephonyManager?.isDataEnabled ?: false
+                }
+            }
+            result
+        } catch (e: Exception) {
+            telephonyManager?.isDataEnabled ?: false
+        }
+    }
+
     var isWifiEnabled by remember {
         mutableStateOf(wifiManager?.isWifiEnabled ?: false)
     }
     var isDataEnabled by remember {
-        val globalOn = try {
-            android.provider.Settings.Global.getInt(
-                context.contentResolver,
-                android.provider.Settings.Global.MOBILE_DATA,
-                0
-            ) == 1
-        } catch (e: Exception) { false }
-        mutableStateOf(globalOn || (telephonyManager?.isDataEnabled ?: false))
+        mutableStateOf(queryMobileDataEnabled())
     }
 
     DisposableEffect(context, wifiManager, telephonyManager) {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
                 isWifiEnabled = wifiManager?.isWifiEnabled ?: false
-                val globalOn = try {
-                    android.provider.Settings.Global.getInt(
-                        (c ?: context).contentResolver,
-                        android.provider.Settings.Global.MOBILE_DATA,
-                        0
-                    ) == 1
-                } catch (e: Exception) { false }
-                isDataEnabled = globalOn || (telephonyManager?.isDataEnabled ?: false)
+                isDataEnabled = queryMobileDataEnabled()
             }
         }
         val filter = android.content.IntentFilter().apply {
             addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
             addAction(android.net.wifi.WifiManager.NETWORK_STATE_CHANGED_ACTION)
             addAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION)
-            addAction("android.intent.action.ANY_DATA_STATE")
             addAction(android.telephony.TelephonyManager.ACTION_MULTI_SIM_CONFIG_CHANGED)
         }
         context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED_UNAUDITED)
+
+        val subId = try { android.telephony.SubscriptionManager.getDefaultDataSubscriptionId() } catch (e: Exception) { -1 }
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                isDataEnabled = queryMobileDataEnabled()
+            }
+        }
+        try {
+            context.contentResolver.registerContentObserver(
+                android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.MOBILE_DATA),
+                false,
+                observer
+            )
+            if (subId != -1 && subId != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                context.contentResolver.registerContentObserver(
+                    android.provider.Settings.Global.getUriFor("${android.provider.Settings.Global.MOBILE_DATA}$subId"),
+                    false,
+                    observer
+                )
+            }
+        } catch (e: Exception) {}
+
         onDispose {
-            try {
-                context.unregisterReceiver(receiver)
-            } catch (e: Exception) {}
+            try { context.unregisterReceiver(receiver) } catch (e: Exception) {}
+            try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {}
         }
     }
 
@@ -938,7 +986,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
                             view = view,
                             modifier = Modifier
-                                .weight(2.2f)
+                                .weight(2.6f)
                                 .fillMaxHeight()
                         )
 
@@ -947,7 +995,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             view = view,
                             onLongClick = { showBrightnessDialog = true },
                             modifier = Modifier
-                                .weight(0.85f)
+                                .weight(0.7f)
                                 .fillMaxHeight()
                         )
 
@@ -956,7 +1004,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             audioManager = audioManager,
                             view = view,
                             modifier = Modifier
-                                .weight(0.85f)
+                                .weight(0.7f)
                                 .fillMaxHeight()
                         )
                     }
@@ -1085,7 +1133,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
                             view = view,
                             modifier = Modifier
-                                .weight(2f)
+                                .weight(2.6f)
                                 .fillMaxHeight()
                         )
 
@@ -1094,7 +1142,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             view = view,
                             onLongClick = { showBrightnessDialog = true },
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(0.7f)
                                 .fillMaxHeight()
                         )
 
@@ -1103,7 +1151,7 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
                             audioManager = audioManager,
                             view = view,
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(0.7f)
                                 .fillMaxHeight()
                         )
                     }
@@ -1141,8 +1189,17 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
 
         AnimatedVisibility(
             visible = showBrightnessDialog,
-            enter = fadeIn(tween(250, easing = FastOutSlowInEasing)),
-            exit = fadeOut(tween(200, easing = FastOutSlowInEasing))
+            enter = fadeIn(tween(260, easing = FastOutSlowInEasing)) + scaleIn(
+                initialScale = 0.88f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ),
+            exit = fadeOut(tween(180, easing = FastOutSlowInEasing)) + scaleOut(
+                targetScale = 0.90f,
+                animationSpec = tween(180, easing = FastOutSlowInEasing)
+            )
         ) {
             BackHandler(enabled = true) {
                 showBrightnessDialog = false
@@ -1156,8 +1213,17 @@ private fun ContentScope.HyperOSQuickSettingsLayout(
 
         AnimatedVisibility(
             visible = showMobileDataDialog,
-            enter = fadeIn(tween(250, easing = FastOutSlowInEasing)),
-            exit = fadeOut(tween(200, easing = FastOutSlowInEasing))
+            enter = fadeIn(tween(260, easing = FastOutSlowInEasing)) + scaleIn(
+                initialScale = 0.88f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ),
+            exit = fadeOut(tween(180, easing = FastOutSlowInEasing)) + scaleOut(
+                targetScale = 0.90f,
+                animationSpec = tween(180, easing = FastOutSlowInEasing)
+            )
         ) {
             BackHandler(enabled = true) {
                 showMobileDataDialog = false
@@ -1250,17 +1316,6 @@ private fun HyperOSMobileDataSelectorDialog(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
-    val scaleAnim = remember { androidx.compose.animation.core.Animatable(0.85f) }
-    LaunchedEffect(Unit) {
-        scaleAnim.animateTo(
-            1.0f,
-            animationSpec = androidx.compose.animation.core.spring(
-                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-            )
-        )
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1276,10 +1331,6 @@ private fun HyperOSMobileDataSelectorDialog(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
                 .fillMaxWidth(if (isLandscape) 0.48f else 0.88f)
-                .graphicsLayer {
-                    scaleX = scaleAnim.value
-                    scaleY = scaleAnim.value
-                }
                 .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
                 .clickable(
@@ -2444,7 +2495,7 @@ private fun HyperOSVerticalBrightnessSlider(
 
     BoxWithConstraints(
         modifier = modifier
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(Color(0x593A3A3A))
             .pointerInput(minGamma, maxGamma) {
                 awaitEachGesture {
@@ -2609,17 +2660,6 @@ private fun HyperOSBrightnessExpandedDialog(
         label = "ExpandedBrightnessFraction"
     )
 
-    val scaleAnim = remember { androidx.compose.animation.core.Animatable(0.85f) }
-    LaunchedEffect(Unit) {
-        scaleAnim.animateTo(
-            1.0f,
-            animationSpec = androidx.compose.animation.core.spring(
-                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-            )
-        )
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2635,10 +2675,6 @@ private fun HyperOSBrightnessExpandedDialog(
             modifier = Modifier
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth(if (isLandscape) 0.44f else 0.88f)
-                .graphicsLayer {
-                    scaleX = scaleAnim.value
-                    scaleY = scaleAnim.value
-                }
                 .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
                 .clickable(
@@ -2940,7 +2976,7 @@ private fun HyperOSVerticalVolumeSlider(
 
     BoxWithConstraints(
         modifier = modifier
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(Color(0x593A3A3A))
             .pointerInput(minVolume, maxVolume, sliderState) {
                 detectVerticalDragGestures(
@@ -3191,12 +3227,24 @@ private fun HyperOSTileItem(
     }
 }
 
+private class HyperOSFlyingTile(
+    val tile: EditTileViewModel,
+    val isAdd: Boolean,
+    val startOffset: Offset,
+    val targetOffset: Offset,
+    val widthPx: Int,
+    val progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>
+)
+
 @Composable
 private fun HyperOSEditMode(
     viewModel: EditModeViewModel,
     modifier: Modifier = Modifier,
 ) {
     val view = androidx.compose.ui.platform.LocalView.current
+    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
     val allEditTiles by viewModel.tiles.collectAsStateWithLifecycle(emptyList())
 
     BackHandler { viewModel.stopEditing() }
@@ -3209,211 +3257,388 @@ private fun HyperOSEditMode(
         allEditTiles.filter { !it.isCurrent && it.tileSpec.spec != "internet" && it.tileSpec.spec != "wifi" && it.tileSpec.spec != "cell" }
     }
 
-    Column(
+    var rootCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val tilePositions = remember { mutableMapOf<String, Offset>() }
+    val tileWidths = remember { mutableMapOf<String, Int>() }
+    var activeSectionTop by remember { mutableFloatStateOf(0f) }
+    var availableSectionTop by remember { mutableFloatStateOf(0f) }
+
+    val hiddenSpecs = remember { mutableStateListOf<String>() }
+    val activeFlyers = remember { mutableStateListOf<HyperOSFlyingTile>() }
+
+    val colSpacingPx = with(density) { 10.dp.toPx() }
+    val rowSpacingPx = with(density) { 14.dp.toPx() }
+    val tileHeightPx = with(density) { 82.dp.toPx() }
+
+    // Handler when user taps to ADD an available tile (flies from bottom available to top active)
+    val onAddTileClick: (EditTileViewModel) -> Unit = { tile ->
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        val spec = tile.tileSpec.spec
+        val startPos = tilePositions[spec] ?: Offset(0f, 0f)
+        val width = tileWidths[spec] ?: with(density) { 76.dp.roundToPx() }
+
+        val currentlyFlyingAdds = activeFlyers.count { it.isAdd }
+        val targetIndex = activeTiles.size + currentlyFlyingAdds
+        val targetCol = targetIndex % 4
+        val targetRow = targetIndex / 4
+
+        val colRefTile = activeTiles.getOrNull(targetCol)?.tileSpec?.spec
+        val targetX = tilePositions[colRefTile]?.x ?: run {
+            val x0 = tilePositions[activeTiles.firstOrNull()?.tileSpec?.spec]?.x ?: with(density) { 14.dp.toPx() }
+            x0 + targetCol * (width + colSpacingPx)
+        }
+
+        val y0 = tilePositions[activeTiles.firstOrNull()?.tileSpec?.spec]?.y ?: (activeSectionTop + with(density) { 38.dp.toPx() })
+        val targetY = y0 + targetRow * (tileHeightPx + rowSpacingPx)
+
+        val effectiveStart = if (startPos == Offset.Zero) Offset(targetX, targetY + with(density) { 320.dp.toPx() }) else startPos
+        val effectiveTarget = Offset(targetX, targetY)
+
+        val anim = Animatable(0f)
+        val flyer = HyperOSFlyingTile(
+            tile = tile,
+            isAdd = true,
+            startOffset = effectiveStart,
+            targetOffset = effectiveTarget,
+            widthPx = width,
+            progress = anim
+        )
+        hiddenSpecs.add(spec)
+        activeFlyers.add(flyer)
+
+        coroutineScope.launch {
+            anim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 280,
+                    easing = FastOutSlowInEasing
+                )
+            )
+            viewModel.addTile(tile.tileSpec)
+            activeFlyers.remove(flyer)
+            kotlinx.coroutines.delay(100)
+            hiddenSpecs.remove(spec)
+        }
+    }
+
+    // Handler when user taps to REMOVE an active tile (flies from top active to bottom available)
+    val onRemoveTileClick: (EditTileViewModel) -> Unit = { tile ->
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        val spec = tile.tileSpec.spec
+        val startPos = tilePositions[spec] ?: Offset(0f, 0f)
+        val width = tileWidths[spec] ?: with(density) { 76.dp.roundToPx() }
+
+        val currentlyFlyingRemoves = activeFlyers.count { !it.isAdd }
+        val targetY = (if (availableSectionTop > 0f) availableSectionTop else (startPos.y + with(density) { 260.dp.toPx() })) + with(density) { 44.dp.toPx() } + (currentlyFlyingRemoves * with(density) { 18.dp.toPx() })
+        val targetX = startPos.x
+
+        val effectiveStart = startPos
+        val effectiveTarget = Offset(targetX, targetY)
+
+        val anim = Animatable(0f)
+        val flyer = HyperOSFlyingTile(
+            tile = tile,
+            isAdd = false,
+            startOffset = effectiveStart,
+            targetOffset = effectiveTarget,
+            widthPx = width,
+            progress = anim
+        )
+        hiddenSpecs.add(spec)
+        activeFlyers.add(flyer)
+
+        coroutineScope.launch {
+            anim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 280,
+                    easing = FastOutSlowInEasing
+                )
+            )
+            viewModel.removeTile(tile.tileSpec)
+            activeFlyers.remove(flyer)
+            kotlinx.coroutines.delay(100)
+            hiddenSpecs.remove(spec)
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .onGloballyPositioned { rootCoordinates = it }
     ) {
-        // Header
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 14.dp, vertical = 6.dp)
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Header
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x33FFFFFF))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                viewModel.stopEditing()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_close),
+                            contentDescription = stringResource(R.string.hyperos_qs_close),
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = stringResource(R.string.hyperos_qs_edit_cards),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = stringResource(R.string.hyperos_qs_edit_cards_subtitle),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+                }
+
+                // "Listo" capsule button
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x33FFFFFF))
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.primary)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) {
                             view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                             viewModel.stopEditing()
-                        },
+                        }
+                        .padding(horizontal = 18.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_close),
-                        contentDescription = stringResource(R.string.hyperos_qs_close),
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Column {
                     Text(
-                        text = stringResource(R.string.hyperos_qs_edit_cards),
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        text = stringResource(R.string.hyperos_qs_done),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = Color.White
-                        )
-                    )
-                    Text(
-                        text = stringResource(R.string.hyperos_qs_edit_cards_subtitle),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp,
-                            color = Color.White.copy(alpha = 0.65f)
+                            fontSize = 13.sp
                         )
                     )
                 }
             }
 
-            // "Listo" capsule button
-            Box(
+            VerticalSeparator(14.dp)
+
+            // Section 1: Active Switches
+            Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                        viewModel.stopEditing()
-                    }
-                    .padding(horizontal = 18.dp, vertical = 7.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .onGloballyPositioned { coords ->
+                        val root = rootCoordinates
+                        if (root != null && root.isAttached && coords.isAttached) {
+                            activeSectionTop = root.localPositionOf(coords, Offset.Zero).y
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.hyperos_qs_done),
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = MaterialTheme.colorScheme.onPrimary,
+                    text = stringResource(R.string.hyperos_qs_added_switches),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
+                )
+                Text(
+                    text = "${activeTiles.size}",
+                    style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 )
             }
-        }
 
-        VerticalSeparator(14.dp)
+            VerticalSeparator(10.dp)
 
-        // Section 1: Active Switches
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.hyperos_qs_added_switches),
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.9f)
-                )
-            )
-            Text(
-                text = "${activeTiles.size}",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            )
-        }
-
-        VerticalSeparator(10.dp)
-
-        // Active Tiles Grid (4 columns)
-        val activeRows = activeTiles.chunked(4)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            for (row in activeRows) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    for (tile in row) {
-                        HyperOSEditTileItem(
-                            tile = tile,
-                            isAdd = false,
-                            onBadgeClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                viewModel.removeTile(tile.tileSpec)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (row.size < 4) {
-                        for (i in 0 until (4 - row.size)) {
-                            Spacer(modifier = Modifier.weight(1f))
+            // Active Tiles Grid (4 columns)
+            val activeRows = activeTiles.chunked(4)
+            Column(
+                modifier = Modifier.fillMaxWidth().animateContentSize(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                for (row in activeRows) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        for (tile in row) {
+                            val isHidden = tile.tileSpec.spec in hiddenSpecs
+                            HyperOSEditTileItem(
+                                tile = tile,
+                                isAdd = false,
+                                onBadgeClick = {
+                                    if (tile.tileSpec.spec !in hiddenSpecs) {
+                                        onRemoveTileClick(tile)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer { alpha = if (isHidden) 0f else 1f }
+                                    .onGloballyPositioned { coords ->
+                                        val root = rootCoordinates
+                                        if (root != null && root.isAttached && coords.isAttached) {
+                                            tilePositions[tile.tileSpec.spec] = root.localPositionOf(coords, Offset.Zero)
+                                            tileWidths[tile.tileSpec.spec] = coords.size.width
+                                        }
+                                    }
+                            )
+                        }
+                        if (row.size < 4) {
+                            for (i in 0 until (4 - row.size)) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
             }
-        }
 
-        VerticalSeparator(24.dp)
+            VerticalSeparator(24.dp)
 
-        // Section 2: Available Switches
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.hyperos_qs_available_switches),
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.9f)
+            // Section 2: Available Switches
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .onGloballyPositioned { coords ->
+                        val root = rootCoordinates
+                        if (root != null && root.isAttached && coords.isAttached) {
+                            availableSectionTop = root.localPositionOf(coords, Offset.Zero).y
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.hyperos_qs_available_switches),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
                 )
-            )
-            Text(
-                text = "${availableTiles.size}",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = Color(0xFF4CAF50)
+                Text(
+                    text = "${availableTiles.size}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = Color(0xFF4CAF50)
+                    )
                 )
-            )
-        }
+            }
 
-        VerticalSeparator(10.dp)
+            VerticalSeparator(10.dp)
 
-        // Available Tiles Grid (4 columns)
-        val availableRows = availableTiles.chunked(4)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            for (row in availableRows) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    for (tile in row) {
-                        HyperOSEditTileItem(
-                            tile = tile,
-                            isAdd = true,
-                            onBadgeClick = {
-                                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                viewModel.addTile(tile.tileSpec)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (row.size < 4) {
-                        for (i in 0 until (4 - row.size)) {
-                            Spacer(modifier = Modifier.weight(1f))
+            // Available Tiles Grid (4 columns)
+            val availableRows = availableTiles.chunked(4)
+            Column(
+                modifier = Modifier.fillMaxWidth().animateContentSize(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                for (row in availableRows) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        for (tile in row) {
+                            val isHidden = tile.tileSpec.spec in hiddenSpecs
+                            HyperOSEditTileItem(
+                                tile = tile,
+                                isAdd = true,
+                                onBadgeClick = {
+                                    if (tile.tileSpec.spec !in hiddenSpecs) {
+                                        onAddTileClick(tile)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer { alpha = if (isHidden) 0f else 1f }
+                                    .onGloballyPositioned { coords ->
+                                        val root = rootCoordinates
+                                        if (root != null && root.isAttached && coords.isAttached) {
+                                            tilePositions[tile.tileSpec.spec] = root.localPositionOf(coords, Offset.Zero)
+                                            tileWidths[tile.tileSpec.spec] = coords.size.width
+                                        }
+                                    }
+                            )
+                        }
+                        if (row.size < 4) {
+                            for (i in 0 until (4 - row.size)) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
             }
+
+            VerticalSeparator(36.dp)
         }
 
-        VerticalSeparator(36.dp)
+        // Floating Animated Tiles Layer (Smooth flight from bottom-to-top on Add, and top-to-bottom on Remove)
+        for (flyer in activeFlyers) {
+            val progress = flyer.progress.value
+            val curX = flyer.startOffset.x + (flyer.targetOffset.x - flyer.startOffset.x) * progress
+            val curY = flyer.startOffset.y + (flyer.targetOffset.y - flyer.startOffset.y) * progress
+            val peak = kotlin.math.sin(progress * Math.PI.toFloat())
+            val curScale = 1.0f + 0.08f * peak
+            val elevation = (6f * peak).dp
+
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(curX.roundToInt(), curY.roundToInt()) }
+                    .width(with(density) { if (flyer.widthPx > 0) flyer.widthPx.toDp() else 76.dp })
+                    .graphicsLayer {
+                        scaleX = curScale
+                        scaleY = curScale
+                        shadowElevation = with(density) { elevation.toPx() }
+                    }
+            ) {
+                HyperOSEditTileItem(
+                    tile = flyer.tile,
+                    isAdd = !flyer.isAdd,
+                    onBadgeClick = {},
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
     }
 }
 
@@ -3452,7 +3677,12 @@ private fun HyperOSEditTileItem(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .background(if (isAdd) Color(0x387F7F7F) else Color(0x597F7F7F)),
+                    .background(if (isAdd) Color(0x387F7F7F) else Color(0x597F7F7F))
+                    .clickable(
+                        interactionSource = badgeInteractionSource,
+                        indication = null,
+                        onClick = onBadgeClick
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 SmallTileContent(

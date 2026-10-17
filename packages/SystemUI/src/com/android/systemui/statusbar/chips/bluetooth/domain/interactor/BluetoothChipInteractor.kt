@@ -186,4 +186,11 @@ constructor(
             logger.d({ "Bluetooth chip state updated: newState=$str1" }) { str1 = it.logString() }
         }
         .stateIn(scope, SharingStarted.Lazily, BluetoothChipModel.Inactive)
+
+    fun disconnectCurrentDevice() {
+        try {
+            val connected = controller.connectedDevices
+            connected?.firstOrNull()?.disconnect()
+        } catch (ignored: Exception) {}
+    }
 }

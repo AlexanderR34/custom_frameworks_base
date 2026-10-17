@@ -1283,8 +1283,8 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
      * @see ActivityRecord#hasSizeCompatBounds()
      */
     boolean hasCompatScale() {
-        if (mAttrs.type == TYPE_APPLICATION_STARTING) {
-            // Exclude starting window because it is not displayed by the application.
+        if (mAttrs.type == TYPE_APPLICATION_STARTING || mAttrs.type == TYPE_WALLPAPER) {
+            // Exclude starting window and wallpaper because they should never receive app compat scaling.
             return false;
         }
         if (mWmService.mAtmService.mCompatModePackages.useLegacyScreenCompatMode(
@@ -2969,6 +2969,10 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
     }
 
     void setWindowScale(int requestedWidth, int requestedHeight) {
+        if (mAttrs.type == TYPE_WALLPAPER) {
+            mHScale = mVScale = 1;
+            return;
+        }
         final boolean scaledWindow = (mAttrs.flags & FLAG_SCALED) != 0;
 
         if (scaledWindow) {

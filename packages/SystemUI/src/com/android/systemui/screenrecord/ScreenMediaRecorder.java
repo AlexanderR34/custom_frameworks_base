@@ -323,48 +323,50 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
 
         if (!mHEVC) {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-            int level = MediaCodecInfo.CodecProfileLevel.AVCLevel42;
-            if ("4.1".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel41;
-            } else if ("4".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel4;
-            } else if ("5".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel5;
-            } else if ("5.1".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel51;
-            } else if ("5.2".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel52;
-            } else if ("3.2".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel32;
-            } else if ("3.1".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel31;
-            } else if ("3".equals(mAvcProfileLevel)) {
-                level = MediaCodecInfo.CodecProfileLevel.AVCLevel3;
-            }
+            int requiredLevel = getRequiredAvcLevel(width, height, refreshRate);
+            int configuredLevel = getAvcProfileLevelCodeByName(mAvcProfileLevel);
+            // Ensure the level satisfies ITU-T H.264 Annex A specification for width x height @ refreshRate
+            int level = Math.max(configuredLevel, requiredLevel);
+            Log.d(TAG, "Configuring AVC encoder for " + width + "x" + height + " @" + refreshRate
+                    + "fps -> Level 0x" + Integer.toHexString(level));
             try {
                 mMediaRecorder.setVideoEncodingProfileLevel(
                         MediaCodecInfo.CodecProfileLevel.AVCProfileHigh,
                         level);
             } catch (Exception e1) {
+                Log.w(TAG, "AVCProfileHigh not supported for level 0x" + Integer.toHexString(level) + ", trying Main", e1);
                 try {
                     mMediaRecorder.setVideoEncodingProfileLevel(
                             MediaCodecInfo.CodecProfileLevel.AVCProfileMain,
                             level);
                 } catch (Exception e2) {
+                    Log.w(TAG, "AVCProfileMain not supported, trying Baseline", e2);
                     try {
                         mMediaRecorder.setVideoEncodingProfileLevel(
                                 MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline,
                                 level);
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                        Log.w(TAG, "setVideoEncodingProfileLevel failed; letting encoder auto-negotiate profile/level");
+                    }
                 }
             }
         } else {
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.HEVC);
+            int hevcLevel = MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51;
+            if (refreshRate > 60 || width > 1920 || height > 1920) {
+                hevcLevel = MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel52;
+            }
             try {
                 mMediaRecorder.setVideoEncodingProfileLevel(
                         MediaCodecInfo.CodecProfileLevel.HEVCProfileMain,
-                        MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51);
-            } catch (Exception ignored) {}
+                        hevcLevel);
+            } catch (Exception ignored) {
+                try {
+                    mMediaRecorder.setVideoEncodingProfileLevel(
+                            MediaCodecInfo.CodecProfileLevel.HEVCProfileMain,
+                            MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51);
+                } catch (Exception ignored2) {}
+            }
         }
         mMediaRecorder.setVideoSize(width, height);
         mMediaRecorder.setVideoFrameRate(refreshRate);
@@ -422,14 +424,40 @@ public class ScreenMediaRecorder extends MediaProjection.Callback {
      * Match human-readable AVC level name to its constant value.
      */
     private int getAvcProfileLevelCodeByName(final String levelName) {
-        switch (levelName) {
+        if (levelName == null) return 0;
+        switch (levelName.trim()) {
             case "3": return MediaCodecInfo.CodecProfileLevel.AVCLevel3;
             case "3.1": return MediaCodecInfo.CodecProfileLevel.AVCLevel31;
             case "3.2": return MediaCodecInfo.CodecProfileLevel.AVCLevel32;
             case "4": return MediaCodecInfo.CodecProfileLevel.AVCLevel4;
             case "4.1": return MediaCodecInfo.CodecProfileLevel.AVCLevel41;
-            default:
             case "4.2": return MediaCodecInfo.CodecProfileLevel.AVCLevel42;
+            case "5": return MediaCodecInfo.CodecProfileLevel.AVCLevel5;
+            case "5.1": return MediaCodecInfo.CodecProfileLevel.AVCLevel51;
+            case "5.2": return MediaCodecInfo.CodecProfileLevel.AVCLevel52;
+            case "6": return MediaCodecInfo.CodecProfileLevel.AVCLevel6;
+            case "6.1": return MediaCodecInfo.CodecProfileLevel.AVCLevel61;
+            case "6.2": return MediaCodecInfo.CodecProfileLevel.AVCLevel62;
+            default: return 0;
+        }
+    }
+
+    /**
+     * Calculate the minimum H.264 level required by ITU-T Table A-1
+     * based on resolution (macroblocks) and framerate (macroblocks per second).
+     */
+    private int getRequiredAvcLevel(int width, int height, int fps) {
+        int mbWidth = (width + 15) / 16;
+        int mbHeight = (height + 15) / 16;
+        int totalMb = mbWidth * mbHeight;
+        long mbps = (long) totalMb * Math.max(1, fps);
+
+        if (totalMb <= 8192 && mbps <= 522240) {
+            return MediaCodecInfo.CodecProfileLevel.AVCLevel42; // Up to 1080p @ 60fps
+        } else if (totalMb <= 36864 && mbps <= 983040) {
+            return MediaCodecInfo.CodecProfileLevel.AVCLevel51; // Up to 1.5K @ ~75fps or 4K @ 30fps
+        } else {
+            return MediaCodecInfo.CodecProfileLevel.AVCLevel52; // Up to 1.5K @ 120fps or 4K @ 60fps
         }
     }
 

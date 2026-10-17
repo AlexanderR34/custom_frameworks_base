@@ -95,8 +95,11 @@ class LockscreenLyricsController @Inject constructor(
                 val song = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim()
                 val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)?.trim() ?: ""
                 val durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-                if (!song.isNullOrEmpty() && (song != currentTrackName || artist != currentArtistName)) {
-                    loadLyrics(song, artist, durationMs)
+                if (!song.isNullOrEmpty() && !isGarbageLyricLine(song)) {
+                    val cleanArtist = if (isGarbageLyricLine(artist)) "" else artist
+                    if (song != currentTrackName || cleanArtist != currentArtistName) {
+                        loadLyrics(song, cleanArtist, durationMs)
+                    }
                 }
             }
         }
@@ -296,9 +299,10 @@ class LockscreenLyricsController @Inject constructor(
         val artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)?.trim() ?: ""
         val durationMs = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
 
-        if (!song.isNullOrEmpty()) {
-            if (song != currentTrackName || artist != currentArtistName) {
-                loadLyrics(song, artist, durationMs)
+        if (!song.isNullOrEmpty() && !isGarbageLyricLine(song)) {
+            val cleanArtist = if (isGarbageLyricLine(artist)) "" else artist
+            if (song != currentTrackName || cleanArtist != currentArtistName) {
+                loadLyrics(song, cleanArtist, durationMs)
             } else {
                 evaluateTickerState()
                 updateLyricsDisplay()
@@ -349,10 +353,12 @@ class LockscreenLyricsController @Inject constructor(
         val song = data.song?.toString()?.trim()
         val artist = data.artist?.toString()?.trim() ?: ""
 
-        if (song.isNullOrEmpty()) {
+        if (song.isNullOrEmpty() || isGarbageLyricLine(song)) {
             checkActiveSessions()
             return
         }
+
+        val cleanArtist = if (isGarbageLyricLine(artist)) "" else artist
 
         val token = data.token
         if (token != null && (activeController == null || activeController?.sessionToken != token)) {
@@ -366,14 +372,14 @@ class LockscreenLyricsController @Inject constructor(
 
         isMediaPlaying = (data.isPlaying == true) || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
 
-        if (song == currentTrackName && artist == currentArtistName) {
+        if (song == currentTrackName && cleanArtist == currentArtistName) {
             evaluateTickerState()
             updateLyricsDisplay()
             return
         }
 
         val durationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-        loadLyrics(song, artist, durationMs)
+        loadLyrics(song, cleanArtist, durationMs)
     }
 
     private fun loadLyrics(song: String, artist: String, durationMs: Long) {
@@ -413,7 +419,8 @@ class LockscreenLyricsController @Inject constructor(
 
     private fun evaluateTickerState() {
         val isPlaying = isMediaPlaying || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
-        val shouldTick = shouldShowForCurrentState() && isPlaying && (currentLyrics != null) && (lyricsView != null)
+        val hasValidLyrics = currentLyrics != null && currentLyrics!!.lines.isNotEmpty() && !currentLyrics!!.lines.all { isGarbageLyricLine(it.text) }
+        val shouldTick = shouldShowForCurrentState() && isPlaying && hasValidLyrics && (lyricsView != null)
 
         if (shouldTick && !isTicking) {
             isTicking = true
@@ -423,7 +430,7 @@ class LockscreenLyricsController @Inject constructor(
             mainHandler.removeCallbacks(tickerRunnable)
         }
 
-        if (!isPlaying || currentLyrics == null || !shouldShowForCurrentState()) {
+        if (!isPlaying || !hasValidLyrics || !shouldShowForCurrentState()) {
             lyricsView?.visibility = View.GONE
         }
     }
@@ -447,7 +454,8 @@ class LockscreenLyricsController @Inject constructor(
     private fun updateLyricsDisplay() {
         val lyrics = currentLyrics
         val isPlaying = isMediaPlaying || (activeController?.playbackState?.state == PlaybackState.STATE_PLAYING)
-        if (lyrics != null && shouldShowForCurrentState() && isPlaying) {
+        val hasValidLyrics = lyrics != null && lyrics.lines.isNotEmpty() && !lyrics.lines.all { isGarbageLyricLine(it.text) }
+        if (hasValidLyrics && shouldShowForCurrentState() && isPlaying) {
             lyricsView?.setDozing(isDozing)
             updateProgress()
         } else {

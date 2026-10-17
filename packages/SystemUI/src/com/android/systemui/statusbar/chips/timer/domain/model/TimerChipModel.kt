@@ -38,6 +38,9 @@ sealed interface TimerChipModel {
         val pausedDurationMs: Long = 0L,
         val appIcon: Drawable? = null,
         val intent: PendingIntent? = null,
+        val plusOneIntent: PendingIntent? = null,
+        val pauseResumeIntent: PendingIntent? = null,
+        val stopIntent: PendingIntent? = null,
     ) : TimerChipModel {
         override fun logString(): String =
             "Active(pkg=$packageName, eventTime=$eventTimeRealtimeMs, isCountdown=$isCountdown, isPaused=$isPaused)"

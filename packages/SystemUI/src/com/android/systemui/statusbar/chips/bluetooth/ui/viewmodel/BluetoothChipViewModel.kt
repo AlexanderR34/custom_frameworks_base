@@ -18,12 +18,16 @@ package com.android.systemui.statusbar.chips.bluetooth.ui.viewmodel
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
+import com.android.systemui.media.dialog.MediaOutputDialogManager
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.chips.bluetooth.domain.interactor.BluetoothChipInteractor
@@ -32,6 +36,7 @@ import com.android.systemui.statusbar.chips.ui.model.ColorsModel
 import com.android.systemui.statusbar.chips.ui.model.OngoingActivityChipModel
 import com.android.systemui.statusbar.chips.ui.viewmodel.OngoingActivityChipViewModel
 import com.android.systemui.statusbar.chips.uievents.StatusBarChipsUiEventLogger
+import com.android.systemui.statusbar.phone.island.ChipIslandPopup
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,13 +54,22 @@ constructor(
     private val interactor: BluetoothChipInteractor,
     private val activityStarter: ActivityStarter,
     private val uiEventLogger: StatusBarChipsUiEventLogger,
+    private val mediaOutputDialogManager: MediaOutputDialogManager,
 ) : OngoingActivityChipViewModel {
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var bluetoothPopup: ChipIslandPopup? = null
 
     override val chip: StateFlow<OngoingActivityChipModel> =
         interactor.bluetoothState
             .map { state ->
                 when (state) {
-                    is BluetoothChipModel.Inactive -> OngoingActivityChipModel.Inactive()
+                    is BluetoothChipModel.Inactive -> {
+                        mainHandler.post {
+                            bluetoothPopup?.dismissWithAnimation()
+                        }
+                        OngoingActivityChipModel.Inactive()
+                    }
                     is BluetoothChipModel.Active -> prepareChip(state)
                 }
             }
@@ -110,13 +124,10 @@ constructor(
             }
 
         val clickBehavior =
-            OngoingActivityChipModel.ClickBehavior.ExpandAction {
-                try {
-                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    activityStarter.postStartActivityDismissingKeyguard(intent, 0)
-                } catch (ignored: Exception) {}
+            OngoingActivityChipModel.ClickBehavior.ExpandAction { _ ->
+                mainHandler.post {
+                    showOrTogglePopup(state)
+                }
             }
 
         return OngoingActivityChipModel.Active(
@@ -126,6 +137,60 @@ constructor(
             colors = colors,
             clickBehavior = clickBehavior,
         )
+    }
+
+    private fun showOrTogglePopup(state: BluetoothChipModel.Active) {
+        val popup = bluetoothPopup ?: ChipIslandPopup(context, "BluetoothIslandPopup").also { bluetoothPopup = it }
+
+        if (popup.isShowing) {
+            popup.dismissWithAnimation()
+            return
+        }
+
+        // Left button: Media Output Switcher (native system audio route switcher)
+        popup.setLeftButton(
+            iconRes = R.drawable.ic_bluetooth_island_output,
+            contentDescription = "Media Output Switcher",
+        ) {
+            try {
+                mediaOutputDialogManager.createAndShowForSystemRouting()
+                popup.dismissWithAnimation()
+            } catch (e: Exception) {
+                try {
+                    context.sendBroadcast(Intent("com.android.systemui.action.LAUNCH_SYSTEM_MEDIA_OUTPUT_DIALOG"))
+                    popup.dismissWithAnimation()
+                } catch (ignored: Exception) {}
+            }
+        }
+
+        // Center button: 1-Tap Disconnect device
+        popup.setCenterButton(
+            iconRes = R.drawable.ic_bluetooth_island_disconnect,
+            contentDescription = "Disconnect Device",
+        ) {
+            try {
+                interactor.disconnectCurrentDevice()
+                popup.dismissWithAnimation()
+            } catch (ignored: Exception) {}
+        }
+
+        // Right button: Device / Bluetooth Settings
+        popup.setRightButton(
+            iconRes = R.drawable.ic_bluetooth_island_settings,
+            contentDescription = "Bluetooth Settings",
+        ) {
+            try {
+                val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                activityStarter.postStartActivityDismissingKeyguard(intent, 0)
+                popup.dismissWithAnimation()
+            } catch (ignored: Exception) {}
+        }
+
+        // Apply Monet theme with blue / cyan dynamic styling
+        popup.applyMonetTheme(Color.parseColor("#1976D2"))
+        popup.show()
     }
 
     companion object {

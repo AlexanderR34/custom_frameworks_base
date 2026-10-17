@@ -17,6 +17,9 @@
 package com.android.systemui.statusbar.chips.timer.ui.viewmodel
 
 import android.content.Context
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.shared.model.Icon
 import com.android.systemui.dagger.SysUISingleton
@@ -24,6 +27,7 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.dagger.qualifiers.Main
 import com.android.systemui.plugins.ActivityStarter
 import com.android.systemui.res.R
+import com.android.systemui.statusbar.phone.island.ChipIslandPopup
 import com.android.systemui.statusbar.chips.timer.domain.interactor.TimerChipInteractor
 import com.android.systemui.statusbar.chips.timer.domain.model.TimerChipModel
 import com.android.systemui.statusbar.chips.ui.model.Chronometer
@@ -53,12 +57,38 @@ constructor(
     private val uiEventLogger: StatusBarChipsUiEventLogger,
 ) : OngoingActivityChipViewModel {
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var timerPopup: ChipIslandPopup? = null
+
     override val chip: StateFlow<OngoingActivityChipModel> =
         interactor.timerState
             .map { state ->
                 when (state) {
-                    is TimerChipModel.Inactive -> OngoingActivityChipModel.Inactive()
-                    is TimerChipModel.Active -> prepareChip(state)
+                    is TimerChipModel.Inactive -> {
+                        mainHandler.post {
+                            timerPopup?.dismissWithAnimation()
+                        }
+                        OngoingActivityChipModel.Inactive()
+                    }
+                    is TimerChipModel.Active -> {
+                        mainHandler.post {
+                            timerPopup?.let { popup ->
+                                if (popup.isShowing) {
+                                    val centerIcon = if (state.isPaused) {
+                                        R.drawable.ic_music_island_play
+                                    } else {
+                                        R.drawable.ic_music_island_pause
+                                    }
+                                    popup.setCenterButton(centerIcon, "Play/Pause") {
+                                        try {
+                                            state.pauseResumeIntent?.send()
+                                        } catch (ignored: Exception) {}
+                                    }
+                                }
+                            }
+                        }
+                        prepareChip(state)
+                    }
                 }
             }
             .stateIn(
@@ -108,14 +138,10 @@ constructor(
         val colors = ColorsModel.DynamicThemed()
 
         val clickBehavior =
-            if (state.intent != null) {
-                OngoingActivityChipModel.ClickBehavior.ExpandAction {
-                    try {
-                        activityStarter.postStartActivityDismissingKeyguard(state.intent)
-                    } catch (ignored: Exception) {}
+            OngoingActivityChipModel.ClickBehavior.ExpandAction { _ ->
+                mainHandler.post {
+                    showOrTogglePopup(state)
                 }
-            } else {
-                OngoingActivityChipModel.ClickBehavior.None
             }
 
         return OngoingActivityChipModel.Active(
@@ -127,6 +153,66 @@ constructor(
             colors = colors,
             clickBehavior = clickBehavior,
         )
+    }
+
+    private fun showOrTogglePopup(state: TimerChipModel.Active) {
+        val popup = timerPopup ?: ChipIslandPopup(context, "TimerIslandPopup").also { timerPopup = it }
+
+        if (popup.isShowing) {
+            popup.dismissWithAnimation()
+            return
+        }
+
+        // Left button: +1 Min quick action
+        popup.setLeftButton(
+            iconRes = R.drawable.ic_timer_island_plus1,
+            contentDescription = "+1 Min",
+        ) {
+            try {
+                if (state.plusOneIntent != null) {
+                    state.plusOneIntent.send()
+                } else if (state.intent != null) {
+                    activityStarter.postStartActivityDismissingKeyguard(state.intent)
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        // Center button: Pause/Resume toggle
+        val centerIcon = if (state.isPaused) {
+            R.drawable.ic_music_island_play
+        } else {
+            R.drawable.ic_music_island_pause
+        }
+        popup.setCenterButton(
+            iconRes = centerIcon,
+            contentDescription = if (state.isPaused) "Resume" else "Pause",
+        ) {
+            try {
+                if (state.pauseResumeIntent != null) {
+                    state.pauseResumeIntent.send()
+                } else if (state.intent != null) {
+                    activityStarter.postStartActivityDismissingKeyguard(state.intent)
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        // Right button: Stop / Cancel
+        popup.setRightButton(
+            iconRes = R.drawable.ic_timer_island_stop,
+            contentDescription = "Stop",
+        ) {
+            try {
+                if (state.stopIntent != null) {
+                    state.stopIntent.send()
+                } else if (state.intent != null) {
+                    activityStarter.postStartActivityDismissingKeyguard(state.intent)
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        // Apply dynamic Monet styling with warm amber/orange accent
+        popup.applyMonetTheme(Color.parseColor("#F57C00"))
+        popup.show()
     }
 
     companion object {

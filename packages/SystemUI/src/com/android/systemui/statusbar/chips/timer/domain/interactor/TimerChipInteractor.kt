@@ -206,6 +206,21 @@ constructor(
             0L
         }
 
+        var plusOneIntent: android.app.PendingIntent? = null
+        var pauseResumeIntent: android.app.PendingIntent? = null
+        var stopIntent: android.app.PendingIntent? = null
+
+        notif.actions?.forEach { action ->
+            val actTitle = action.title?.toString()?.lowercase() ?: ""
+            if (actTitle.contains("+") || actTitle.contains("1") || actTitle.contains("add") || actTitle.contains("añadir") || actTitle.contains("agregar")) {
+                plusOneIntent = action.actionIntent
+            } else if (actTitle.contains("paus") || actTitle.contains("resume") || actTitle.contains("reanudar") || actTitle.contains("iniciar") || actTitle.contains("start") || actTitle.contains("continuar")) {
+                pauseResumeIntent = action.actionIntent
+            } else if (actTitle.contains("stop") || actTitle.contains("detener") || actTitle.contains("reset") || actTitle.contains("reiniciar") || actTitle.contains("borrar") || actTitle.contains("delete") || actTitle.contains("cancel") || actTitle.contains("dismiss")) {
+                stopIntent = action.actionIntent
+            }
+        }
+
         _timerState.value = TimerChipModel.Active(
             notificationKey = candidate.key,
             packageName = packageName,
@@ -215,6 +230,9 @@ constructor(
             pausedDurationMs = pausedDuration,
             appIcon = appIcon,
             intent = notif.contentIntent,
+            plusOneIntent = plusOneIntent,
+            pauseResumeIntent = pauseResumeIntent,
+            stopIntent = stopIntent,
         )
     }
 }

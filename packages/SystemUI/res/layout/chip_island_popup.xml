@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chip_island_popup_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/music_island_popup_bg"
+    android:paddingHorizontal="10dp"
+    android:paddingVertical="8dp"
+    android:elevation="12dp"
+    android:clipToPadding="false"
+    android:clipChildren="false">
+
+    <!-- Left Squircle Button: 38dp -->
+    <ImageView
+        android:id="@+id/chip_island_btn_left"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:padding="8dp"
+        android:scaleType="fitCenter"
+        android:background="@drawable/music_island_btn_bg"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <Space
+        android:layout_width="8dp"
+        android:layout_height="match_parent" />
+
+    <!-- Center Squircle Button: 44dp -->
+    <ImageView
+        android:id="@+id/chip_island_btn_center"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:padding="10dp"
+        android:scaleType="fitCenter"
+        android:background="@drawable/music_island_btn_bg"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <Space
+        android:layout_width="8dp"
+        android:layout_height="match_parent" />
+
+    <!-- Right Squircle Button: 38dp -->
+    <ImageView
+        android:id="@+id/chip_island_btn_right"
+        android:layout_width="38dp"
+        android:layout_height="38dp"
+        android:padding="8dp"
+        android:scaleType="fitCenter"
+        android:background="@drawable/music_island_btn_bg"
+        android:clickable="true"
+        android:focusable="true" />
+
+</LinearLayout>

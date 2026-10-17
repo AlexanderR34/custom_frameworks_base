@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?android:attr/colorControlNormal">
+    <!-- Official Material bluetooth_disabled vector (diagonal slash with clean cutouts) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M6.5,4.72l1.41,-1.41L20.28,15.68l-1.41,1.41L6.5,4.72zM13,5.83l1.88,1.88 -1.6,1.6 1.41,1.41 3.02,-3.01L12,2h-1v5.03l2,2V5.83zM5.41,17.29L6.83,18.7 11,14.53V22h1l5.71,-5.71 -2.31,-2.31 -1.41,1.41 1.84,1.84L13,19.17v-3.88l-1.6,-1.6 -4.99,4.99 -1,-1.39z"/>
+</vector>

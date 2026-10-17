@@ -537,12 +537,24 @@ public class ImageWallpaper extends WallpaperService {
         private Rect getDisplayBounds() {
             Rect displayBounds = null;
             try {
-                if (mWindowManagerProvider != null) {
-                    displayBounds = mWindowManagerProvider.getWindowManager(getDisplayContext())
-                            .getCurrentWindowMetrics()
-                            .getBounds();
+                DisplayManager dm = getDisplayContext().getSystemService(DisplayManager.class);
+                android.view.Display display = dm != null ? dm.getDisplay(android.view.Display.DEFAULT_DISPLAY) : null;
+                if (display != null) {
+                    android.view.DisplayInfo di = new android.view.DisplayInfo();
+                    if (display.getDisplayInfo(di) && di.logicalWidth > 0 && di.logicalHeight > 0) {
+                        displayBounds = new Rect(0, 0, di.logicalWidth, di.logicalHeight);
+                    }
                 }
             } catch (Exception ignored) {}
+            if (displayBounds == null || displayBounds.width() <= 0 || displayBounds.height() <= 0) {
+                try {
+                    if (mWindowManagerProvider != null) {
+                        displayBounds = mWindowManagerProvider.getWindowManager(getDisplayContext())
+                                .getMaximumWindowMetrics()
+                                .getBounds();
+                    }
+                } catch (Exception ignored) {}
+            }
             if (displayBounds == null || displayBounds.width() <= 0 || displayBounds.height() <= 0) {
                 try {
                     DisplayMetrics dm = getDisplayContext().getResources().getDisplayMetrics();
@@ -562,11 +574,11 @@ public class ImageWallpaper extends WallpaperService {
 
             boolean needsReload = false;
             synchronized (mSurfaceLock) {
+                if (mSurfaceHolder != null) {
+                    mSurfaceHolder.setFixedSize(targetW, targetH);
+                }
+                mJellyMesh.setSize(targetW, targetH);
                 if (mJellyEnabled) {
-                    if (mSurfaceHolder != null) {
-                        mSurfaceHolder.setFixedSize(targetW, targetH);
-                    }
-                    mJellyMesh.setSize(targetW, targetH);
                     if (mBitmap == null || mBitmap.isRecycled()
                             || mBitmap.getWidth() != targetW
                             || mBitmap.getHeight() != targetH) {
@@ -3007,13 +3019,9 @@ public class ImageWallpaper extends WallpaperService {
 
                 synchronized (mSurfaceLock) {
                     if (mSurfaceHolder != null) {
-                        if (mJellyEnabled) {
-                            mSurfaceHolder.setFixedSize(targetW, targetH);
-                        } else {
-                            mSurfaceHolder.setFixedSize(bitmap.getWidth(), bitmap.getHeight());
-                        }
+                        mSurfaceHolder.setFixedSize(targetW, targetH);
                     }
-                    mJellyMesh.setSize(bitmap.getWidth(), bitmap.getHeight());
+                    mJellyMesh.setSize(targetW, targetH);
 
                     // recycle the previously loaded bitmap
                     if (mBitmap != null && mBitmap != bitmap) {

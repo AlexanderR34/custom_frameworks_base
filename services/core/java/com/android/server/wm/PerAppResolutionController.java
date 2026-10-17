@@ -186,7 +186,9 @@ public class PerAppResolutionController implements CompatScaleProvider {
     @Override
     @Nullable
     public CompatScale getCompatScale(@NonNull String packageName, int uid) {
-        if (packageName == null) return null;
+        if (packageName == null || packageName.isEmpty()) return null;
+        if (uid < android.os.Process.FIRST_APPLICATION_UID) return null;
+        if ("android".equals(packageName) || "com.android.systemui".equals(packageName)) return null;
         Float scale = mScaleMap.get(packageName);
         if (scale != null && scale >= 0.20f && scale < 0.999f) {
             float compatFactor = 1.0f / scale;

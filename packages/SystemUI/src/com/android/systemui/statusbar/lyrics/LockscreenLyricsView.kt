@@ -148,7 +148,7 @@ class LockscreenLyricsView @JvmOverloads constructor(
      * Updates the displayed lyrics and synchronizes active line progress word-by-word.
      */
     fun updateLyrics(lyrics: LyricsData?, newIndex: Int, currentPositionMs: Long = 0L) {
-        if (lyrics == null || lyrics.lines.isEmpty()) {
+        if (lyrics == null || lyrics.lines.isEmpty() || lyrics.lines.all { isGarbageLyricLine(it.text) }) {
             currentLyrics = null
             lastIndex = -2
             visibility = View.GONE
@@ -226,6 +226,11 @@ class LockscreenLyricsView @JvmOverloads constructor(
     private fun applyStaticRowTexts(text1: String, text2: String, text4: String, text5: String) {
         val maxLines = if (isDozing) linesAod else linesLockscreen
 
+        val clean1 = if (isGarbageLyricLine(text1)) "" else text1
+        val clean2 = if (isGarbageLyricLine(text2)) "" else text2
+        val clean4 = if (isGarbageLyricLine(text4)) "" else text4
+        val clean5 = if (isGarbageLyricLine(text5)) "" else text5
+
         when (maxLines) {
             1 -> {
                 row1.visibility = View.GONE
@@ -235,21 +240,21 @@ class LockscreenLyricsView @JvmOverloads constructor(
             }
             3 -> {
                 row1.visibility = View.GONE
-                row2.text = text2
-                row2.visibility = if (text2.isEmpty()) View.GONE else View.VISIBLE
-                row4.text = text4
-                row4.visibility = if (text4.isEmpty()) View.GONE else View.VISIBLE
+                row2.text = clean2
+                row2.visibility = if (clean2.isEmpty()) View.GONE else View.VISIBLE
+                row4.text = clean4
+                row4.visibility = if (clean4.isEmpty()) View.GONE else View.VISIBLE
                 row5.visibility = View.GONE
             }
             else -> { // 5 lines
-                row1.text = text1
-                row1.visibility = if (text1.isEmpty()) View.GONE else View.VISIBLE
-                row2.text = text2
-                row2.visibility = if (text2.isEmpty()) View.GONE else View.VISIBLE
-                row4.text = text4
-                row4.visibility = if (text4.isEmpty()) View.GONE else View.VISIBLE
-                row5.text = text5
-                row5.visibility = if (text5.isEmpty()) View.GONE else View.VISIBLE
+                row1.text = clean1
+                row1.visibility = if (clean1.isEmpty()) View.GONE else View.VISIBLE
+                row2.text = clean2
+                row2.visibility = if (clean2.isEmpty()) View.GONE else View.VISIBLE
+                row4.text = clean4
+                row4.visibility = if (clean4.isEmpty()) View.GONE else View.VISIBLE
+                row5.text = clean5
+                row5.visibility = if (clean5.isEmpty()) View.GONE else View.VISIBLE
             }
         }
     }
@@ -319,7 +324,7 @@ class LockscreenLyricsView @JvmOverloads constructor(
 
         val currentLine = lyrics.lines[index]
         val text = currentLine.text
-        if (text.isEmpty()) {
+        if (text.isEmpty() || isGarbageLyricLine(text)) {
             row3.text = ""
             return
         }

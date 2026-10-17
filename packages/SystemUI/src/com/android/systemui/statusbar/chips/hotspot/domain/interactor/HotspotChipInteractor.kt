@@ -85,4 +85,8 @@ constructor(
             logger.d({ "Hotspot chip state updated: newState=$str1" }) { str1 = it.logString() }
         }
         .stateIn(scope, SharingStarted.Lazily, HotspotChipModel.Inactive)
+
+    fun disableHotspot() {
+        controller.setHotspotEnabled(false)
+    }
 }

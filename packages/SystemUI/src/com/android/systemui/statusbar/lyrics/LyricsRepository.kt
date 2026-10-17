@@ -51,7 +51,7 @@ class LyricsRepository @Inject constructor() {
         artistName: String,
         durationSeconds: Long = 0L
     ): LyricsData? = withContext(Dispatchers.IO) {
-        if (trackName.isBlank()) return@withContext null
+        if (trackName.isBlank() || isGarbageLyricLine(trackName)) return@withContext null
 
         val (extractedTrack, extractedArtist) = resolveTrackAndArtist(trackName, artistName)
         val cleanTrack = cleanTitle(extractedTrack)
@@ -156,16 +156,22 @@ class LyricsRepository @Inject constructor() {
         return Pair(track, artist)
     }
 
+    private fun JSONObject.optCleanLyricsString(name: String): String {
+        if (isNull(name)) return ""
+        val value = optString(name, "").trim()
+        return if (isGarbageLyricLine(value)) "" else value
+    }
+
     private fun queryLrclibGet(
         track: String,
         artist: String,
         durationSeconds: Long
     ): LyricsData? {
-        if (track.isBlank()) return null
+        if (track.isBlank() || isGarbageLyricLine(track)) return null
         try {
             val queryBuilder = StringBuilder("$BASE_URL/get?")
             queryBuilder.append("track_name=").append(URLEncoder.encode(track, "UTF-8"))
-            if (artist.isNotBlank()) {
+            if (artist.isNotBlank() && !isGarbageLyricLine(artist)) {
                 queryBuilder.append("&artist_name=").append(URLEncoder.encode(artist, "UTF-8"))
             }
             if (durationSeconds > 0) {
@@ -174,13 +180,18 @@ class LyricsRepository @Inject constructor() {
 
             val response = executeHttpRequest(queryBuilder.toString()) ?: return null
             val json = JSONObject(response)
-            val syncedLyrics = json.optString("syncedLyrics", "")
+
+            if (json.optBoolean("instrumental", false)) {
+                return null
+            }
+
+            val syncedLyrics = json.optCleanLyricsString("syncedLyrics")
             if (syncedLyrics.isNotBlank()) {
                 val parsed = LrcParser.parse(syncedLyrics, track, artist)
                 if (parsed != null && parsed.lines.isNotEmpty()) return parsed
             }
 
-            val plainLyrics = json.optString("plainLyrics", "")
+            val plainLyrics = json.optCleanLyricsString("plainLyrics")
             if (plainLyrics.isNotBlank()) {
                 return parsePlainLyrics(plainLyrics, track, artist, durationSeconds)
             }
@@ -191,7 +202,7 @@ class LyricsRepository @Inject constructor() {
     }
 
     private fun queryLrclibSearch(query: String, durationSeconds: Long = 0L): LyricsData? {
-        if (query.isBlank()) return null
+        if (query.isBlank() || isGarbageLyricLine(query)) return null
         try {
             val url = "$BASE_URL/search?q=" + URLEncoder.encode(query, "UTF-8")
             val response = executeHttpRequest(url) ?: return null
@@ -200,10 +211,11 @@ class LyricsRepository @Inject constructor() {
             // First pass: look for synchronized lyrics
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
-                val syncedLyrics = item.optString("syncedLyrics", "")
+                if (item.optBoolean("instrumental", false)) continue
+                val syncedLyrics = item.optCleanLyricsString("syncedLyrics")
                 if (syncedLyrics.isNotBlank()) {
-                    val track = item.optString("trackName", query)
-                    val artist = item.optString("artistName", "")
+                    val track = if (item.isNull("trackName")) query else item.optString("trackName", query)
+                    val artist = if (item.isNull("artistName")) "" else item.optString("artistName", "")
                     val parsed = LrcParser.parse(syncedLyrics, track, artist)
                     if (parsed != null && parsed.lines.isNotEmpty()) {
                         return parsed
@@ -214,10 +226,11 @@ class LyricsRepository @Inject constructor() {
             // Second pass: fallback to plain lyrics if no synced available
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
-                val plainLyrics = item.optString("plainLyrics", "")
+                if (item.optBoolean("instrumental", false)) continue
+                val plainLyrics = item.optCleanLyricsString("plainLyrics")
                 if (plainLyrics.isNotBlank()) {
-                    val track = item.optString("trackName", query)
-                    val artist = item.optString("artistName", "")
+                    val track = if (item.isNull("trackName")) query else item.optString("trackName", query)
+                    val artist = if (item.isNull("artistName")) "" else item.optString("artistName", "")
                     val parsed = parsePlainLyrics(plainLyrics, track, artist, durationSeconds)
                     if (parsed != null && parsed.lines.isNotEmpty()) {
                         return parsed
@@ -236,9 +249,11 @@ class LyricsRepository @Inject constructor() {
         artistName: String,
         durationSeconds: Long
     ): LyricsData? {
+        if (plainText.isBlank() || isGarbageLyricLine(plainText)) return null
+
         val rawLines = plainText.lines()
             .map { it.trim() }
-            .filter { it.isNotBlank() }
+            .filter { it.isNotBlank() && !isGarbageLyricLine(it) }
 
         if (rawLines.isEmpty()) return null
 
