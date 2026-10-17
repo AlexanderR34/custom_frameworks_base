@@ -53,12 +53,6 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 
-/**
- * Handles Volume Dialog visibility state. It might change from several sources:
- * - [com.android.systemui.plugins.VolumeDialogController] requests visibility change;
- * - it might be dismissed by the inactivity timeout;
- * - it can be dismissed by the user;
- */
 @VolumeDialogPluginScope
 class VolumeDialogVisibilityInteractor
 @Inject
@@ -75,13 +69,12 @@ constructor(
     expandedAudioTileDetailsFeatureInteractor: ExpandedAudioTileDetailsFeatureInteractor,
 ) {
 
-    /** @see computeTimeout */
     private val defaultTimeout = 3.seconds
 
     private val showVolumeSliderInQsShade = expandedAudioTileDetailsFeatureInteractor.isEnabled()
 
     @SuppressLint("SharedFlowCreation")
-    private val mutableDismissDialogEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val mutableDismissDialogEvents = MutableSharedFlow<Duration?>(extraBufferCapacity = 1)
     val dialogVisibility: Flow<VolumeDialogVisibilityModel> =
         repository.dialogVisibility
             .onEach { controller.notifyVisible(it is Visible) }
@@ -89,8 +82,8 @@ constructor(
 
     init {
         merge(
-                mutableDismissDialogEvents.mapLatest {
-                    delay(computeTimeout())
+                mutableDismissDialogEvents.mapLatest { customTimeout ->
+                    delay(computeTimeout(customTimeout))
                     VolumeDialogEventModel.DismissRequested(Events.DISMISS_REASON_TIMEOUT)
                 },
                 callbacksInteractor.event,
@@ -98,21 +91,15 @@ constructor(
             .mapNotNull { event ->
                 val visibilityModel = event.toVisibilityModel()
 
-                // If volume slider in QS is not supposed to be shown, or if the event doesn't map
-                // to a Visible state, then we don't need to check for QS visibility.
                 if (!showVolumeSliderInQsShade || visibilityModel !is Visible) {
                     return@mapNotNull visibilityModel
                 }
 
-                // At this point, showVolumeSliderInQsShade is true AND visibilityModel is Visible.
-                // Now check if Quick Settings is expanded.
                 val isQsExpanded = shadeInteractor.isQsExpanded.first()
 
                 if (isQsExpanded) {
-                    // Suppress volume dialog
                     null
                 } else {
-                    // Show volume dialog
                     visibilityModel
                 }
             }
@@ -125,7 +112,6 @@ constructor(
             .launchIn(coroutineScope)
 
         if (showVolumeSliderInQsShade) {
-            // Dismiss the volume dialog if QS becomes expanded while the dialog is visible
             combine(shadeInteractor.isQsExpanded, dialogVisibility) {
                     isQsExpandedNow,
                     currentDialogVisibility ->
@@ -139,18 +125,13 @@ constructor(
         }
     }
 
-    /**
-     * Dismisses the dialog with a given [reason]. The new state will be emitted in the
-     * [dialogVisibility].
-     */
     fun dismissDialog(reason: Int) {
         updateVisibility { Dismissed(reason) }
     }
 
-    /** Resets current dialog timeout. */
-    fun resetDismissTimeout() {
+    fun resetDismissTimeout(customTimeout: Duration? = null) {
         controller.userActivity()
-        mutableDismissDialogEvents.tryEmit(Unit)
+        mutableDismissDialogEvents.tryEmit(customTimeout)
     }
 
     private fun updateVisibility(
@@ -158,7 +139,6 @@ constructor(
     ) {
         repository.updateVisibility { currentVisibility ->
             val newVisibility = update(currentVisibility)
-            // Don't update if the visibility is of the same type
             if (currentVisibility::class == newVisibility::class) {
                 currentVisibility
             } else {
@@ -168,14 +148,15 @@ constructor(
         }
     }
 
-    private suspend fun computeTimeout(): Duration {
+    private suspend fun computeTimeout(customTimeout: Duration? = null): Duration {
         val defaultDialogTimeoutMillis =
-            secureSettingsRepository
-                .getInt(
-                    Settings.Secure.VOLUME_DIALOG_DISMISS_TIMEOUT,
-                    defaultTimeout.toInt(DurationUnit.MILLISECONDS),
-                )
-                .milliseconds
+            customTimeout
+                ?: secureSettingsRepository
+                    .getInt(
+                        Settings.Secure.VOLUME_DIALOG_DISMISS_TIMEOUT,
+                        defaultTimeout.toInt(DurationUnit.MILLISECONDS),
+                    )
+                    .milliseconds
         val currentDialogState = stateInteractor.volumeDialogState.first()
         return when {
             currentDialogState.isHovering ->

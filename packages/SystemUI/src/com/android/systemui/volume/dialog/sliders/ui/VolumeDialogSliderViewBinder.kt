@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -109,6 +110,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 
 @VolumeDialogSliderScope
 class VolumeDialogSliderViewBinder
@@ -126,7 +128,6 @@ constructor(
             0,
             UserHandle.USER_CURRENT
         ) == 1
-        // Use horizontal volume dialog ONLY if audio tile details view is enabled AND NOT HyperOS
         val isVolumeDialogVertical = if (isHyperOS) true else !expandedAudioTileDetailsFeatureInteractor.isEnabled()
         val sliderComposeViewId =
             if (isVolumeDialogVertical) {
@@ -326,17 +327,8 @@ private fun VolumeDialogSlider(
     )
 }
 
-/**
- * Authentic HyperOS Vertical Volume Panel layout matching official Xiaomi design.
- * Features:
- * - Left App Volume / Sound Assistant Floating Button (46dp circle).
- * - Wide rounded volume capsule (62dp x 210dp) with frosted translucent dark background and subtle border.
- * - Top 3 dots ••• for expanding full volume panel.
- * - Solid white progress fill from bottom with smooth dragging.
- * - Dynamic animated Speaker Icon with progressive wave arcs (1, 2, 3 waves / mute) and color switching.
- * - Bottom Ringer Mode stadium button (62dp x 48dp) for normal/vibrate/silent.
- * - Bottom DND Mode stadium button (62dp x 48dp) with crescent moon icon.
- */
+private var isHyperOSVolumeCollapsed: Boolean = false
+
 @Composable
 private fun HyperOSVolumeVerticalLayout(
     viewModel: VolumeDialogSliderViewModel,
@@ -478,6 +470,80 @@ private fun HyperOSVolumeVerticalLayout(
     val iconBottomPadding = if (isLandscape) 14.dp else 18.dp
     val topPadding = if (isLandscape) 10.dp else 15.dp
 
+    var isCollapsed by remember { mutableStateOf(isHyperOSVolumeCollapsed) }
+    var isDragging by remember { mutableStateOf(false) }
+    var touchTrigger by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(isCollapsed, isDragging, touchTrigger, currentVal) {
+        if (!isCollapsed && !isDragging) {
+            delay(2000L)
+            isCollapsed = true
+            isHyperOSVolumeCollapsed = true
+        }
+    }
+
+    LaunchedEffect(isCollapsed, if (isCollapsed) currentVal else Unit) {
+        if (isCollapsed) {
+            viewModel.resetDismissTimeout(5000L)
+        }
+    }
+
+    val targetSliderWidth = if (isCollapsed) (if (isLandscape) 4.dp else 4.5.dp) else sliderWidth
+    val animatedSliderWidth by animateDpAsState(
+        targetValue = targetSliderWidth,
+        animationSpec = tween(
+            durationMillis = 350,
+            easing = FastOutSlowInEasing
+        ),
+        label = "sliderWidth"
+    )
+
+    val targetCornerRadius = if (isCollapsed) 2.25.dp else sliderCornerRadius
+    val animatedCornerRadius by animateDpAsState(
+        targetValue = targetCornerRadius,
+        animationSpec = tween(
+            durationMillis = 350,
+            easing = FastOutSlowInEasing
+        ),
+        label = "sliderCornerRadius"
+    )
+
+    val animatedBorderWidth by animateDpAsState(
+        targetValue = if (isCollapsed) 0.dp else 0.75.dp,
+        animationSpec = tween(
+            durationMillis = 300,
+            easing = FastOutSlowInEasing
+        ),
+        label = "sliderBorderWidth"
+    )
+
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (isCollapsed) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = if (isCollapsed) 180 else 280,
+            easing = FastOutSlowInEasing
+        ),
+        label = "sliderContentAlpha"
+    )
+
+    val buttonsTranslationX by animateDpAsState(
+        targetValue = if (isCollapsed) (sliderWidth + 36.dp) else 0.dp,
+        animationSpec = tween(
+            durationMillis = if (isCollapsed) 300 else 350,
+            easing = FastOutSlowInEasing
+        ),
+        label = "buttonsTranslationX"
+    )
+
+    val buttonsAlpha by animateFloatAsState(
+        targetValue = if (isCollapsed) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = if (isCollapsed) 200 else 280,
+            easing = FastOutSlowInEasing
+        ),
+        label = "buttonsAlpha"
+    )
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
@@ -485,7 +551,6 @@ private fun HyperOSVolumeVerticalLayout(
             .wrapContentSize()
             .padding(vertical = if (isLandscape) 2.dp else 4.dp, horizontal = 2.dp)
     ) {
-        // Dual / Secondary Volume Slider (shown ONLY when in active call and enabled)
         if (showCallSlider && isInCall) {
             val isMainVoiceCall = isVoiceCall
 
@@ -499,35 +564,42 @@ private fun HyperOSVolumeVerticalLayout(
                 context = context,
                 targetStream = targetSecondaryStream,
                 isLandscape = isLandscape,
-                useMonet = useMonet
+                useMonet = useMonet,
+                isCollapsed = isCollapsed
             )
         }
 
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 10.dp),
             modifier = Modifier.wrapContentSize()
         ) {
-            // Main Volume Slider Capsule
             Box(
                 modifier = Modifier
-                    .size(width = sliderWidth, height = sliderHeight)
-                    .clip(RoundedCornerShape(sliderCornerRadius))
-                    .background(Color(0x8A1A1A1A))
-                    .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(sliderCornerRadius))
-                    .pointerInput(min, max, range, isBoostActive) {
+                    .size(
+                        width = if (isCollapsed) (if (isLandscape) 36.dp else 44.dp) else sliderWidth,
+                        height = sliderHeight
+                    )
+                    .pointerInput(min, max, range, isBoostActive, isCollapsed) {
                         detectVerticalDragGestures(
                             onDragStart = {
+                                isDragging = true
+                                isCollapsed = false
+                                isHyperOSVolumeCollapsed = false
                                 viewModel.onSliderDragStarted()
                             },
                             onDragEnd = {
+                                isDragging = false
                                 viewModel.onSliderDragFinished()
                             },
                             onDragCancel = {
+                                isDragging = false
                                 viewModel.onSliderDragFinished()
                             },
                             onVerticalDrag = { change, _ ->
                                 change.consume()
+                                isDragging = true
+                                isCollapsed = false
                                 val touchY = change.position.y
                                 val heightPx = size.height.toFloat()
                                 val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
@@ -552,205 +624,250 @@ private fun HyperOSVolumeVerticalLayout(
                             }
                         )
                     }
-                    .pointerInput(min, max, range, isBoostActive) {
+                    .pointerInput(min, max, range, isBoostActive, isCollapsed) {
                         detectTapGestures { offset ->
-                            val touchY = offset.y
-                            val heightPx = size.height.toFloat()
-                            // Only handle taps in slider middle area (ignoring top 38dp dots and bottom 38dp icon)
-                            if (touchY > 38f && touchY < (heightPx - 38f)) {
-                                val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                                if (isBoost200Enabled && !isVoiceCall && (touchY <= 25f || frac >= 0.98f)) {
-                                    Settings.System.putIntForUser(
-                                        context.contentResolver,
-                                        Settings.System.VOLUME_BOOST_LEVEL,
-                                        100,
-                                        UserHandle.USER_CURRENT
-                                    )
-                                } else if (isBoostActive && frac < 0.95f) {
-                                    Settings.System.putIntForUser(
-                                        context.contentResolver,
-                                        Settings.System.VOLUME_BOOST_LEVEL,
-                                        0,
-                                        UserHandle.USER_CURRENT
-                                    )
+                            if (isCollapsed) {
+                                isCollapsed = false
+                                isHyperOSVolumeCollapsed = false
+                                touchTrigger = System.currentTimeMillis()
+                                viewModel.resetDismissTimeout()
+                            } else {
+                                val touchY = offset.y
+                                val heightPx = size.height.toFloat()
+                                if (touchY > 38f && touchY < (heightPx - 38f)) {
+                                    val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                    if (isBoost200Enabled && !isVoiceCall && (touchY <= 25f || frac >= 0.98f)) {
+                                        Settings.System.putIntForUser(
+                                            context.contentResolver,
+                                            Settings.System.VOLUME_BOOST_LEVEL,
+                                            100,
+                                            UserHandle.USER_CURRENT
+                                        )
+                                    } else if (isBoostActive && frac < 0.95f) {
+                                        Settings.System.putIntForUser(
+                                            context.contentResolver,
+                                            Settings.System.VOLUME_BOOST_LEVEL,
+                                            0,
+                                            UserHandle.USER_CURRENT
+                                        )
+                                    }
+                                    val targetVal = min + frac * range
+                                    overscrollViewModel.setSlider(targetVal, min, max)
+                                    viewModel.setStreamVolume(targetVal, true)
+                                    viewModel.onSliderChangeFinished(targetVal)
                                 }
-                                val targetVal = min + frac * range
-                                overscrollViewModel.setSlider(targetVal, min, max)
-                                viewModel.setStreamVolume(targetVal, true)
-                                viewModel.onSliderChangeFinished(targetVal)
                             }
                         }
-                    }
+                    },
+                contentAlignment = Alignment.CenterEnd
             ) {
-                val mainFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color.White
-
-                // Solid progress fill from bottom (flat top edge, clipped naturally by parent container)
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(progressFraction)
-                        .align(Alignment.BottomCenter)
-                        .background(mainFillColor)
-                ) {
-                    // Fluid red gradient deploying from top down when 200% boost is active
-                    if (boostAnimationProgress > 0.001f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(boostAnimationProgress)
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colorStops = arrayOf(
-                                            0.0f to Color(0xFFE5252A).copy(alpha = boostAnimationProgress),
-                                            0.35f to Color(0xFFFF3B30).copy(alpha = boostAnimationProgress * 0.95f),
-                                            0.70f to Color(0xFFFF8E8E).copy(alpha = boostAnimationProgress * 0.5f),
-                                            1.0f to Color.White.copy(alpha = 0f)
-                                        )
-                                    )
-                                )
-                        )
-                    }
-                }
-
-                // Top 3 dots ••• (Expand / Sound Settings button)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = topPadding)
-                        .size(36.dp)
-                        .pointerInput(Unit) {
-                            detectTapGestures {
-                                viewModel.openVolumePanel()
+                        .size(width = animatedSliderWidth, height = sliderHeight)
+                        .clip(RoundedCornerShape(animatedCornerRadius))
+                        .background(Color(0x8A1A1A1A))
+                        .then(
+                            if (animatedBorderWidth > 0.dp) {
+                                Modifier.border(animatedBorderWidth, Color(0x33FFFFFF), RoundedCornerShape(animatedCornerRadius))
+                            } else {
+                                Modifier
                             }
-                        },
-                    contentAlignment = Alignment.Center
+                        )
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    val mainFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color.White
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(progressFraction)
+                            .align(Alignment.BottomCenter)
+                            .background(mainFillColor)
                     ) {
-                        repeat(3) {
+                        if (boostAnimationProgress > 0.001f) {
                             Box(
                                 modifier = Modifier
-                                    .size(if (isLandscape) 3.5.dp else 4.5.dp)
-                                    .clip(CircleShape)
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(boostAnimationProgress)
+                                    .align(Alignment.TopCenter)
                                     .background(
-                                        if (boostAnimationProgress > 0.5f) Color(0xEEFFFFFF) else Color(0xFFB0B0B0)
+                                        Brush.verticalGradient(
+                                            colorStops = arrayOf(
+                                                0.0f to Color(0xFFE5252A).copy(alpha = boostAnimationProgress),
+                                                0.35f to Color(0xFFFF3B30).copy(alpha = boostAnimationProgress * 0.95f),
+                                                0.70f to Color(0xFFFF8E8E).copy(alpha = boostAnimationProgress * 0.5f),
+                                                1.0f to Color.White.copy(alpha = 0f)
+                                            )
+                                        )
                                     )
                             )
                         }
                     }
-                }
 
-                // "200%" bold text display under the top dots
-                if (boostAnimationProgress > 0.001f) {
-                    Text(
-                        text = "200%",
-                        color = Color.White.copy(alpha = boostAnimationProgress),
-                        fontSize = if (isLandscape) 10.sp else 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.SansSerif,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = topPadding + (if (isLandscape) 11.dp else 15.dp))
-                            .graphicsLayer {
-                                alpha = boostAnimationProgress
-                                translationY = (1f - boostAnimationProgress) * -12f
+                    if (contentAlpha > 0.001f) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = topPadding)
+                                .size(36.dp)
+                                .graphicsLayer { alpha = contentAlpha }
+                                .pointerInput(isCollapsed) {
+                                    if (!isCollapsed) {
+                                        detectTapGestures {
+                                            viewModel.openVolumePanel()
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                repeat(3) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(if (isLandscape) 3.5.dp else 4.5.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (boostAnimationProgress > 0.5f) Color(0xEEFFFFFF) else Color(0xFFB0B0B0)
+                                            )
+                                    )
+                                }
                             }
-                    )
-                }
+                        }
 
-                val isHeadsetOrBt = remember(sliderStateModel, progressFraction) {
-                    try {
-                        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-                        devices.any { d ->
-                            d.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                            d.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                            d.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
-                            d.type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
-                            d.type == AudioDeviceInfo.TYPE_BLE_BROADCAST ||
-                            d.type == AudioDeviceInfo.TYPE_HEARING_AID ||
-                            d.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-                            d.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-                            d.type == AudioDeviceInfo.TYPE_USB_HEADSET
-                        } || audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn || audioManager.isWiredHeadsetOn
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
+                        if (boostAnimationProgress > 0.001f) {
+                            Text(
+                                text = "200%",
+                                color = Color.White.copy(alpha = boostAnimationProgress * contentAlpha),
+                                fontSize = if (isLandscape) 10.sp else 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.SansSerif,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = topPadding + (if (isLandscape) 11.dp else 15.dp))
+                                    .graphicsLayer {
+                                        alpha = boostAnimationProgress * contentAlpha
+                                        translationY = (1f - boostAnimationProgress) * -12f
+                                    }
+                            )
+                        }
 
-                // Dynamic Speaker / Headphone Icon
-                val currentIconRes = when {
-                    isHeadsetOrBt -> {
-                        if (progressFraction <= 0.01f || sliderStateModel.isDisabled) {
-                            R.drawable.ic_hyperos_headphone_mute
+                        val isHeadsetOrBt = remember(sliderStateModel, progressFraction) {
+                            try {
+                                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                                devices.any { d ->
+                                    d.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                                    d.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                                    d.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                                    d.type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+                                    d.type == AudioDeviceInfo.TYPE_BLE_BROADCAST ||
+                                    d.type == AudioDeviceInfo.TYPE_HEARING_AID ||
+                                    d.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                                    d.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                                    d.type == AudioDeviceInfo.TYPE_USB_HEADSET
+                                } || audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn || audioManager.isWiredHeadsetOn
+                            } catch (_: Exception) {
+                                false
+                            }
+                        }
+
+                        val currentIconRes = when {
+                            isHeadsetOrBt -> {
+                                if (progressFraction <= 0.01f || sliderStateModel.isDisabled) {
+                                    R.drawable.ic_hyperos_headphone_mute
+                                } else {
+                                    R.drawable.ic_hyperos_headphone
+                                }
+                            }
+                            progressFraction <= 0.01f || sliderStateModel.isDisabled -> R.drawable.ic_hyperos_speaker_mute
+                            progressFraction < 0.34f -> R.drawable.ic_hyperos_speaker_low
+                            progressFraction < 0.67f -> R.drawable.ic_hyperos_speaker_mid
+                            else -> R.drawable.ic_hyperos_speaker_high
+                        }
+
+                        val baseIconTint = if (progressFraction >= 0.20f) {
+                            if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
                         } else {
-                            R.drawable.ic_hyperos_headphone
+                            Color(0xFFEEEEEE)
+                        }
+                        val boostedIconTint = Color(0xFFE5252A)
+                        val finalIconTint = if (boostAnimationProgress > 0.001f) {
+                            androidx.compose.ui.graphics.lerp(baseIconTint, boostedIconTint, boostAnimationProgress)
+                        } else {
+                            baseIconTint
+                        }
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = iconBottomPadding - 6.dp)
+                                .size(iconSize + 14.dp)
+                                .graphicsLayer { alpha = contentAlpha }
+                                .pointerInput(min, max, range, currentVal, isCollapsed) {
+                                    if (!isCollapsed) {
+                                        detectTapGestures {
+                                            val targetVal = if (currentVal > min) min else (min + 0.7f * range)
+                                            overscrollViewModel.setSlider(targetVal, min, max)
+                                            viewModel.setStreamVolume(targetVal, true)
+                                            viewModel.onSliderChangeFinished(targetVal)
+                                        }
+                                    }
+                                }
+                        ) {
+                            androidx.compose.material3.Icon(
+                                painter = painterResource(id = currentIconRes),
+                                contentDescription = sliderStateModel.label,
+                                tint = finalIconTint,
+                                modifier = Modifier.size(iconSize)
+                            )
                         }
                     }
-                    progressFraction <= 0.01f || sliderStateModel.isDisabled -> R.drawable.ic_hyperos_speaker_mute
-                    progressFraction < 0.34f -> R.drawable.ic_hyperos_speaker_low
-                    progressFraction < 0.67f -> R.drawable.ic_hyperos_speaker_mid
-                    else -> R.drawable.ic_hyperos_speaker_high
-                }
-
-                val baseIconTint = if (progressFraction >= 0.20f) {
-                    if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
-                } else {
-                    Color(0xFFEEEEEE)
-                }
-                val boostedIconTint = Color(0xFFE5252A)
-                val finalIconTint = if (boostAnimationProgress > 0.001f) {
-                    androidx.compose.ui.graphics.lerp(baseIconTint, boostedIconTint, boostAnimationProgress)
-                } else {
-                    baseIconTint
-                }
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = iconBottomPadding - 6.dp)
-                        .size(iconSize + 14.dp)
-                        .pointerInput(min, max, range, currentVal) {
-                            detectTapGestures {
-                                val targetVal = if (currentVal > min) min else (min + 0.7f * range)
-                                overscrollViewModel.setSlider(targetVal, min, max)
-                                viewModel.setStreamVolume(targetVal, true)
-                                viewModel.onSliderChangeFinished(targetVal)
-                            }
-                        }
-                ) {
-                    androidx.compose.material3.Icon(
-                        painter = painterResource(id = currentIconRes),
-                        contentDescription = sliderStateModel.label,
-                        tint = finalIconTint,
-                        modifier = Modifier.size(iconSize)
-                    )
                 }
             }
 
-            // HyperOS Ringer Mode Toggle Button
-            HyperOSRingerPill(context = context, isLandscape = isLandscape)
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationX = buttonsTranslationX.toPx()
+                        alpha = buttonsAlpha
+                    }
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 10.dp),
+                ) {
+                    HyperOSRingerPill(
+                        context = context,
+                        isLandscape = isLandscape,
+                        enabled = !isCollapsed,
+                        onInteraction = {
+                            touchTrigger = System.currentTimeMillis()
+                        }
+                    )
 
-            // HyperOS DND Mode Toggle Button
-            HyperOSDndPill(context = context, isLandscape = isLandscape)
+                    HyperOSDndPill(
+                        context = context,
+                        isLandscape = isLandscape,
+                        enabled = !isCollapsed,
+                        onInteraction = {
+                            touchTrigger = System.currentTimeMillis()
+                        }
+                    )
+                }
+            }
         }
     }
 }
 
-/**
- * HyperOS Secondary Volume Vertical Capsule for Dual Sliders in Call Mode.
- * If main slider controls Call, this secondary slider controls Media (STREAM_MUSIC).
- * If main slider controls Media, this secondary slider controls Call (STREAM_VOICE_CALL).
- */
 @Composable
 private fun HyperOSSecondaryVolumeVerticalCapsule(
     context: Context,
     targetStream: Int,
     isLandscape: Boolean = false,
-    useMonet: Boolean = true
+    useMonet: Boolean = true,
+    isCollapsed: Boolean = false
 ) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val minVol = remember(targetStream) { audioManager.getStreamMinVolume(targetStream).toFloat() }
@@ -794,7 +911,23 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
         ),
         label = "SecondaryVolumeSliderProgress"
     )
-    val iconTint = if (progressFraction >= 0.20f) Color(0xFF2A72E5) else Color(0xFFEEEEEE)
+
+    val secondaryTranslationX by animateDpAsState(
+        targetValue = if (isCollapsed) 40.dp else 0.dp,
+        animationSpec = tween(
+            durationMillis = if (isCollapsed) 300 else 350,
+            easing = FastOutSlowInEasing
+        ),
+        label = "secTransX"
+    )
+    val secondaryAlpha by animateFloatAsState(
+        targetValue = if (isCollapsed) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = if (isCollapsed) 200 else 280,
+            easing = FastOutSlowInEasing
+        ),
+        label = "secAlpha"
+    )
 
     val capsuleWidth = if (isLandscape) 28.dp else 31.dp
     val capsuleHeight = if (isLandscape) 170.dp else 224.dp
@@ -810,41 +943,51 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
 
     Box(
         modifier = Modifier
+            .graphicsLayer {
+                translationX = secondaryTranslationX.toPx()
+                alpha = secondaryAlpha
+            }
             .size(width = capsuleWidth, height = capsuleHeight)
             .clip(RoundedCornerShape(capsuleCorner))
             .background(Color(0x8A1A1A1A))
             .border(0.75.dp, Color(0x33FFFFFF), RoundedCornerShape(capsuleCorner))
-            .pointerInput(minVol, maxVol, range, targetStream) {
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, _ ->
-                        change.consume()
-                        val touchY = change.position.y
-                        val heightPx = size.height.toFloat()
-                        val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                        val targetVal = (minVol + frac * range).roundToInt()
-                        currentVol = targetVal.toFloat()
-                        try {
-                            audioManager.setStreamVolume(targetStream, targetVal, 0)
-                        } catch (_: Exception) {}
-                    }
-                )
-            }
-            .pointerInput(minVol, maxVol, range, targetStream) {
-                detectTapGestures { offset ->
-                    val touchY = offset.y
-                    val heightPx = size.height.toFloat()
-                    val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
-                    val targetVal = (minVol + frac * range).roundToInt()
-                    currentVol = targetVal.toFloat()
-                    try {
-                        audioManager.setStreamVolume(targetStream, targetVal, 0)
-                    } catch (_: Exception) {}
+            .then(
+                if (!isCollapsed) {
+                    Modifier
+                        .pointerInput(minVol, maxVol, range, targetStream) {
+                            detectVerticalDragGestures(
+                                onVerticalDrag = { change, _ ->
+                                    change.consume()
+                                    val touchY = change.position.y
+                                    val heightPx = size.height.toFloat()
+                                    val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                    val targetVal = (minVol + frac * range).roundToInt()
+                                    currentVol = targetVal.toFloat()
+                                    try {
+                                        audioManager.setStreamVolume(targetStream, targetVal, 0)
+                                    } catch (_: Exception) {}
+                                }
+                            )
+                        }
+                        .pointerInput(minVol, maxVol, range, targetStream) {
+                            detectTapGestures { offset ->
+                                val touchY = offset.y
+                                val heightPx = size.height.toFloat()
+                                val frac = 1f - (touchY / heightPx).coerceIn(0f, 1f)
+                                val targetVal = (minVol + frac * range).roundToInt()
+                                currentVol = targetVal.toFloat()
+                                try {
+                                    audioManager.setStreamVolume(targetStream, targetVal, 0)
+                                } catch (_: Exception) {}
+                            }
+                        }
+                } else {
+                    Modifier
                 }
-            }
+            )
     ) {
         val secFillColor = if (useMonet) MaterialTheme.colorScheme.primary else Color.White
 
-        // Solid progress fill from bottom (flat top edge, clipped naturally by parent container)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -853,7 +996,6 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
                 .background(secFillColor)
         )
 
-        // Bottom Icon
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -876,12 +1018,13 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
     }
 }
 
-/**
- * HyperOS Left Sound Assistant / Per-App Volume Floating Button.
- */
-
 @Composable
-private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
+private fun HyperOSRingerPill(
+    context: Context,
+    isLandscape: Boolean = false,
+    enabled: Boolean = true,
+    onInteraction: () -> Unit = {}
+) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     var ringerMode by remember { mutableStateOf(audioManager.ringerModeInternal) }
     val isSilentOrVibrate = ringerMode != AudioManager.RINGER_MODE_NORMAL
@@ -903,8 +1046,8 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
     )
 
     val targetIconTint = when (ringerMode) {
-        AudioManager.RINGER_MODE_SILENT -> Color(0xFFFF453A) // Red for silent bell
-        AudioManager.RINGER_MODE_VIBRATE -> Color(0xFF2A72E5) // Blue for vibrate
+        AudioManager.RINGER_MODE_SILENT -> Color(0xFFFF453A)
+        AudioManager.RINGER_MODE_VIBRATE -> Color(0xFF2A72E5)
         else -> Color.White
     }
     val animatedIconTint by androidx.compose.animation.animateColorAsState(
@@ -918,7 +1061,7 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
         .clip(RoundedCornerShape(pillCorner))
         .background(animatedBg)
         .border(0.75.dp, animatedBorderColor, RoundedCornerShape(pillCorner))
-        .clickable {
+        .clickable(enabled = enabled) {
             val nextMode = when (ringerMode) {
                 AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
                 AudioManager.RINGER_MODE_VIBRATE -> AudioManager.RINGER_MODE_SILENT
@@ -926,6 +1069,7 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
             }
             audioManager.ringerModeInternal = nextMode
             ringerMode = nextMode
+            onInteraction()
         }
 
     Box(
@@ -947,7 +1091,12 @@ private fun HyperOSRingerPill(context: Context, isLandscape: Boolean = false) {
 }
 
 @Composable
-private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
+private fun HyperOSDndPill(
+    context: Context,
+    isLandscape: Boolean = false,
+    enabled: Boolean = true,
+    onInteraction: () -> Unit = {}
+) {
     val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
     var isDndActive by remember {
         mutableStateOf(
@@ -981,7 +1130,7 @@ private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
         .clip(RoundedCornerShape(pillCorner))
         .background(animatedBg)
         .border(0.75.dp, animatedBorderColor, RoundedCornerShape(pillCorner))
-        .clickable {
+        .clickable(enabled = enabled) {
             val currentZen = Settings.Global.getInt(context.contentResolver, Settings.Global.ZEN_MODE, Settings.Global.ZEN_MODE_OFF)
             val newZen = if (currentZen == Settings.Global.ZEN_MODE_OFF) {
                 Settings.Global.ZEN_MODE_IMPORTANT_INTERRUPTIONS
@@ -990,6 +1139,7 @@ private fun HyperOSDndPill(context: Context, isLandscape: Boolean = false) {
             }
             notificationManager.setZenMode(newZen, null, "HyperOSVolumePanel")
             isDndActive = (newZen != Settings.Global.ZEN_MODE_OFF)
+            onInteraction()
         }
 
     Box(

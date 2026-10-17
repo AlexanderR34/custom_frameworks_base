@@ -36,6 +36,7 @@ import com.android.systemui.volume.dialog.sliders.shared.model.SliderInputEvent
 import com.android.systemui.volume.dialog.ui.VolumeDialogUiEvent
 import javax.inject.Inject
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,19 +48,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.mapNotNull
+import com.android.systemui.volume.dialog.shared.model.VolumeDialogVisibilityModel
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 
-/*
- This prevents volume slider updates while user interacts with it. This is needed due to the
- flawed VolumeDialogControllerImpl. It has a single threaded message queue that handles all state
- updates and doesn't skip sequential updates of the same stream. This leads to a bottleneck when
- user rigorously adjusts the slider.
-
- Remove this when getting rid of the VolumeDialogControllerImpl as this doesn't happen in the
- Volume Panel that uses the new coroutine-backed AudioRepository.
-*/
-// TODO(b/375355785) remove this
 private const val VOLUME_UPDATE_GRACE_PERIOD = 1000
 
 @VolumeDialogSliderScope
@@ -86,6 +78,8 @@ constructor(
 
     private val userVolumeUpdates = MutableStateFlow<VolumeUpdate?>(null)
     private val model: Flow<VolumeDialogStreamModel> = interactor.slider
+
+    val dialogVisibility: Flow<VolumeDialogVisibilityModel> = visibilityInteractor.dialogVisibility
 
     val state: Flow<VolumeDialogSliderStateModel> =
         combine(
@@ -171,6 +165,10 @@ constructor(
     fun onSliderDragFinished() {
         visibilityInteractor.resetDismissTimeout()
         uiEventLogger.log(VolumeDialogUiEvent.VOLUME_DIALOG_SLIDER_STOPPED_TRACKING_TOUCH)
+    }
+
+    fun resetDismissTimeout(timeoutMs: Long? = null) {
+        visibilityInteractor.resetDismissTimeout(timeoutMs?.milliseconds)
     }
 
     fun onSliderChangeFinished(volume: Float) {
