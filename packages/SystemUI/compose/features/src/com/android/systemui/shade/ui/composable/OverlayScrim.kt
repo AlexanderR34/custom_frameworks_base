@@ -23,15 +23,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.android.compose.animation.scene.ContentScope
 import com.android.compose.modifiers.thenIf
 import com.android.systemui.res.R
-import com.android.systemui.shade.ui.ShadeColors
 import platform.test.motion.compose.values.MotionTestValueKey
 import platform.test.motion.compose.values.motionTestValues
 
@@ -41,24 +38,12 @@ fun ContentScope.OverlayScrim(
     showBackgroundColor: Boolean,
     onClicked: () -> Unit,
     modifier: Modifier = Modifier,
-    isHyperOS: Boolean = false,
 ) {
     val closeOverlayActionLabel = stringResource(R.string.accessibility_close_overlay_action)
     val closeOverlayBoundingBoxDescription =
         stringResource(R.string.accessibility_close_overlay_box_description)
 
-    val context = LocalContext.current
-    val scrimBackgroundColor = if (isHyperOS) {
-        Color(
-            ShadeColors.shadePanel(
-                context = context,
-                blurSupported = showBackgroundColor,
-                withScrim = true,
-            )
-        )
-    } else {
-        OverlayShade.Colors.ScrimBackground
-    }
+    val scrimBackgroundColor = OverlayShade.Colors.ScrimBackground
     Spacer(
         modifier =
             modifier
@@ -69,7 +54,7 @@ fun ContentScope.OverlayScrim(
                     }
                 }
                 .fillMaxSize()
-                .thenIf(showBackgroundColor || isHyperOS) { Modifier.background(scrimBackgroundColor) }
+                .thenIf(showBackgroundColor) { Modifier.background(scrimBackgroundColor) }
                 .clickable(
                     onClick = onClicked,
                     interactionSource = null,

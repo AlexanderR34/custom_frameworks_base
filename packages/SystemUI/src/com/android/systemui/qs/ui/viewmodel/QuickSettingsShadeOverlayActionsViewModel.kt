@@ -66,6 +66,10 @@ constructor(private val editModeViewModel: EditModeViewModel) : UserActionsViewM
                             Swipe.Right,
                             ReplaceByOverlay(Overlays.NotificationsShade),
                         )
+                        put(
+                            Swipe.Left,
+                            ReplaceByOverlay(Overlays.NotificationsShade),
+                        )
                     }
                 }
             }

@@ -17,16 +17,11 @@
 package com.android.systemui.shade.ui.composable
 
 import android.annotation.SuppressLint
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
@@ -37,7 +32,6 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.approachLayout
@@ -83,17 +77,7 @@ fun ContentScope.OverlayShade(
     header: @Composable () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val context = LocalContext.current
-    val isHyperOS = remember(context) {
-        android.provider.Settings.System.getInt(
-            context.contentResolver,
-            "control_center_style",
-            1
-        ) == 1
-    }
-    val isFullWidth = LocalSceneContainerPreloadedResources.current.isFullWidthShade || isLandscape || isHyperOS
+    val isFullWidth = LocalSceneContainerPreloadedResources.current.isFullWidthShade
     val panelSpec = rememberShadeExpansionMotion(isFullWidth)
     val panelCornerRadiusPx = with(LocalDensity.current) { panelSpec.radius.toPx() }
     val panelAlignment =
@@ -104,11 +88,7 @@ fun ContentScope.OverlayShade(
         }
 
     Box(modifier) {
-        OverlayScrim(
-            showBackgroundColor = enableTransparency,
-            onClicked = onScrimClicked,
-            isHyperOS = isHyperOS,
-        )
+        OverlayScrim(showBackgroundColor = enableTransparency, onClicked = onScrimClicked)
 
         Box(
             modifier =
@@ -128,13 +108,7 @@ fun ContentScope.OverlayShade(
                                 label = "OverlayShade",
                             )
                         }
-                        .then(
-                            if (isFullWidth) {
-                                Modifier.fillMaxWidth()
-                            } else {
-                                Modifier.width(Dimensions.PanelWidth)
-                            }
-                        )
+                        .width(Dimensions.PanelWidth)
                         // TODO(440566878): Investigate if this can be optimized by replacing with
                         // onLayoutRectChanged.
                         .onPlaced { coordinates ->
@@ -150,7 +124,6 @@ fun ContentScope.OverlayShade(
                             onBackgroundPlaced(bounds, topCornerRadius, bottomCornerRadius)
                         },
                 header = header.takeIf { isFullWidth },
-                isHyperOS = isHyperOS,
                 content = {
                     Box(
                         Modifier
@@ -195,20 +168,13 @@ private fun ContentScope.Panel(
     spec: VerticalExpandContainerSpec,
     modifier: Modifier = Modifier,
     header: (@Composable () -> Unit)?,
-    isHyperOS: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Box(
         modifier =
             modifier
                 .disableSwipesWhenScrolling()
-                .then(
-                    if (isHyperOS) {
-                        Modifier.clipToBounds()
-                    } else {
-                        Modifier.verticalExpandContainerBackground(Colors.panelBackground(enableTransparency), spec)
-                    }
-                )
+                .verticalExpandContainerBackground(Colors.panelBackground(enableTransparency), spec)
     ) {
         Column {
             header?.invoke()

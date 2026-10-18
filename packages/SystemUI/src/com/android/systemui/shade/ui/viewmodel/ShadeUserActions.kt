@@ -71,14 +71,22 @@ fun splitShadeActions(): Array<Pair<UserAction, UserActionResult>> {
 fun dualShadeActions(
     twoFingerSwipeEnabled: Boolean = true
 ): Array<Pair<UserAction, UserActionResult>> {
+    val invertSides = try {
+        val cr = android.app.ActivityThread.currentApplication()?.contentResolver
+        if (cr != null) android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1 else false
+    } catch (e: Exception) {
+        false
+    }
+    val defaultOverlay = if (invertSides) Overlays.QuickSettingsShade else Overlays.NotificationsShade
+    val edgeOverlay = if (invertSides) Overlays.NotificationsShade else Overlays.QuickSettingsShade
     return buildList {
             allPointerTypesButMouse {
                 // Don't add the "single pointer swipe down" actions for PointerType.Mouse because
                 // it is easy to accidentally trigger them when trying to dragging windows.
-                add(Swipe.Down(pointerType = it) to Overlays.NotificationsShade)
+                add(Swipe.Down(pointerType = it) to defaultOverlay)
                 add(
                     Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf, pointerType = it) to
-                        Overlays.QuickSettingsShade
+                        edgeOverlay
                 )
             }
             if (twoFingerSwipeEnabled) {

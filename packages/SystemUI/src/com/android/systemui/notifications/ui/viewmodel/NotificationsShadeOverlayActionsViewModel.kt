@@ -45,6 +45,7 @@ class NotificationsShadeOverlayActionsViewModel @AssistedInject constructor() :
                         hideCurrentOverlays = HideCurrentOverlays.Some(Overlays.NotificationsShade),
                     ),
                 Swipe.Left to ReplaceByOverlay(Overlays.QuickSettingsShade),
+                Swipe.Right to ReplaceByOverlay(Overlays.QuickSettingsShade),
             )
         )
     }
