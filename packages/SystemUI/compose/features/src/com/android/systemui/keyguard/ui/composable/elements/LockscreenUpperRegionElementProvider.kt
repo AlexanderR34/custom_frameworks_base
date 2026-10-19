@@ -120,9 +120,9 @@ constructor(
             modifier: Modifier = Modifier,
         ) {
             Box(modifier = Modifier.fillMaxSize().then(modifier)) {
-                AODNotifications(Modifier.align(aodAlignment))
-                // Make the Notification section overlap with the AOD icons, to avoid jumps while
-                // animating them in.
+                AnimatedVisibility(!viewModel.isNotificationStackActive || viewModel.isDozing) {
+                    AODNotifications(Modifier.align(aodAlignment))
+                }
                 AnimatedVisibility(viewModel.isNotificationStackActive) {
                     LockscreenElement(
                         Notifications.Stack,
