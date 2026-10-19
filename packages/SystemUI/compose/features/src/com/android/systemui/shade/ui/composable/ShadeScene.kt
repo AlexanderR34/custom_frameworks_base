@@ -341,8 +341,6 @@ private fun ContentScope.SingleShade(
         try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
         awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
     }
-    val shouldShowMediaInClassic = mediaCardMode == 1 || mediaCardMode == 3
-
     val qsContainerViewModel =
         rememberViewModel(traceName = "SingleShade.QSContainerViewModel") {
             viewModel.qsContainerViewModelFactory.create(supportsBrightnessMirroring = true)
@@ -569,7 +567,7 @@ private fun ContentScope.SingleShade(
                             },
                         media = {
                             if (isAlwaysComposedContentVisible()) {
-                                if (viewModel.isQsEnabled && viewModel.showMedia && shouldShowMediaInClassic) {
+                                if (viewModel.isQsEnabled && viewModel.showMedia) {
                                     Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
                                         Media(
                                             viewModelFactory = viewModel.mediaViewModelFactory,

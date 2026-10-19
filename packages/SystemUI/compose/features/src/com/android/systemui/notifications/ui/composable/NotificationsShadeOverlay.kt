@@ -341,24 +341,33 @@ constructor(
         }
 
         val isFullWidth = LocalSceneContainerPreloadedResources.current.isFullWidthShade
-        val mediaCardMode by produceState(
+        val shouldShowMedia by produceState(
             initialValue = try {
-                android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
-            } catch (e: Exception) { 3 },
+                val notifMedia = android.provider.Settings.System.getInt(context.contentResolver, "qs_show_notifications_media", -1)
+                if (notifMedia != -1) notifMedia == 1 else {
+                    val mode = android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+                    mode == 2 || mode == 3
+                }
+            } catch (e: Exception) { true },
             key1 = context
         ) {
-            val uri = android.provider.Settings.System.getUriFor("qs_media_card_mode")
+            val uri1 = android.provider.Settings.System.getUriFor("qs_show_notifications_media")
+            val uri2 = android.provider.Settings.System.getUriFor("qs_media_card_mode")
             val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
                 override fun onChange(selfChange: Boolean) {
                     value = try {
-                        android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
-                    } catch (e: Exception) { 3 }
+                        val notifMedia = android.provider.Settings.System.getInt(context.contentResolver, "qs_show_notifications_media", -1)
+                        if (notifMedia != -1) notifMedia == 1 else {
+                            val mode = android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+                            mode == 2 || mode == 3
+                        }
+                    } catch (e: Exception) { true }
                 }
             }
-            try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+            try { context.contentResolver.registerContentObserver(uri1, false, observer) } catch (e: Exception) {}
+            try { context.contentResolver.registerContentObserver(uri2, false, observer) } catch (e: Exception) {}
             awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
         }
-        val shouldShowMedia = mediaCardMode == 2 || mediaCardMode == 3
 
         val targetBlurRadiusPx: Float by
             remember(layoutState) {

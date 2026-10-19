@@ -458,24 +458,7 @@ private fun ContentScope.QuickSettingsLayout(
             onDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
         }
 
-        val mediaCardMode by produceState(
-            initialValue = try {
-                android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
-            } catch (e: Exception) { 3 },
-            key1 = context
-        ) {
-            val uri = android.provider.Settings.System.getUriFor("qs_media_card_mode")
-            val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
-                override fun onChange(selfChange: Boolean) {
-                    value = try {
-                        android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
-                    } catch (e: Exception) { 3 }
-                }
-            }
-            try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
-            awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
-        }
-        val shouldShowMedia = mediaCardMode == 2 || mediaCardMode == 3
+
 
         val showVolumeSlider by produceState(
             initialValue = try {
@@ -496,19 +479,17 @@ private fun ContentScope.QuickSettingsLayout(
         }
 
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-            if (shouldShowMedia) {
-                Media(
-                    viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
-                    presentationStyle = MediaPresentationStyle.Compact,
-                    behavior = QuickSettingsContainerViewModel.mediaUiBehavior,
-                    onDismissed = qsContainerViewModel::onMediaSwipeToDismiss,
-                    modifier = Modifier,
-                    location = Media.Location.QS,
-                )
+            Media(
+                viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
+                presentationStyle = MediaPresentationStyle.Compact,
+                behavior = QuickSettingsContainerViewModel.mediaUiBehavior,
+                onDismissed = qsContainerViewModel::onMediaSwipeToDismiss,
+                modifier = Modifier,
+                location = Media.Location.QS,
+            )
 
-                if (qsContainerViewModel.showMedia) {
-                    VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
-                }
+            if (qsContainerViewModel.showMedia) {
+                VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
             }
 
             val slidersBlock = @Composable {

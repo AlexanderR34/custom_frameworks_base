@@ -89,8 +89,6 @@ fun ContentScope.QuickSettingsContent(
             try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
             awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
         }
-    val shouldShowMediaInClassic = mediaCardMode == 1 || mediaCardMode == 3
-
     val brightnessPosition by produceState(
         initialValue = try {
             android.provider.Settings.System.getInt(context.contentResolver, "qs_brightness_position", 0)
@@ -243,7 +241,7 @@ fun ContentScope.QuickSettingsContent(
             },
         media =
             @Composable {
-                if (isAlwaysComposedContentVisible() && shouldShowMediaInClassic) {
+                if (isAlwaysComposedContentVisible()) {
                     Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
                         Media(
                             viewModelFactory = viewModel.mediaViewModelFactory,
