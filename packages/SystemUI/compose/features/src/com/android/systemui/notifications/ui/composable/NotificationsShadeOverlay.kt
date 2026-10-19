@@ -436,7 +436,7 @@ constructor(
                     shouldPunchHoleBehindScrim = false,
                     isTransparencyEnabled = viewModel.isTransparencyEnabled,
                     stackTopPadding = notificationStackPadding,
-                    stackBottomPadding = { 4.dp },
+                    stackBottomPadding = { 12.dp },
                     shouldFillMaxHeight = false,
                     aboveNotifications = {
                         if (isFullWidth) {

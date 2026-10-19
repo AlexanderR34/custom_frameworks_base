@@ -705,11 +705,8 @@ public class StackScrollAlgorithm {
         if (view instanceof FooterView) {
             if (SceneContainerFlag.isEnabled()) {
                 if (!ambientState.isExpansionChanging()) {
-                    final float footerEnd =
-                            stackTop + viewState.getYTranslation() + view.getIntrinsicHeight();
-                    final boolean noSpaceForFooter = footerEnd > ambientState.getStackCutoff();
                     ((FooterView.FooterViewState) viewState).hideContent =
-                            noSpaceForFooter || (ambientState.isClearAllInProgress()
+                            (ambientState.isClearAllInProgress()
                                     && !hasNonClearableNotifs(algorithmState));
                 }
             } else {

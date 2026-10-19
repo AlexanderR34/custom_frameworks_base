@@ -2869,12 +2869,15 @@ public class NotificationStackScrollLayout
         if (SceneContainerFlag.isUnexpectedlyInLegacyMode()) return;
 
         final int shelfIntrinsicHeight = mShelf != null ? mShelf.getIntrinsicHeight() : 0;
-        final int notificationsHeight = (int) mNotificationStackSizeCalculator.computeHeight(
+        int notificationsHeight = (int) mNotificationStackSizeCalculator.computeHeight(
                 /* notificationStackScrollLayout= */ this,
                 mMaxDisplayedNotifications,
                 shelfIntrinsicHeight,
                 "updateIntrinsicStackHeight"
         );
+        if (mFooterView != null && mFooterView.getVisibility() != View.GONE) {
+            notificationsHeight += mFooterView.getIntrinsicHeight();
+        }
         if (mScrollViewFields.intrinsicStackHeight != notificationsHeight) {
             mScrollViewFields.intrinsicStackHeight = notificationsHeight;
             notifyStackHeightChangedListeners();
