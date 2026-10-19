@@ -218,13 +218,6 @@ fun ContentScope.Tile(
         }
 
         val context = LocalContext.current
-        val showLabels = remember(context) {
-            android.provider.Settings.System.getInt(
-                context.contentResolver,
-                "show_qs_tile_labels",
-                0
-            ) == 1
-        }
 
         val expandable =
             if (dynamicTargetResolutionEnabled()) tile.expandable
@@ -334,79 +327,32 @@ fun ContentScope.Tile(
             modifier = modifier,
             enabled = Flags.enableQsTileTooltips(),
         ) { mod ->
-            if (iconOnly && showLabels) {
-                androidx.compose.foundation.layout.Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = mod.fillMaxWidth()
-                ) {
-                    TileExpandable(
-                        expandable = expandable,
-                        color = { animatedColor },
-                        shape = tileShape,
-                        squishiness = squishiness,
-                        hapticsViewModel = hapticsViewModel.takeIf { hasLongClickEffect },
-                        modifier =
-                            Modifier
-                                .then(surfaceRevealModifier)
-                                .borderOnFocus(
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    tileShape.topEnd,
-                                )
-                                .sysuiResTag("tile_expandable")
-                                .size(CommonTileDefaults.TileHeight)
-                                .bounceable(
-                                    currentBounceableInfo.bounceable,
-                                    currentBounceableInfo.previousTile,
-                                    currentBounceableInfo.nextTile,
-                                    orientation = Orientation.Horizontal,
-                                    bounceEnd = currentBounceableInfo.bounceEnd,
-                                    interactionSource = interactionSource,
-                                ),
-                    ) { exp ->
-                        renderContent(exp)
-                    }
-                    Text(
-                        text = uiState.label,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 11.sp,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            TileExpandable(
+                expandable = expandable,
+                color = { animatedColor },
+                shape = tileShape,
+                squishiness = squishiness,
+                hapticsViewModel = hapticsViewModel.takeIf { hasLongClickEffect },
+                modifier =
+                    mod
+                        .then(surfaceRevealModifier)
+                        .borderOnFocus(
+                            color = MaterialTheme.colorScheme.secondary,
+                            tileShape.topEnd,
+                        )
+                        .sysuiResTag("tile_expandable")
+                        .fillMaxWidth()
+                        .height(CommonTileDefaults.TileHeight)
+                        .bounceable(
+                            currentBounceableInfo.bounceable,
+                            currentBounceableInfo.previousTile,
+                            currentBounceableInfo.nextTile,
+                            orientation = Orientation.Horizontal,
+                            bounceEnd = currentBounceableInfo.bounceEnd,
+                            interactionSource = interactionSource,
                         ),
-                        maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                    )
-                }
-            } else {
-                TileExpandable(
-                    expandable = expandable,
-                    color = { animatedColor },
-                    shape = tileShape,
-                    squishiness = squishiness,
-                    hapticsViewModel = hapticsViewModel.takeIf { hasLongClickEffect },
-                    modifier =
-                        mod
-                            .then(surfaceRevealModifier)
-                            .borderOnFocus(
-                                color = MaterialTheme.colorScheme.secondary,
-                                tileShape.topEnd,
-                            )
-                            .sysuiResTag("tile_expandable")
-                            .fillMaxWidth()
-                            .bounceable(
-                                currentBounceableInfo.bounceable,
-                                currentBounceableInfo.previousTile,
-                                currentBounceableInfo.nextTile,
-                                orientation = Orientation.Horizontal,
-                                bounceEnd = currentBounceableInfo.bounceEnd,
-                                interactionSource = interactionSource,
-                            ),
-                ) { exp ->
-                    renderContent(exp)
-                }
+            ) { exp ->
+                renderContent(exp)
             }
         }
     }
@@ -694,15 +640,6 @@ private object TileDefaults {
 
     @Composable
     fun tileRadius(uiState: TileUiState, iconOnly: Boolean = false): Dp {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val isDualShade = android.provider.Settings.Secure.getInt(
-            context.contentResolver,
-            android.provider.Settings.Secure.DUAL_SHADE,
-            1
-        ) == 1
-        if (isDualShade && iconOnly) {
-            return 999.dp
-        }
         return when (uiState.visualState) {
             STATE_ACTIVE -> ActiveTileCornerRadius
             STATE_INACTIVE -> InactiveTileCornerRadius

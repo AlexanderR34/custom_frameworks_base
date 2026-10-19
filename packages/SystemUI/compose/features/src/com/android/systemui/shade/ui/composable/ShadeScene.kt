@@ -16,6 +16,22 @@
 
 package com.android.systemui.shade.ui.composable
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import com.android.systemui.brightness.ui.compose.BrightnessSliderContainer
+import com.android.systemui.brightness.ui.compose.BrightnessSliderDimensions
+import com.android.systemui.brightness.ui.compose.ContainerColors
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
@@ -306,6 +322,95 @@ private fun ContentScope.SingleShade(
         layoutState.isTransitioningBetween(Scenes.Gone, Scenes.Shade) ||
             layoutState.isTransitioningBetween(Scenes.Lockscreen, Scenes.Shade)
     val mediaInRow = viewModel.showMediaInRow
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val mediaCardMode by produceState(
+        initialValue = try {
+            android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+        } catch (e: Exception) { 3 },
+        key1 = context
+    ) {
+        val uri = android.provider.Settings.System.getUriFor("qs_media_card_mode")
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                value = try {
+                    android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+                } catch (e: Exception) { 3 }
+            }
+        }
+        try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+        awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+    }
+    val shouldShowMediaInClassic = mediaCardMode == 1 || mediaCardMode == 3
+
+    val qsContainerViewModel =
+        rememberViewModel(traceName = "SingleShade.QSContainerViewModel") {
+            viewModel.qsContainerViewModelFactory.create(supportsBrightnessMirroring = true)
+        }
+    val brightnessPosition by produceState(
+        initialValue = try {
+            android.provider.Settings.System.getInt(context.contentResolver, "qs_brightness_position", 0)
+        } catch (e: Exception) { 0 },
+        key1 = context
+    ) {
+        val uri = android.provider.Settings.System.getUriFor("qs_brightness_position")
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                value = try {
+                    android.provider.Settings.System.getInt(context.contentResolver, "qs_brightness_position", 0)
+                } catch (e: Exception) { 0 }
+            }
+        }
+        try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+        awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+    }
+
+    val showAutoBrightnessButton by produceState(
+        initialValue = try {
+            android.provider.Settings.System.getInt(context.contentResolver, "qs_show_auto_brightness_button", 1) == 1
+        } catch (e: Exception) { true },
+        key1 = context
+    ) {
+        val uri = android.provider.Settings.System.getUriFor("qs_show_auto_brightness_button")
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                value = try {
+                    android.provider.Settings.System.getInt(context.contentResolver, "qs_show_auto_brightness_button", 1) == 1
+                } catch (e: Exception) { true }
+            }
+        }
+        try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+        awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+    }
+
+    var isAutoBrightness by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.System.getInt(
+                    context.contentResolver,
+                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                ) == android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+            } catch (e: Exception) { false }
+        )
+    }
+
+    DisposableEffect(context) {
+        val uri = android.provider.Settings.System.getUriFor(android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE)
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                isAutoBrightness = try {
+                    android.provider.Settings.System.getInt(
+                        context.contentResolver,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                    ) == android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+                } catch (e: Exception) { false }
+            }
+        }
+        try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+        onDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+    }
     val notificationStackPadding = dimensionResource(id = R.dimen.notification_side_paddings_single)
 
     val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
@@ -370,67 +475,129 @@ private fun ContentScope.SingleShade(
                 val qqsLayoutPaddingBottom = 16.dp
                 val qsHorizontalMargin =
                     shadeHorizontalPadding + dimensionResource(id = R.dimen.qs_horizontal_margin)
-                MediaAndQqsLayout(
-                    modifier =
-                        Modifier.element(QuickSettings.Elements.QuickQuickSettingsAndMedia)
-                            .offset {
-                                // Centering offset when the shade is being dragged down.
-                                val down = visualOffsetProvider().fastCoerceAtLeast(0)
-                                IntOffset(x = 0, y = down / 2)
-                            }
-                            .padding(bottom = qqsLayoutPaddingBottom)
-                            .padding(horizontal = qsHorizontalMargin),
-                    tiles =
-                        @Composable {
-                            // Because the ShadeScene is always composed, we need to manually tell
-                            // the tiles when they're actually visible and should be listening, just
-                            // like in the [QuickSettingsContent] Composable.
-                            var listening by remember { mutableStateOf(false) }
-                            LifecycleStartEffect(Unit) {
-                                listening = true
 
-                                onStopOrDispose { listening = false }
+                val brightnessBlock = @Composable {
+                    if (qsContainerViewModel.isBrightnessSliderVisibleInQqs) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = qsHorizontalMargin).padding(bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                BrightnessSliderContainer(
+                                    viewModel = qsContainerViewModel.brightnessSliderViewModel,
+                                    containerColors =
+                                        ContainerColors(
+                                            idleColor = Color.Transparent,
+                                            mirrorColor = ContainerColors.defaultContainerColor,
+                                        ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
-                            Box {
-                                val qqsViewModel =
-                                    rememberViewModel(traceName = "shade_scene_qqs") {
-                                        viewModel.quickQuickSettingsViewModel.create()
-                                    }
-                                if (viewModel.isQsEnabled) {
-                                    QuickQuickSettings(
-                                        qqsViewModel,
-                                        listening = { listening },
-                                        modifier = Modifier.sysuiResTag("quick_qs_panel"),
+                            if (showAutoBrightnessButton) {
+                                Spacer(Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = {
+                                        val newMode = if (isAutoBrightness) {
+                                            android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                                        } else {
+                                            android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+                                        }
+                                        try {
+                                            android.provider.Settings.System.putInt(
+                                                context.contentResolver,
+                                                android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                                                newMode
+                                            )
+                                        } catch (e: Exception) {}
+                                    },
+                                    modifier = Modifier.size(44.dp),
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = if (isAutoBrightness) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isAutoBrightness) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_qs_autobrightness),
+                                        contentDescription = "Brillo automático",
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (brightnessPosition == 0) {
+                        brightnessBlock()
+                    }
+
+                    MediaAndQqsLayout(
+                        modifier =
+                            Modifier.element(QuickSettings.Elements.QuickQuickSettingsAndMedia)
+                                .offset {
+                                    // Centering offset when the shade is being dragged down.
+                                    val down = visualOffsetProvider().fastCoerceAtLeast(0)
+                                    IntOffset(x = 0, y = down / 2)
+                                }
+                                .padding(bottom = qqsLayoutPaddingBottom)
+                                .padding(horizontal = qsHorizontalMargin),
+                        tiles =
+                            @Composable {
+                                // Because the ShadeScene is always composed, we need to manually tell
+                                // the tiles when they're actually visible and should be listening, just
+                                // like in the [QuickSettingsContent] Composable.
+                                var listening by remember { mutableStateOf(false) }
+                                LifecycleStartEffect(Unit) {
+                                    listening = true
+
+                                    onStopOrDispose { listening = false }
+                                }
+                                Box {
+                                    val qqsViewModel =
+                                        rememberViewModel(traceName = "shade_scene_qqs") {
+                                            viewModel.quickQuickSettingsViewModel.create()
+                                        }
+                                    if (viewModel.isQsEnabled) {
+                                        QuickQuickSettings(
+                                            qqsViewModel,
+                                            listening = { listening },
+                                            modifier = Modifier.sysuiResTag("quick_qs_panel"),
+                                        )
+                                    }
+                                }
+                            },
+                        media = {
+                            if (isAlwaysComposedContentVisible()) {
+                                if (viewModel.isQsEnabled && viewModel.showMedia && shouldShowMediaInClassic) {
+                                    Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
+                                        Media(
+                                            viewModelFactory = viewModel.mediaViewModelFactory,
+                                            presentationStyle =
+                                                if (mediaInRow) {
+                                                    MediaPresentationStyle.Compressed
+                                                } else {
+                                                    MediaPresentationStyle.Default
+                                                },
+                                            behavior = ShadeSceneContentViewModel.qqsMediaUiBehavior,
+                                            onDismissed = viewModel::onMediaSwipeToDismiss,
+                                            location = Media.Location.SHADE,
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Add an empty box when QQS content is not visible to keep the same
+                                // number of elements.
+                                Box(modifier = Modifier)
                             }
                         },
-                    media = {
-                        if (isAlwaysComposedContentVisible()) {
-                            if (viewModel.isQsEnabled && viewModel.showMedia) {
-                                Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
-                                    Media(
-                                        viewModelFactory = viewModel.mediaViewModelFactory,
-                                        presentationStyle =
-                                            if (mediaInRow) {
-                                                MediaPresentationStyle.Compressed
-                                            } else {
-                                                MediaPresentationStyle.Default
-                                            },
-                                        behavior = ShadeSceneContentViewModel.qqsMediaUiBehavior,
-                                        onDismissed = viewModel::onMediaSwipeToDismiss,
-                                        location = Media.Location.SHADE,
-                                    )
-                                }
-                            }
-                        } else {
-                            // Add an empty box when QQS content is not visible to keep the same
-                            // number of elements.
-                            Box(modifier = Modifier)
-                        }
-                    },
-                    mediaInRow = mediaInRow,
-                )
+                        mediaInRow = mediaInRow,
+                    )
+
+                    if (brightnessPosition == 1) {
+                        brightnessBlock()
+                    }
+                }
             },
             scrollableScrim = { onContentHeightChanged, isScrimAtRest ->
                 NestedScrollingNotificationPanel(

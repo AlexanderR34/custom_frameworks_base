@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2023 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.android.systemui.keyguard.ui.viewmodel
 
 import com.android.compose.animation.scene.Swipe
@@ -33,6 +17,8 @@ import com.android.systemui.shade.ui.viewmodel.splitShadeActions
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -49,6 +35,23 @@ constructor(
 ) : UserActionsViewModel() {
 
     override suspend fun hydrateActions(setActions: (Map<UserAction, UserActionResult>) -> Unit) {
+        val cr = android.app.ActivityThread.currentApplication()?.contentResolver
+        val invertFlow = if (cr != null) {
+            callbackFlow {
+                val uri = android.provider.Settings.System.getUriFor("dual_shade_invert_sides")
+                val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1)
+                    }
+                }
+                cr.registerContentObserver(uri, false, observer)
+                trySend(android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1)
+                awaitClose { cr.unregisterContentObserver(observer) }
+            }
+        } else {
+            flowOf(false)
+        }
+
         shadeInteractor.isShadeTouchable
             .flatMapLatest { isShadeTouchable ->
                 if (!isShadeTouchable) {
@@ -59,7 +62,8 @@ constructor(
                     deviceEntryInteractor.isUnlocked,
                     communalInteractor.isCommunalAvailable,
                     shadeModeInteractor.shadeMode,
-                ) { isDeviceUnlocked, isCommunalAvailable, shadeMode ->
+                    invertFlow,
+                ) { isDeviceUnlocked, isCommunalAvailable, shadeMode, invertSides ->
                     buildList {
                             if (isCommunalAvailable) {
                                 add(Swipe.Start to Scenes.Communal)
@@ -75,7 +79,7 @@ constructor(
                                 when (shadeMode) {
                                     ShadeMode.Single -> singleShadeActions()
                                     ShadeMode.Split -> splitShadeActions()
-                                    ShadeMode.Dual -> dualShadeActions()
+                                    ShadeMode.Dual -> dualShadeActions(invertSides = invertSides)
                                 }
                             )
                         }

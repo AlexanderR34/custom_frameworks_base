@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2024 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.android.systemui.qs.ui.viewmodel
 
 import com.android.compose.animation.scene.Back
@@ -27,11 +11,15 @@ import com.android.compose.animation.scene.UserActionResult.ShowOverlay.HideCurr
 import com.android.systemui.qs.panels.ui.viewmodel.EditModeViewModel
 import com.android.systemui.scene.shared.model.Overlays
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.BottomEdge
+import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeEndHalf
 import com.android.systemui.scene.ui.viewmodel.SceneContainerArea.TopEdgeStartHalf
 import com.android.systemui.scene.ui.viewmodel.UserActionsViewModel
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 
 /** Models the UI state for the user actions for navigating to other scenes or overlays. */
 class QuickSettingsShadeOverlayActionsViewModel
@@ -39,41 +27,51 @@ class QuickSettingsShadeOverlayActionsViewModel
 constructor(private val editModeViewModel: EditModeViewModel) : UserActionsViewModel() {
 
     override suspend fun hydrateActions(setActions: (Map<UserAction, UserActionResult>) -> Unit) {
-        editModeViewModel.isEditing
-            .map { isEditing ->
-                val hideQuickSettings = HideOverlay(Overlays.QuickSettingsShade)
-                buildMap {
-                    if (isEditing) {
-                        // When editing, the back gesture is handled outside of this view-model.
-                        // TODO(b/418003378): Back should go back to the QS grid layout.
-                        put(Swipe.Up(fromSource = BottomEdge), hideQuickSettings)
-                    } else {
-                        put(Back, hideQuickSettings)
-                        put(Swipe.Up, hideQuickSettings)
-                    }
-
-                    put(
-                        Swipe.Down(fromSource = TopEdgeStartHalf),
-                        ShowOverlay(
-                            Overlays.NotificationsShade,
-                            hideCurrentOverlays =
-                                HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
-                        ),
-                    )
-
-                    if (!isEditing) {
-                        put(
-                            Swipe.Right,
-                            ReplaceByOverlay(Overlays.NotificationsShade),
-                        )
-                        put(
-                            Swipe.Left,
-                            ReplaceByOverlay(Overlays.NotificationsShade),
-                        )
+        val cr = android.app.ActivityThread.currentApplication()?.contentResolver
+        val invertFlow = if (cr != null) {
+            callbackFlow {
+                val uri = android.provider.Settings.System.getUriFor("dual_shade_invert_sides")
+                val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1)
                     }
                 }
+                cr.registerContentObserver(uri, false, observer)
+                trySend(android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1)
+                awaitClose { cr.unregisterContentObserver(observer) }
             }
-            .collect { actions -> setActions(actions) }
+        } else {
+            flowOf(false)
+        }
+
+        combine(editModeViewModel.isEditing, invertFlow) { isEditing, invertSides ->
+            val hideQuickSettings = HideOverlay(Overlays.QuickSettingsShade)
+            val topEdgeToNotifs = if (invertSides) TopEdgeEndHalf else TopEdgeStartHalf
+            val swipeHorizontal = if (invertSides) Swipe.Left else Swipe.Right
+            buildMap {
+                if (isEditing) {
+                    put(Swipe.Up(fromSource = BottomEdge), hideQuickSettings)
+                } else {
+                    put(Back, hideQuickSettings)
+                    put(Swipe.Up, hideQuickSettings)
+                }
+
+                put(
+                    Swipe.Down(fromSource = topEdgeToNotifs),
+                    ShowOverlay(
+                        Overlays.NotificationsShade,
+                        hideCurrentOverlays =
+                            HideCurrentOverlays.Some(Overlays.QuickSettingsShade),
+                    ),
+                )
+
+                if (!isEditing) {
+                    put(
+                        swipeHorizontal, ReplaceByOverlay(Overlays.NotificationsShade)
+                    )
+                }
+            }
+        }.collect { actions -> setActions(actions) }
     }
 
     @AssistedFactory

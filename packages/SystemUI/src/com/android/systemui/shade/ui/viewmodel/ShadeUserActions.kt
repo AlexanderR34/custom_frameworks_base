@@ -69,25 +69,37 @@ fun splitShadeActions(): Array<Pair<UserAction, UserActionResult>> {
 
 /** Returns collection of [UserAction] to [UserActionResult] pairs for opening the dual shade. */
 fun dualShadeActions(
-    twoFingerSwipeEnabled: Boolean = true
-): Array<Pair<UserAction, UserActionResult>> {
-    val invertSides = try {
+    twoFingerSwipeEnabled: Boolean = true,
+    invertSides: Boolean = try {
         val cr = android.app.ActivityThread.currentApplication()?.contentResolver
         if (cr != null) android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1 else false
     } catch (e: Exception) {
         false
     }
-    val defaultOverlay = if (invertSides) Overlays.QuickSettingsShade else Overlays.NotificationsShade
-    val edgeOverlay = if (invertSides) Overlays.NotificationsShade else Overlays.QuickSettingsShade
+): Array<Pair<UserAction, UserActionResult>> {
     return buildList {
             allPointerTypesButMouse {
-                // Don't add the "single pointer swipe down" actions for PointerType.Mouse because
-                // it is easy to accidentally trigger them when trying to dragging windows.
-                add(Swipe.Down(pointerType = it) to defaultOverlay)
-                add(
-                    Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf, pointerType = it) to
-                        edgeOverlay
-                )
+                if (invertSides) {
+                    add(
+                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf, pointerType = it) to
+                            Overlays.QuickSettingsShade
+                    )
+                    add(
+                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf, pointerType = it) to
+                            Overlays.NotificationsShade
+                    )
+                    add(Swipe.Down(pointerType = it) to Overlays.QuickSettingsShade)
+                } else {
+                    add(
+                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf, pointerType = it) to
+                            Overlays.QuickSettingsShade
+                    )
+                    add(
+                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf, pointerType = it) to
+                            Overlays.NotificationsShade
+                    )
+                    add(Swipe.Down(pointerType = it) to Overlays.NotificationsShade)
+                }
             }
             if (twoFingerSwipeEnabled) {
                 add(Swipe.Down(pointerCount = 2) to Overlays.QuickSettingsShade)

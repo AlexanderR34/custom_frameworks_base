@@ -226,11 +226,7 @@ constructor(
             }
             launch {
                 viewModel.shouldShowFooterView.collect { animatedVisibility ->
-                    val isHyperOS = android.provider.Settings.System.getInt(
-                        parentView.context.contentResolver,
-                        "control_center_style",
-                        1
-                    ) == 1
+                    val isHyperOS = false
 
                     if (isHyperOS) {
                         footerView.setVisible(false, false)
@@ -262,11 +258,7 @@ constructor(
                 )
             launch {
                 viewModel.shouldIncludeFooterView.collect { animatedVisibility ->
-                    val isHyperOS = android.provider.Settings.System.getInt(
-                        parentView.context.contentResolver,
-                        "control_center_style",
-                        1
-                    ) == 1
+                    val isHyperOS = false
 
                     if (isHyperOS) {
                         footerView.setVisible(false, false)
@@ -281,11 +273,7 @@ constructor(
             }
             launch {
                 viewModel.shouldHideFooterView.collect {
-                    val isHyperOS = android.provider.Settings.System.getInt(
-                        parentView.context.contentResolver,
-                        "control_center_style",
-                        1
-                    ) == 1
+                    val isHyperOS = false
 
                     footerView.setShouldBeHidden(if (isHyperOS) true else it)
                     if (isHyperOS) footerView.visibility = View.GONE

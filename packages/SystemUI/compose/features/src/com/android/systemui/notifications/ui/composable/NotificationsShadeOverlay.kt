@@ -16,6 +16,8 @@
 
 package com.android.systemui.notifications.ui.composable
 
+import androidx.compose.runtime.produceState
+
 import android.content.Context
 import android.content.res.Configuration
 import android.media.AudioManager
@@ -285,14 +287,24 @@ constructor(
                 1
             ) == 1
         }
-        val controlCenterStyle = remember(context) {
-            android.provider.Settings.System.getInt(
-                context.contentResolver,
-                "control_center_style",
-                1
-            )
+        val controlCenterStyle by produceState(
+            initialValue = try {
+                android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
+            } catch (e: Exception) { 1 },
+            key1 = context
+        ) {
+            val uri = android.provider.Settings.System.getUriFor("control_center_style")
+            val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    value = try {
+                        android.provider.Settings.System.getInt(context.contentResolver, "control_center_style", 1)
+                    } catch (e: Exception) { 1 }
+                }
+            }
+            try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+            awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
         }
-        val isHyperOS = isDualShade && controlCenterStyle == 1
+        val isHyperOS = false
 
         val notificationStackPadding =
             dimensionResource(id = R.dimen.notification_side_paddings_dual)
@@ -325,6 +337,24 @@ constructor(
         }
 
         val isFullWidth = LocalSceneContainerPreloadedResources.current.isFullWidthShade
+        val mediaCardMode by produceState(
+            initialValue = try {
+                android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+            } catch (e: Exception) { 3 },
+            key1 = context
+        ) {
+            val uri = android.provider.Settings.System.getUriFor("qs_media_card_mode")
+            val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    value = try {
+                        android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+                    } catch (e: Exception) { 3 }
+                }
+            }
+            try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+            awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+        }
+        val shouldShowMedia = mediaCardMode == 2 || mediaCardMode == 3
 
         val targetBlurRadiusPx: Float by
             remember(layoutState) {
@@ -338,29 +368,48 @@ constructor(
 
         OverlayShade(
             panelElement = NotificationsShade.Elements.Panel,
-            alignmentOnWideScreens = if (isHyperOS && isLandscape) Alignment.CenterHorizontally else viewModel.alignmentOnWideScreens,
+            alignmentOnWideScreens = viewModel.alignmentOnWideScreens,
             statusBarHeightPx = viewModel.statusBarHeightPx,
             enableTransparency = viewModel.isTransparencyEnabled,
             modifier = modifier.blur(with(LocalDensity.current) { animatedBlurRadiusPx.toDp() }),
             onScrimClicked = viewModel::onScrimClicked,
             onBackgroundPlaced = { bounds, _, _ -> viewModel.onShadeOverlayBoundsChanged(bounds) },
             header = {
-                if (isHyperOS) {
-                    HyperOSNotificationsHeader(
-                        modifier = Modifier.element(NotificationsShade.Elements.StatusBar)
-                    )
-                } else if (viewModel.showHeader) {
-                    val headerViewModel =
-                        rememberViewModel("NotificationsShadeOverlayHeader") {
-                            viewModel.shadeHeaderViewModelFactory.create()
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (viewModel.showHeader) {
+                        val headerViewModel =
+                            rememberViewModel("NotificationsShadeOverlayHeader") {
+                                viewModel.shadeHeaderViewModelFactory.create()
+                            }
+                        OverlayShadeHeader(
+                            viewModel = headerViewModel,
+                            notificationsHighlight = ChipHighlightModel.Strong,
+                            quickSettingsHighlight = headerViewModel.inactiveChipHighlight,
+                            showClock = true,
+                            modifier = Modifier.element(NotificationsShade.Elements.StatusBar),
+                        )
+                    }
+
+                    if (viewModel.showMedia && shouldShowMedia) {
+                        Box(
+                            modifier =
+                                Modifier.fillMaxWidth().padding(
+                                    start = notificationStackPadding,
+                                    end = notificationStackPadding,
+                                    top = 8.dp,
+                                    bottom = 8.dp,
+                                )
+                        ) {
+                            Media(
+                                viewModelFactory = viewModel.mediaViewModelFactory,
+                                presentationStyle = MediaPresentationStyle.Default,
+                                behavior = viewModel.mediaUiBehavior,
+                                onDismissed = viewModel::onMediaSwipeToDismiss,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)),
+                                location = Media.Location.SHADE,
+                            )
                         }
-                    OverlayShadeHeader(
-                        viewModel = headerViewModel,
-                        notificationsHighlight = ChipHighlightModel.Strong,
-                        quickSettingsHighlight = headerViewModel.inactiveChipHighlight,
-                        showClock = true,
-                        modifier = Modifier.element(NotificationsShade.Elements.StatusBar),
-                    )
+                    }
                 }
             },
         ) {
@@ -374,177 +423,48 @@ constructor(
             val stackScrollViewInstance = stackScrollView.get()
 
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.TopCenter
             ) {
-                Box(
-                    modifier = if (isHyperOS && isLandscape) {
-                        Modifier
-                            .fillMaxHeight()
-                            .width(560.dp)
-                    } else {
-                        Modifier.fillMaxSize()
-                    }
-                ) {
-                    ScrollingNotificationPanel(
-                        tag = "NotifShadeOverlay",
-                        shadeSession = shadeSession,
-                        stackScrollView = stackScrollViewInstance,
-                        viewModel = placeholderViewModel,
-                        notificationRulesParentViewModel = notificationRulesParentViewModel,
-                        jankMonitor = jankMonitor,
-                        shouldPunchHoleBehindScrim = false,
-                        isTransparencyEnabled = viewModel.isTransparencyEnabled,
-                        stackTopPadding = notificationStackPadding,
-                        stackBottomPadding = { 4.dp },
-                        shouldFillMaxHeight = true,
-                        aboveNotifications = {
-                            if (!isHyperOS && isFullWidth) {
-                                Box(
-                                    Modifier.padding(
-                                        start = notificationStackPadding,
-                                        end = notificationStackPadding,
-                                        bottom = 8.dp,
-                                    )
-                                ) {
-                                    with(lockscreenElements) {
-                                        LockscreenElement(
-                                            LockscreenElementKeys.Clock.Small,
-                                            Modifier.height(88.dp),
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (!isHyperOS && viewModel.showMedia) {
-                                Box(
-                                    modifier =
-                                        Modifier.fillMaxWidth().padding(
-                                            start = notificationStackPadding,
-                                            end = notificationStackPadding,
-                                            bottom = 8.dp,
-                                        )
-                                ) {
-                                    Media(
-                                        viewModelFactory = viewModel.mediaViewModelFactory,
-                                        presentationStyle = MediaPresentationStyle.Default,
-                                        behavior = viewModel.mediaUiBehavior,
-                                        onDismissed = viewModel::onMediaSwipeToDismiss,
-                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)),
-                                        location = Media.Location.SHADE,
-                                    )
-                                }
-                            }
-                        },
-                        shouldDrawScrimBackground = false,
-                        useVerticalOverscrollEffect = false,
-                        modifier =
-                            Modifier.fillMaxWidth().focusRequester(focusRequester).focusable().semantics {
-                                paneTitle = accessibilityTitle
-                            }.focusProperties {
-                                onEnter = { stackScrollViewInstance.asView().requestFocus() }
-                            },
-                    )
-                }
-
-                if (isHyperOS) {
-                    val nsslView = stackScrollViewInstance.asView()
-                    val sharedContainer = (nsslView.parent as? SharedNotificationContainer)
-                        ?: (nsslView.rootView.findViewById(R.id.shared_notification_container) as? SharedNotificationContainer)
-                    val compositionContext = rememberCompositionContext()
-                    val isDark = isSystemInDarkTheme()
-
-                    val composeView = remember {
-                        ComposeView(context).apply {
-                            setParentCompositionContext(compositionContext)
-                            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
-                        }
-                    }
-
-                    DisposableEffect(sharedContainer, composeView) {
-                        sharedContainer?.setFloatingClearAllButton(composeView)
-                        onDispose {
-                            sharedContainer?.setFloatingClearAllButton(null)
-                        }
-                    }
-
-                    LaunchedEffect(composeView, isDark, nsslView) {
-                        composeView.setContent {
-                            var hasClearableNotifs by remember { mutableStateOf(false) }
-                            LaunchedEffect(nsslView) {
-                                while (true) {
-                                    val nssl = nsslView as? NotificationStackScrollLayout
-                                    val count = nssl?.childCount ?: 0
-                                    var found = false
-                                    for (i in 0 until count) {
-                                        val child = nssl?.getChildAt(i)
-                                        if (child is com.android.systemui.statusbar.notification.row.ExpandableNotificationRow && child.canViewBeDismissed()) {
-                                            found = true
-                                            break
-                                        }
-                                    }
-                                    hasClearableNotifs = found
-                                    delay(300)
-                                }
-                            }
-
-                            LaunchedEffect(hasClearableNotifs) {
-                                if (hasClearableNotifs) {
-                                    composeView.visibility = android.view.View.VISIBLE
-                                } else {
-                                    delay(200)
-                                    if (!hasClearableNotifs) {
-                                        composeView.visibility = android.view.View.GONE
-                                    }
-                                }
-                            }
-
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = hasClearableNotifs,
-                                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.scaleIn(initialScale = 0.8f),
-                                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)) + androidx.compose.animation.scaleOut(targetScale = 0.8f),
-                            ) {
-                                val interactionSource = remember { MutableInteractionSource() }
-                                val isPressed by interactionSource.collectIsPressedAsState()
-                                val scale by animateFloatAsState(
-                                    targetValue = if (isPressed) 0.88f else 1.0f,
-                                    animationSpec = androidx.compose.animation.core.spring(
-                                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-                                    ),
-                                    label = "ClearAllButtonScale"
+                ScrollingNotificationPanel(
+                    tag = "NotifShadeOverlay",
+                    shadeSession = shadeSession,
+                    stackScrollView = stackScrollViewInstance,
+                    viewModel = placeholderViewModel,
+                    notificationRulesParentViewModel = notificationRulesParentViewModel,
+                    jankMonitor = jankMonitor,
+                    shouldPunchHoleBehindScrim = false,
+                    isTransparencyEnabled = viewModel.isTransparencyEnabled,
+                    stackTopPadding = notificationStackPadding,
+                    stackBottomPadding = { 4.dp },
+                    shouldFillMaxHeight = false,
+                    aboveNotifications = {
+                        if (isFullWidth) {
+                            Box(
+                                Modifier.padding(
+                                    start = notificationStackPadding,
+                                    end = notificationStackPadding,
+                                    bottom = 8.dp,
                                 )
-
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            scaleX = scale
-                                            scaleY = scale
-                                        }
-                                        .shadow(elevation = 8.dp, shape = CircleShape)
-                                        .size(54.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f) else Color.White)
-                                        .clickable(
-                                            interactionSource = interactionSource,
-                                            indication = null
-                                        ) {
-                                            nsslView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                            (nsslView as? NotificationStackScrollLayout)?.clearAllNotifications(false)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_close),
-                                        contentDescription = stringResource(R.string.hyperos_qs_close),
-                                        tint = if (isDark) Color.White else Color(0xFF1C1B1F),
-                                        modifier = Modifier.size(24.dp)
+                            ) {
+                                with(lockscreenElements) {
+                                    LockscreenElement(
+                                        LockscreenElementKeys.Clock.Small,
+                                        Modifier.height(88.dp),
                                     )
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                    shouldDrawScrimBackground = false,
+                    useVerticalOverscrollEffect = false,
+                    modifier =
+                        Modifier.fillMaxWidth().focusRequester(focusRequester).focusable().semantics {
+                            paneTitle = accessibilityTitle
+                        }.focusProperties {
+                            onEnter = { stackScrollViewInstance.asView().requestFocus() }
+                        },
+                )
             }
         }
     }

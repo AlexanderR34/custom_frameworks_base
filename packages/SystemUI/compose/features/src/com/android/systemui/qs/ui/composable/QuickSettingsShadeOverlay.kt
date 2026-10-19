@@ -458,6 +458,25 @@ private fun ContentScope.QuickSettingsLayout(
             onDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
         }
 
+        val mediaCardMode by produceState(
+            initialValue = try {
+                android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+            } catch (e: Exception) { 3 },
+            key1 = context
+        ) {
+            val uri = android.provider.Settings.System.getUriFor("qs_media_card_mode")
+            val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    value = try {
+                        android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+                    } catch (e: Exception) { 3 }
+                }
+            }
+            try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+            awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+        }
+        val shouldShowMedia = mediaCardMode == 2 || mediaCardMode == 3
+
         val showVolumeSlider by produceState(
             initialValue = try {
                 android.provider.Settings.System.getInt(context.contentResolver, "qs_show_volume_slider", 0) == 1
@@ -477,17 +496,19 @@ private fun ContentScope.QuickSettingsLayout(
         }
 
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-            Media(
-                viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
-                presentationStyle = MediaPresentationStyle.Compact,
-                behavior = QuickSettingsContainerViewModel.mediaUiBehavior,
-                onDismissed = qsContainerViewModel::onMediaSwipeToDismiss,
-                modifier = Modifier,
-                location = Media.Location.QS,
-            )
+            if (shouldShowMedia) {
+                Media(
+                    viewModelFactory = qsContainerViewModel.mediaViewModelFactory,
+                    presentationStyle = MediaPresentationStyle.Compact,
+                    behavior = QuickSettingsContainerViewModel.mediaUiBehavior,
+                    onDismissed = qsContainerViewModel::onMediaSwipeToDismiss,
+                    modifier = Modifier,
+                    location = Media.Location.QS,
+                )
 
-            if (qsContainerViewModel.showMedia) {
-                VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
+                if (qsContainerViewModel.showMedia) {
+                    VerticalSeparator(QuickSettingsShade.Dimensions.VerticalPadding)
+                }
             }
 
             val slidersBlock = @Composable {
@@ -531,15 +552,16 @@ private fun ContentScope.QuickSettingsLayout(
                                             )
                                         } catch (e: Exception) {}
                                     },
-                                    modifier = Modifier.size(QuickSettingsShade.Dimensions.brightnessSliderDimensions.frameHeight),
+                                    modifier = Modifier.size(44.dp),
                                     colors = IconButtonDefaults.iconButtonColors(
                                         containerColor = if (isAutoBrightness) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                         contentColor = if (isAutoBrightness) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 ) {
-                                    Text(
-                                        text = "A",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_qs_autobrightness),
+                                        contentDescription = "Brillo automático",
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
@@ -556,49 +578,22 @@ private fun ContentScope.QuickSettingsLayout(
                             enabled = { layoutState.transitionState is TransitionState.Idle }
                         )
                     ) {
-                        Row(
+                        VolumeSlider(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            VolumeSlider(
-                                modifier = Modifier.weight(1f),
-                                showLabel = false,
-                                state = volumeSliderState,
-                                onValueChange = { newValue: Float ->
-                                    volumeSliderViewModel.onValueChanged(volumeSliderState, newValue)
-                                },
-                                onValueChangeFinished = {
-                                    volumeSliderViewModel.onValueChangeFinished()
-                                },
-                                onIconTapped = { volumeSliderViewModel.toggleMuted(volumeSliderState) },
-                                sliderColors = PlatformSliderDefaults.defaultPlatformSliderColors(),
-                                hapticsViewModelFactory =
-                                    volumeSliderViewModel.getSliderHapticsViewModelFactory(),
-                                dimensions = QuickSettingsShade.Dimensions.VolumeSliderDimensions,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            IconButton(
-                                modifier =
-                                    Modifier.size(
-                                        QuickSettingsShade.Dimensions.VolumeSliderDimensions.trackHeight
-                                    ),
-                                colors =
-                                    IconButtonDefaults.iconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    ),
-                                onClick = {
-                                    qsContainerViewModel.detailsViewModel.onVolumeSettingsButtonClicked(
-                                        audioDetailsViewModelFactory.create()
-                                    )
-                                },
-                            ) {
-                                Icon(
-                                    painterResource(R.drawable.ic_more_vert),
-                                    contentDescription = "Volume settings",
-                                )
-                            }
-                        }
+                            showLabel = false,
+                            state = volumeSliderState,
+                            onValueChange = { newValue: Float ->
+                                volumeSliderViewModel.onValueChanged(volumeSliderState, newValue)
+                            },
+                            onValueChangeFinished = {
+                                volumeSliderViewModel.onValueChangeFinished()
+                            },
+                            onIconTapped = { volumeSliderViewModel.toggleMuted(volumeSliderState) },
+                            sliderColors = PlatformSliderDefaults.defaultPlatformSliderColors(),
+                            hapticsViewModelFactory =
+                                volumeSliderViewModel.getSliderHapticsViewModelFactory(),
+                            dimensions = QuickSettingsShade.Dimensions.VolumeSliderDimensions,
+                        )
                     }
                 }
             }
@@ -650,6 +645,7 @@ object QuickSettingsShade {
         val StatusBar = ElementKey("QuickSettingsShadeOverlayStatusBar")
         val Panel = ElementKey("QuickSettingsShadeOverlayPanel")
         val Header = ElementKey("QuickSettingsShadeOverlayHeader")
+        val TilesGrid = ElementKey("QuickSettingsShadeOverlayTilesGrid")
     }
 
     object Dimensions {

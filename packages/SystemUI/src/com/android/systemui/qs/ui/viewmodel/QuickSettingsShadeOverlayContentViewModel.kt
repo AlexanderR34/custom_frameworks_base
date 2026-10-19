@@ -146,7 +146,7 @@ constructor(
     private val showVolumeSlider = expandedAudioTileDetailsFeatureInteractor.isEnabled()
 
     val volumeSliderViewModel =
-        if (showVolumeSlider && volumeSliderCoroutineScope != null)
+        if (volumeSliderCoroutineScope != null)
             audioStreamSliderViewModelFactory.create(
                 AudioStreamSliderViewModel.FactoryAudioStreamWrapper(
                     SliderType.Stream(AudioStream(AudioManager.STREAM_MUSIC)).stream

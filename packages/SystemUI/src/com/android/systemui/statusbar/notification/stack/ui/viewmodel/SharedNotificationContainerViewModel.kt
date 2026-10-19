@@ -318,16 +318,7 @@ constructor(
                                 if (isRtl) right to left else left to right
                             }
 
-                        val isHyperOS =
-                            try {
-                                android.provider.Settings.System.getInt(
-                                    context.contentResolver,
-                                    "control_center_style",
-                                    1
-                                ) == 1
-                            } catch (e: Exception) {
-                                true
-                            }
+                        val isHyperOS = false
 
                         val (marginStart, marginEnd) =
                             if (isHyperOS) {

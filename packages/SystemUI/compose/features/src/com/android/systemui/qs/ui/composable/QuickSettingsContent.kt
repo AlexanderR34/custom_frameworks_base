@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -69,6 +71,25 @@ fun ContentScope.QuickSettingsContent(
     mediaSquishiness: () -> Float = { 1f },
 ) {
     val context = LocalContext.current
+
+        val mediaCardMode by produceState(
+            initialValue = try {
+                android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+            } catch (e: Exception) { 3 },
+            key1 = context
+        ) {
+            val uri = android.provider.Settings.System.getUriFor("qs_media_card_mode")
+            val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    value = try {
+                        android.provider.Settings.System.getInt(context.contentResolver, "qs_media_card_mode", 3)
+                    } catch (e: Exception) { 3 }
+                }
+            }
+            try { context.contentResolver.registerContentObserver(uri, false, observer) } catch (e: Exception) {}
+            awaitDispose { try { context.contentResolver.unregisterContentObserver(observer) } catch (e: Exception) {} }
+        }
+    val shouldShowMediaInClassic = mediaCardMode == 1 || mediaCardMode == 3
 
     val brightnessPosition by produceState(
         initialValue = try {
@@ -185,15 +206,16 @@ fun ContentScope.QuickSettingsContent(
                                             )
                                         } catch (e: Exception) {}
                                     },
-                                    modifier = Modifier.size(QuickSettingsShade.Dimensions.brightnessSliderDimensions.frameHeight),
+                                    modifier = Modifier.size(44.dp),
                                     colors = IconButtonDefaults.iconButtonColors(
                                         containerColor = if (isAutoBrightness) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                         contentColor = if (isAutoBrightness) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 ) {
-                                    Text(
-                                        text = "A",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_qs_autobrightness),
+                                        contentDescription = "Brillo automático",
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
@@ -221,7 +243,7 @@ fun ContentScope.QuickSettingsContent(
             },
         media =
             @Composable {
-                if (isAlwaysComposedContentVisible()) {
+                if (isAlwaysComposedContentVisible() && shouldShowMediaInClassic) {
                     Element(key = Media.Elements.MediaCarousel, modifier = Modifier) {
                         Media(
                             viewModelFactory = viewModel.mediaViewModelFactory,

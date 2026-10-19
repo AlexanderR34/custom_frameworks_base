@@ -99,7 +99,7 @@ constructor(
                 1
             )
         }
-        val isHyperOS = isDualShade || controlCenterStyle == 1
+        val isHyperOS = false
 
         val effectiveTiles = remember(tiles, isHyperOS) {
             if (isHyperOS) {
@@ -227,7 +227,7 @@ constructor(
                 1
             )
         }
-        val isHyperOS = isDualShade || controlCenterStyle == 1
+        val isHyperOS = false
 
         val columns = if (isHyperOS) 4 else columnsViewModel.columns
         val largeTilesSpan = if (isHyperOS) 2 else columnsViewModel.largeSpan
