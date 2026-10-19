@@ -48,6 +48,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import kotlin.math.min
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -366,12 +370,17 @@ constructor(
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
-        OverlayShade(
-            panelElement = NotificationsShade.Elements.Panel,
-            alignmentOnWideScreens = viewModel.alignmentOnWideScreens,
-            statusBarHeightPx = viewModel.statusBarHeightPx,
-            enableTransparency = viewModel.isTransparencyEnabled,
-            modifier = modifier.blur(with(LocalDensity.current) { animatedBlurRadiusPx.toDp() }),
+        val playerWidth = min(configuration.screenWidthDp, configuration.screenHeightDp).dp - (notificationStackPadding * 2)
+
+        Box(
+            modifier = modifier.blur(with(LocalDensity.current) { animatedBlurRadiusPx.toDp() })
+        ) {
+            OverlayShade(
+                panelElement = NotificationsShade.Elements.Panel,
+                alignmentOnWideScreens = viewModel.alignmentOnWideScreens,
+                statusBarHeightPx = viewModel.statusBarHeightPx,
+                enableTransparency = viewModel.isTransparencyEnabled,
+                modifier = Modifier.fillMaxSize(),
             onScrimClicked = viewModel::onScrimClicked,
             onBackgroundPlaced = { bounds, _, _ -> viewModel.onShadeOverlayBoundsChanged(bounds) },
             header = {
@@ -390,7 +399,7 @@ constructor(
                         )
                     }
 
-                    if (viewModel.showMedia && shouldShowMedia) {
+                    if (isFullWidth && viewModel.showMedia && shouldShowMedia) {
                         Box(
                             modifier =
                                 Modifier.fillMaxWidth().padding(
@@ -467,7 +476,39 @@ constructor(
                 )
             }
         }
+
+        if (!isFullWidth && viewModel.showMedia && shouldShowMedia) {
+            val mediaAlignment =
+                if (viewModel.alignmentOnWideScreens == Alignment.End) {
+                    Alignment.TopStart
+                } else {
+                    Alignment.TopEnd
+                }
+            Box(
+                modifier =
+                    Modifier.fillMaxSize()
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.union(WindowInsets(top = viewModel.statusBarHeightPx))
+                        )
+                        .padding(horizontal = OverlayShade.Dimensions.PanelPaddingHorizontal),
+                contentAlignment = mediaAlignment,
+            ) {
+                Box(
+                    modifier = Modifier.width(playerWidth)
+                ) {
+                    Media(
+                        viewModelFactory = viewModel.mediaViewModelFactory,
+                        presentationStyle = MediaPresentationStyle.Default,
+                        behavior = viewModel.mediaUiBehavior,
+                        onDismissed = viewModel::onMediaSwipeToDismiss,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)),
+                        location = Media.Location.SHADE,
+                    )
+                }
+            }
+        }
     }
+}
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
