@@ -400,7 +400,7 @@ constructor(
                     }
                     addOrUpdatePlayer(key, oldKey, data, onUiExecutionEnd)
                     val canRemove = data.isPlaying?.let { !it } ?: data.isClearable && !data.active
-                    if (canRemove && !Utils.useMediaResumption(context)) {
+                    if (canRemove && (!Utils.useMediaResumption(context) || MediaPlayerData.isSwipedAway)) {
                         // This media control is both paused and timed out, and the resumption
                         // setting is off - let's remove it
                         if (isReorderingAllowed) {
@@ -1000,7 +1000,7 @@ constructor(
                         prevLocation,
                     )
                 }
-                mediaCarouselScrollHandler.showsSettingsButton = !it.showsOnlyActiveMedia
+                mediaCarouselScrollHandler.showsSettingsButton = false
                 mediaCarouselScrollHandler.falsingProtectionNeeded = it.falsingProtectionNeeded
                 val nowVisible = it.visible
                 if (nowVisible != playersVisible) {
@@ -1107,7 +1107,15 @@ constructor(
         MediaControlsInComposeFlag.assertInLegacyMode()
         MediaPlayerData.isSwipedAway = true
         logger.logSwipeDismiss()
-        mediaManager.onSwipeToDismiss()
+        val key = MediaPlayerData.visiblePlayerKeys()
+            .elementAtOrNull(mediaCarouselScrollHandler.visibleMediaIndex)
+            ?.key
+        if (key != null) {
+            mediaManager.dismissMediaData(key, delay = 0L, userInitiated = true)
+        } else {
+            mediaManager.onSwipeToDismiss()
+        }
+        mediaCarouselScrollHandler.resetTranslation(false)
     }
 
     fun getCurrentVisibleMediaContentIntent(): PendingIntent? {

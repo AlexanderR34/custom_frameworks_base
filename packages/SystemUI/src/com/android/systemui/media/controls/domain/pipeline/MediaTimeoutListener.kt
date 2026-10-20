@@ -39,11 +39,11 @@ import javax.inject.Inject
 
 @VisibleForTesting
 val PAUSED_MEDIA_TIMEOUT =
-    SystemProperties.getLong("debug.sysui.media_timeout", TimeUnit.MINUTES.toMillis(10))
+    SystemProperties.getLong("debug.sysui.media_timeout", TimeUnit.MINUTES.toMillis(1))
 
 @VisibleForTesting
 val RESUME_MEDIA_TIMEOUT =
-    SystemProperties.getLong("debug.sysui.media_timeout_resume", TimeUnit.DAYS.toMillis(2))
+    SystemProperties.getLong("debug.sysui.media_timeout_resume", TimeUnit.MINUTES.toMillis(1))
 
 /** Controller responsible for keeping track of playback states and expiring inactive streams. */
 @SysUISingleton

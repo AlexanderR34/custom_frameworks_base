@@ -499,6 +499,11 @@ class LegacyMediaDataManagerImpl(
                 // Only log this event when media expires on its own
                 logger.logMediaTimeout(it.appUid, it.packageName, it.instanceId)
             }
+            if (timedOut) {
+                if (DEBUG) Log.d(TAG, "timing out player $key, dismissing")
+                dismissMediaData(key, delay = 0L, userInitiated = false)
+                return
+            }
             if (it.active == !timedOut && !forceUpdate) {
                 if (it.resumption) {
                     if (DEBUG) Log.d(TAG, "timing out resume player $key")
