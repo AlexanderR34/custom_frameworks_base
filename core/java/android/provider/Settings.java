@@ -6417,6 +6417,25 @@ public final class Settings {
         @Readable
         public static final String NOTIFICATION_LIGHT_PULSE = "notification_light_pulse";
 
+
+        /**
+         * Whether to show a notification when a screenshot is taken.
+         * 0 = no
+         * 1 = yes
+         * @hide
+         */
+        @Readable
+        public static final String SCREENSHOT_NOTIFICATION_ENABLED = "screenshot_notification_enabled";
+
+        /**
+         * Whether to automatically expand notifications containing images, photos, or stickers.
+         * 0 = no
+         * 1 = yes
+         * @hide
+         */
+        @Readable
+        public static final String NOTIFICATION_AUTO_EXPAND_IMAGES = "notification_auto_expand_images";
+
         /**
          * Show pointer location on screen?
          * 0 = no
@@ -6926,6 +6945,69 @@ public final class Settings {
          */
         @Readable
         public static final String VOLUME_BOOST_200_ENABLED = "volume_boost_200_enabled";
+
+        /**
+         * Whether Dolby Atmos / System Equalizer audio effect is enabled.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_EFFECT_ENABLED = "dolby_effect_enabled";
+
+        /**
+         * Selected equalizer preset index (0: Flat, 1: Rock, etc.)
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_PRESET = "dolby_preset";
+
+        /**
+         * Whether 3D virtualizer effect is enabled.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_VIRTUALIZER_ENABLED = "dolby_virtualizer_enabled";
+
+        /**
+         * 15-band comma-separated EQ band gains (-10 to +10 dB).
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_EQ_BAND_GAINS = "dolby_eq_band_gains";
+
+        /**
+         * Dolby profile index.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_PROFILE = "dolby_profile";
+
+        /**
+         * Whether Dolby dialogue enhancer is enabled.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_DIALOGUE_ENHANCER = "dolby_dialogue_enhancer";
+
+        /**
+         * Whether Dolby bass enhancer is enabled.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_BASS_ENHANCER = "dolby_bass_enhancer";
+
+        /**
+         * Whether Dolby volume leveler is enabled.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_VOLUME_LEVELER = "dolby_volume_leveler";
+
+        /**
+         * Whether Dolby stereo widening is enabled.
+         * @hide
+         */
+        @Readable
+        public static final String DOLBY_STEREO_WIDENING = "dolby_stereo_widening";
 
         /**
          * Whether to show Wi-Fi standard icon (e.g. Wi-Fi 4/5/6/7)
@@ -7538,6 +7620,15 @@ public final class Settings {
             PRIVATE_SETTINGS.add(SHOW_VOLTE_ICON);
             PRIVATE_SETTINGS.add(SHOW_VOWIFI_ICON);
             PRIVATE_SETTINGS.add(STATUS_BAR_IMS_ICON_MODE);
+            PRIVATE_SETTINGS.add(DOLBY_EFFECT_ENABLED);
+            PRIVATE_SETTINGS.add(DOLBY_PRESET);
+            PRIVATE_SETTINGS.add(DOLBY_VIRTUALIZER_ENABLED);
+            PRIVATE_SETTINGS.add(DOLBY_EQ_BAND_GAINS);
+            PRIVATE_SETTINGS.add(DOLBY_PROFILE);
+            PRIVATE_SETTINGS.add(DOLBY_DIALOGUE_ENHANCER);
+            PRIVATE_SETTINGS.add(DOLBY_BASS_ENHANCER);
+            PRIVATE_SETTINGS.add(DOLBY_VOLUME_LEVELER);
+            PRIVATE_SETTINGS.add(DOLBY_STEREO_WIDENING);
         }
 
         /**

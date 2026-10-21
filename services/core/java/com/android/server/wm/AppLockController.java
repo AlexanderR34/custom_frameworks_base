@@ -235,8 +235,34 @@ final class AppLockController {
     boolean isPackageLockedByAppLockLocked(@NonNull String packageName, int userId) {
         Objects.requireNonNull(packageName);
 
-        return mAppLockLockedPackages.contains(userId)
-                && mAppLockLockedPackages.get(userId).contains(packageName);
+        if (mAppLockLockedPackages.contains(userId)
+                && mAppLockLockedPackages.get(userId).contains(packageName)) {
+            return true;
+        }
+
+        try {
+            boolean isEnabled = android.provider.Settings.Secure.getIntForUser(
+                    mContext.getContentResolver(), "app_lock_enabled", 1, userId) == 1;
+            if (!isEnabled) {
+                return false;
+            }
+            String lockedList = android.provider.Settings.Secure.getStringForUser(
+                    mContext.getContentResolver(), "app_lock_list", userId);
+            if (lockedList != null && !lockedList.isEmpty()) {
+                for (String pkg : lockedList.split(",")) {
+                    if (packageName.equals(pkg.trim())) {
+                        AppLockInternal ali = LocalServices.getService(AppLockInternal.class);
+                        if (ali != null) {
+                            return ali.isPackageLocked(packageName, userId);
+                        }
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        return false;
     }
 
     /**
