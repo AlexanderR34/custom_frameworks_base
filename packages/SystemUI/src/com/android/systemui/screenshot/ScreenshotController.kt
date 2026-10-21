@@ -635,6 +635,13 @@ internal constructor(
                     }
 
                     logScreenshotResultStatus(result.uri, screenshot.userHandle)
+                    if (result.uri != null) {
+                        notificationController.notifyScreenshotSaved(
+                            result.uri,
+                            screenshot.bitmap,
+                            result.timestamp,
+                        )
+                    }
                     onResult.accept(result)
                     if (LogConfig.DEBUG_CALLBACK) {
                         Log.d(TAG, "finished bg processing, calling back with uri: ${result.uri}")

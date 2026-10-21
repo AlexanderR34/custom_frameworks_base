@@ -16,7 +16,10 @@
 
 package com.android.systemui.statusbar.notification.collection.coordinator
 
+import android.app.Notification
 import android.content.Context
+import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.res.R
@@ -46,7 +49,7 @@ import kotlinx.coroutines.launch
 class RowAppearanceCoordinator
 @Inject
 constructor(
-    @ShadeDisplayAware context: Context,
+    @ShadeDisplayAware private val context: Context,
     private var mSectionStyleProvider: SectionStyleProvider,
     private val notificationSettingsInteractor: NotificationSettingsInteractor,
     @Application private val coroutineScope: CoroutineScope,
@@ -103,6 +106,8 @@ constructor(
     }
 
     private fun onAfterRenderEntry(entry: NotificationEntry, controller: NotifRowController) {
+        val shouldAutoExpandMedia = isAutoExpandImagesEnabled() && hasAttachedImage(entry)
+
         if (entry.isBundled) {
             // If AUTO and there are multiple bundles, then auto-expand notifications that
             // look like singletons: notifications that aren't in a group and notifications that are
@@ -114,20 +119,77 @@ constructor(
                     (entry.parent as GroupEntry).children.size == 1
 
             controller.setSystemExpanded(
-                numActiveBundles > 1 &&
-                    notificationSettingsInteractor.shouldExpandBundles.value ==
-                        EXPAND_BUNDLE_AUTO &&
-                    looksLikeSingleNotification
+                shouldAutoExpandMedia || (
+                    numActiveBundles > 1 &&
+                        notificationSettingsInteractor.shouldExpandBundles.value ==
+                            EXPAND_BUNDLE_AUTO &&
+                        looksLikeSingleNotification
+                )
             )
         } else {
             // If mAlwaysExpandNonGroupedNotification is false, then only expand the
             // very first notification if it's not a child of grouped notifications and when
             // mAutoExpandFirstNotification is true.
             controller.setSystemExpanded(
-                (mAlwaysExpandNonGroupedNotification ||
-                    (mAutoExpandFirstNotification && entry == entryToExpand))
+                shouldAutoExpandMedia ||
+                    mAlwaysExpandNonGroupedNotification ||
+                    (mAutoExpandFirstNotification && entry == entryToExpand)
             )
         }
+    }
+
+    private fun isAutoExpandImagesEnabled(): Boolean {
+        return Settings.System.getInt(
+            context.contentResolver,
+            Settings.System.NOTIFICATION_AUTO_EXPAND_IMAGES,
+            0
+        ) == 1
+    }
+
+    private fun hasAttachedImage(entry: NotificationEntry): Boolean {
+        val sbn = entry.sbn ?: return false
+        val notification = sbn.notification ?: return false
+        val extras = notification.extras ?: return false
+
+        // 1. BigPictureStyle / Picture extras (e.g. screenshots, camera, downloaded photos)
+        if (extras.containsKey(Notification.EXTRA_PICTURE) ||
+            extras.containsKey(Notification.EXTRA_PICTURE_ICON)
+        ) {
+            return true
+        }
+
+        // 2. MessagingStyle messages with image or sticker data (e.g. WhatsApp, Telegram, Signal)
+        if (notification.isStyle(Notification.MessagingStyle::class.java)) {
+            val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (messages != null) {
+                for (item in messages) {
+                    if (item is Bundle && item.containsKey("uri") && item.containsKey("type")) {
+                        val mimeType = item.getString("type")
+                        if (mimeType != null && mimeType.startsWith("image/")) {
+                            return true
+                        }
+                    }
+                }
+            }
+            val historicMessages = extras.getParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES)
+            if (historicMessages != null) {
+                for (item in historicMessages) {
+                    if (item is Bundle && item.containsKey("uri") && item.containsKey("type")) {
+                        val mimeType = item.getString("type")
+                        if (mimeType != null && mimeType.startsWith("image/")) {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Background image uri
+        if (extras.containsKey(Notification.EXTRA_BACKGROUND_IMAGE_URI)) {
+            return true
+        }
+
+        return false
     }
 
     private fun isBundleSystemExpanded(entry: BundleEntry) : Boolean {

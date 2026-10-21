@@ -46,9 +46,12 @@ import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Parcelable;
 import android.os.SystemClock;
 import android.os.Trace;
 import android.os.UserHandle;
+import android.provider.Settings;
+import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.FloatProperty;
@@ -3351,8 +3354,50 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
 
         return (!shouldShowPublic()) && (!mOnKeyguard || allowOnKeyguard)
                 && (!hasUserChangedExpansion()
-                && (isSystemExpanded() || isSystemChildExpanded())
+                && (isSystemExpanded() || isSystemChildExpanded() || shouldAutoExpandMedia())
                 || isUserExpanded());
+    }
+
+    private boolean shouldAutoExpandMedia() {
+        if (mEntryAdapter == null) {
+            return false;
+        }
+        try {
+            if (Settings.System.getInt(mContext.getContentResolver(),
+                    Settings.System.NOTIFICATION_AUTO_EXPAND_IMAGES, 0) != 1) {
+                return false;
+            }
+            StatusBarNotification sbn = mEntryAdapter.getSbn();
+            if (sbn == null || sbn.getNotification() == null) {
+                return false;
+            }
+            Notification notification = sbn.getNotification();
+            Bundle extras = notification.extras;
+            if (extras == null) {
+                return false;
+            }
+            if (extras.containsKey(Notification.EXTRA_PICTURE)
+                    || extras.containsKey(Notification.EXTRA_PICTURE_ICON)
+                    || extras.containsKey(Notification.EXTRA_BACKGROUND_IMAGE_URI)) {
+                return true;
+            }
+            if (notification.isStyle(Notification.MessagingStyle.class)) {
+                Parcelable[] messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+                if (messages != null) {
+                    for (Parcelable p : messages) {
+                        if (p instanceof Bundle) {
+                            Bundle b = (Bundle) p;
+                            String type = b.getString("type");
+                            if (b.containsKey("uri") && type != null && type.startsWith("image/")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private boolean isSystemChildExpanded() {

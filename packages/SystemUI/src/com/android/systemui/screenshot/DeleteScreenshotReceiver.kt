@@ -17,6 +17,7 @@
 
 package com.android.systemui.screenshot
 
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -35,10 +36,22 @@ class DeleteScreenshotReceiver @Inject constructor(
     override fun onReceive(context: Context, intent: Intent) {
         val uri = intent.data ?: return
 
+        val notifId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+        val notifTag = intent.getStringExtra(EXTRA_NOTIFICATION_TAG)
+        if (notifId != -1) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(notifTag, notifId)
+        }
+
         // Delete the image from the media store
         backgroundExecutor.execute {
             context.contentResolver.delete(uri, null, null)
         }
 
+    }
+
+    companion object {
+        const val EXTRA_NOTIFICATION_ID = "notification_id"
+        const val EXTRA_NOTIFICATION_TAG = "notification_tag"
     }
 }
