@@ -129,8 +129,8 @@
             </FrameLayout>
         </FrameLayout>
 
-        <!-- Space should cover the notch (if it exists) and let other views lay out around it -->
-        <android.widget.Space
+        <!-- Camera notch drawing and spacing view -->
+        <com.android.systemui.statusbar.phone.CameraCutoutView
             android:id="@+id/cutout_space_view"
             android:layout_width="0dp"
             android:layout_height="match_parent"

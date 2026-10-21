@@ -49,6 +49,12 @@ import com.android.systemui.util.leak.RotationUtils;
 
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import android.hardware.display.DisplayManager;
+import android.provider.Settings;
+import android.view.Display;
+import android.view.ViewConfiguration;
+import android.os.UserHandle;
+import android.util.DisplayMetrics;
 
 public class PhoneStatusBarView extends FrameLayout {
     private static final String TAG = "PhoneStatusBarView";
@@ -79,8 +85,14 @@ public class PhoneStatusBarView extends FrameLayout {
      */
     private int mCutoutSideNudge = 0;
 
+    private float mBrightnessInitialX = 0f;
+    private float mBrightnessInitialY = 0f;
+    private boolean mIsBrightnessDragging = false;
+    private int mTouchSlop = 0;
+
     public PhoneStatusBarView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
     void setLongPressGestureDetector(
@@ -247,6 +259,28 @@ public class PhoneStatusBarView extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            mBrightnessInitialX = event.getRawX();
+            mBrightnessInitialY = event.getRawY();
+            mIsBrightnessDragging = false;
+        } else if (event.getAction() == MotionEvent.ACTION_MOVE && isBrightnessControlEnabled()) {
+            float dx = event.getRawX() - mBrightnessInitialX;
+            float dy = Math.abs(event.getRawY() - mBrightnessInitialY);
+            if (!mIsBrightnessDragging && Math.abs(dx) > mTouchSlop && Math.abs(dx) > dy * 1.5f) {
+                mIsBrightnessDragging = true;
+            }
+            if (mIsBrightnessDragging) {
+                handleBrightnessDrag(event);
+                return true;
+            }
+        } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+            if (mIsBrightnessDragging) {
+                handleBrightnessDrag(event);
+                mIsBrightnessDragging = false;
+                return true;
+            }
+        }
+
         // Touch events outside of the touchable regions are still received by this view. Touch
         // events started within the view should not be handled to allow app handle views behind
         // the status bar to handle the event. ACTION_MOVE and ACTION_UP events outside the
@@ -279,9 +313,55 @@ public class PhoneStatusBarView extends FrameLayout {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            mBrightnessInitialX = event.getRawX();
+            mBrightnessInitialY = event.getRawY();
+            mIsBrightnessDragging = false;
+        } else if (event.getAction() == MotionEvent.ACTION_MOVE && isBrightnessControlEnabled()) {
+            float dx = event.getRawX() - mBrightnessInitialX;
+            float dy = Math.abs(event.getRawY() - mBrightnessInitialY);
+            if (!mIsBrightnessDragging && Math.abs(dx) > mTouchSlop && Math.abs(dx) > dy * 1.5f) {
+                mIsBrightnessDragging = true;
+                return true;
+            }
+        }
         return mTouchEventHandler != null
                 ? mTouchEventHandler.onInterceptTouchEvent(event)
                 : super.onInterceptTouchEvent(event);
+    }
+
+    private void handleBrightnessDrag(MotionEvent event) {
+        float width = getWidth();
+        if (width <= 0) {
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+            width = dm != null ? dm.widthPixels : 1080f;
+        }
+        float x = Math.max(0f, Math.min(width, event.getRawX()));
+        float ratio = x / width;
+        float brightness = Math.max(0.01f, Math.min(1.0f, ratio));
+
+        int displayId = getDisplay() != null ? getDisplay().getDisplayId() : Display.DEFAULT_DISPLAY;
+        DisplayManager dm = mContext.getSystemService(DisplayManager.class);
+        if (dm != null) {
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                dm.setBrightness(displayId, brightness);
+            } else {
+                dm.setTemporaryBrightness(displayId, brightness);
+            }
+        }
+    }
+
+    private boolean isBrightnessControlEnabled() {
+        try {
+            return Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    "status_bar_brightness_control",
+                    0,
+                    UserHandle.USER_CURRENT
+            ) != 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public void updateResources() {
@@ -354,20 +434,47 @@ public class PhoneStatusBarView extends FrameLayout {
             hasCornerCutout = true;
         }
 
-        if (mDisplayCutout == null || mDisplayCutout.isEmpty() || hasCornerCutout) {
-            mCutoutSpace.setVisibility(View.GONE);
-            return;
+        boolean drawCutoutEnabled = false;
+        try {
+            drawCutoutEnabled = android.provider.Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    "status_bar_draw_camera_cutout",
+                    0,
+                    android.os.UserHandle.USER_CURRENT) == 1;
+        } catch (Exception ignored) {}
+
+        boolean isPortrait = mRotationOrientation == android.view.Surface.ROTATION_0;
+
+        if (mDisplayCutout == null || mDisplayCutout.isEmpty() || hasCornerCutout || !isPortrait) {
+            if (!drawCutoutEnabled || !isPortrait) {
+                mCutoutSpace.setVisibility(View.GONE);
+                return;
+            }
         }
 
         mCutoutSpace.setVisibility(View.VISIBLE);
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) mCutoutSpace.getLayoutParams();
 
-        Rect bounds = mDisplayCutout.getBoundingRectTop();
+        Rect bounds = (mDisplayCutout != null && !mDisplayCutout.isEmpty())
+                ? mDisplayCutout.getBoundingRectTop()
+                : new Rect();
 
         bounds.left = bounds.left + mCutoutSideNudge;
         bounds.right = bounds.right - mCutoutSideNudge;
-        lp.width = bounds.width();
-        lp.height = bounds.height();
+        int customWidth = 0;
+        try {
+            int wDp = android.provider.Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    "status_bar_camera_cutout_width",
+                    0,
+                    android.os.UserHandle.USER_CURRENT);
+            if (wDp > 0) {
+                customWidth = (int) (wDp * getResources().getDisplayMetrics().density);
+            }
+        } catch (Exception ignored) {}
+
+        lp.width = bounds.width() > 0 ? bounds.width() : (customWidth > 0 ? customWidth : (int) (37 * getResources().getDisplayMetrics().density));
+        lp.height = bounds.height() > 0 ? bounds.height() : ViewGroup.LayoutParams.MATCH_PARENT;
     }
 
     private void updateSafeInsets() {

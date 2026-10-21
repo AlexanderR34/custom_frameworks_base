@@ -967,10 +967,14 @@ public class ScreenDecorations implements
         lp.privateFlags |= WindowManager.LayoutParams.SYSTEM_FLAG_SHOW_FOR_ALL_USERS
                 | WindowManager.LayoutParams.PRIVATE_FLAG_NO_MOVE_ANIMATION;
 
-        // FLAG_SLIPPERY can only be set by trusted overlays
-        lp.privateFlags |= WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY;
+        boolean customCutout = false;
+        try {
+            customCutout = android.provider.Settings.System.getInt(
+                    android.app.ActivityThread.currentApplication().getContentResolver(),
+                    "status_bar_draw_camera_cutout", 0) == 1;
+        } catch (Exception ignored) {}
 
-        if (!DEBUG_SCREENSHOT_ROUNDED_CORNERS && excludeFromScreenshots) {
+        if (!DEBUG_SCREENSHOT_ROUNDED_CORNERS && excludeFromScreenshots && !customCutout) {
             lp.privateFlags |= WindowManager.LayoutParams.PRIVATE_FLAG_IS_ROUNDED_CORNERS_OVERLAY;
         }
 
@@ -1287,8 +1291,7 @@ public class ScreenDecorations implements
     }
 
     static boolean shouldDrawCutout(Context context) {
-        return DisplayCutout.getFillBuiltInDisplayCutout(
-                context.getResources(), context.getDisplay().getUniqueId());
+        return DisplayCutoutBaseView.shouldDrawCutout(context);
     }
 
     @VisibleForTesting
@@ -1441,6 +1444,68 @@ public class ScreenDecorations implements
             super.updateRotation(rotation);
         }
 
+        private final android.database.ContentObserver mCutoutSettingsObserver =
+                new android.database.ContentObserver(new Handler(android.os.Looper.getMainLooper())) {
+            @Override
+            public void onChange(boolean selfChange) {
+                updateCutout();
+            }
+        };
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            try {
+                android.content.ContentResolver resolver = getContext().getContentResolver();
+                resolver.registerContentObserver(
+                        android.provider.Settings.System.getUriFor("status_bar_draw_camera_cutout"),
+                        false, mCutoutSettingsObserver, android.os.UserHandle.USER_ALL);
+                resolver.registerContentObserver(
+                        android.provider.Settings.System.getUriFor("status_bar_camera_cutout_color"),
+                        false, mCutoutSettingsObserver, android.os.UserHandle.USER_ALL);
+                resolver.registerContentObserver(
+                        android.provider.Settings.System.getUriFor("status_bar_camera_cutout_style"),
+                        false, mCutoutSettingsObserver, android.os.UserHandle.USER_ALL);
+            } catch (Exception ignored) {}
+            updateCutout();
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            super.onDetachedFromWindow();
+            try {
+                getContext().getContentResolver().unregisterContentObserver(mCutoutSettingsObserver);
+            } catch (Exception ignored) {}
+        }
+
+        private void updateCustomPaint() {
+            try {
+                String colorStr = android.provider.Settings.System.getStringForUser(
+                        getContext().getContentResolver(),
+                        "status_bar_camera_cutout_color",
+                        android.os.UserHandle.USER_CURRENT);
+                int color = Color.BLACK;
+                if (!android.text.TextUtils.isEmpty(colorStr)) {
+                    try {
+                        color = Color.parseColor(colorStr);
+                    } catch (Exception ignored) {}
+                }
+                setColor(color);
+
+                int style = android.provider.Settings.System.getIntForUser(
+                        getContext().getContentResolver(),
+                        "status_bar_camera_cutout_style",
+                        0,
+                        android.os.UserHandle.USER_CURRENT);
+                if (style == 1) {
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(2.5f * getResources().getDisplayMetrics().density);
+                } else {
+                    paint.setStyle(Paint.Style.FILL);
+                }
+            } catch (Exception ignored) {}
+        }
+
         @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
         @Override
         public void updateCutout() {
@@ -1455,6 +1520,7 @@ public class ScreenDecorations implements
             cutoutPath.reset();
             int newVisible;
             if (shouldDrawCutout(getContext()) && hasCutout()) {
+                updateCustomPaint();
                 mBounds.addAll(displayInfo.displayCutout.getBoundingRects());
                 localBounds(mBoundingRect);
                 updateGravity();

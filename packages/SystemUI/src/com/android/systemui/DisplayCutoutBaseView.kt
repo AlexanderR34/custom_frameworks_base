@@ -49,7 +49,7 @@ import java.io.PrintWriter
 open class DisplayCutoutBaseView : View, RegionInterceptableView {
 
     private var shouldDrawCutout: Boolean =
-        DisplayCutout.getFillBuiltInDisplayCutout(context.resources, context.display?.uniqueId)
+        shouldDrawCutout(context)
     private var displayUniqueId: String? = null
     private var displayMode: Display.Mode? = null
     protected val location = IntArray(2)
@@ -123,8 +123,7 @@ open class DisplayCutoutBaseView : View, RegionInterceptableView {
     open fun updateDisplayUniqueId(newDisplayUniqueId: String?) {
         if (displayUniqueId != newDisplayUniqueId) {
             displayUniqueId = newDisplayUniqueId
-            shouldDrawCutout =
-                DisplayCutout.getFillBuiltInDisplayCutout(context.resources, displayUniqueId)
+            shouldDrawCutout = shouldDrawCutout(context)
             invalidate()
         }
     }
@@ -143,7 +142,7 @@ open class DisplayCutoutBaseView : View, RegionInterceptableView {
     @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
     public override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (!shouldDrawCutout) {
+        if (!shouldDrawCutout(context)) {
             return
         }
         canvas.save()
@@ -319,6 +318,21 @@ open class DisplayCutoutBaseView : View, RegionInterceptableView {
 
     companion object {
         const val HIDDEN_CAMERA_PROTECTION_SCALE = 0.0f
+
+        @JvmStatic
+        fun shouldDrawCutout(context: Context): Boolean {
+            val custom = try {
+                android.provider.Settings.System.getIntForUser(
+                    context.contentResolver,
+                    "status_bar_draw_camera_cutout",
+                    0,
+                    android.os.UserHandle.USER_CURRENT
+                ) == 1
+            } catch (e: Exception) {
+                false
+            }
+            return custom || DisplayCutout.getFillBuiltInDisplayCutout(context.resources, context.display?.uniqueId)
+        }
 
         @JvmStatic
         protected fun transformPhysicalToLogicalCoordinates(
