@@ -52,11 +52,13 @@ class MusicIslandController(
     private var mActiveController: MediaController? = null
     private var mIsFeatureEnabled = false
     private var mIsPlaying = false
+    private var mIsPausedTimedOut = false
     private var mLastPlaybackState: PlaybackState? = null
     private var mCurrentDuration: Long = 0L
 
     private val mHideRunnable = Runnable {
         Log.d(TAG, "Inactivity timeout reached, hiding island")
+        mIsPausedTimedOut = true
         mIslandView?.hideIsland()
         mPopup?.dismissWithAnimation()
     }
@@ -141,8 +143,8 @@ class MusicIslandController(
                 mIslandView?.hideIsland()
                 mPopup?.dismissWithAnimation()
             } else {
-                // Restore music island when unlocking device if media is playing
-                if (mIsPlaying && mIsFeatureEnabled) {
+                // Restore music island when unlocking device if media is playing and not timed out
+                if (mIsPlaying && mIsFeatureEnabled && !mIsPausedTimedOut) {
                     mIslandView?.showIsland()
                     mainHandler.removeCallbacks(mProgressTickRunnable)
                     mainHandler.post(mProgressTickRunnable)
@@ -225,6 +227,7 @@ class MusicIslandController(
 
         Log.d(TAG, "Music Island feature enabled: $mIsFeatureEnabled")
         if (!mIsFeatureEnabled) {
+            mIsPausedTimedOut = false
             mainHandler.removeCallbacks(mHideRunnable)
             mainHandler.removeCallbacks(mProgressTickRunnable)
             mIslandView?.hideIsland()
@@ -263,6 +266,10 @@ class MusicIslandController(
             }
         }
 
+        if (mIsPausedTimedOut && playingController?.playbackState?.state != PlaybackState.STATE_PLAYING) {
+            return
+        }
+
         if (mActiveController?.sessionToken != playingController?.sessionToken) {
             mActiveController?.unregisterCallback(mMediaCallback)
             mActiveController = playingController
@@ -285,6 +292,7 @@ class MusicIslandController(
         mPopup?.setPlayingState(mIsPlaying)
 
         if (mIsPlaying) {
+            mIsPausedTimedOut = false
             mainHandler.removeCallbacks(mHideRunnable)
             if (!mIsKeyguardShowing) {
                 mIslandView?.showIsland()
@@ -296,9 +304,16 @@ class MusicIslandController(
             mainHandler.removeCallbacks(mProgressTickRunnable)
             updatePlaybackProgress()
 
-            // Start 30 seconds timer before hiding
-            mainHandler.removeCallbacks(mHideRunnable)
-            mainHandler.postDelayed(mHideRunnable, PAUSE_HIDE_DELAY_MS)
+            if (mIsPausedTimedOut) {
+                mIslandView?.hideIsland()
+                mPopup?.dismissWithAnimation()
+                return
+            }
+
+            // Start 30 seconds timer before hiding if not already running
+            if (!mainHandler.hasCallbacks(mHideRunnable)) {
+                mainHandler.postDelayed(mHideRunnable, PAUSE_HIDE_DELAY_MS)
+            }
         }
     }
 
