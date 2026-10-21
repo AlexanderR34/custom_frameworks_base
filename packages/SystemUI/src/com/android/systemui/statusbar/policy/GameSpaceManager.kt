@@ -114,14 +114,26 @@ class GameSpaceManager @Inject constructor(
         }
 
         // 2. Direct SessionService trigger
-        if (activeGame != null) {
-            try {
-                val serviceIntent = Intent(ACTION_SERVICE_START).apply {
-                    component = ComponentName(GAMESPACE_PACKAGE, SESSION_SERVICE_CLASS)
+        try {
+            val serviceAction = if (activeGame != null) ACTION_SERVICE_START else ACTION_SERVICE_STOP
+            val serviceIntent = Intent(serviceAction).apply {
+                component = ComponentName(GAMESPACE_PACKAGE, SESSION_SERVICE_CLASS)
+                if (activeGame != null) {
                     putExtra(EXTRA_ACTIVE_GAME, activeGame)
                 }
-                context.startServiceAsUser(serviceIntent, UserHandle.SYSTEM)
-            } catch (e: Exception) {
+            }
+            context.startServiceAsUser(serviceIntent, UserHandle.SYSTEM)
+        } catch (e: Exception) {
+        }
+
+        if (activeGame == null) {
+            runCatching {
+                Settings.Secure.putStringForUser(
+                    context.contentResolver,
+                    "gamespace_active_game",
+                    "",
+                    UserHandle.USER_CURRENT
+                )
             }
         }
     }
@@ -172,6 +184,7 @@ class GameSpaceManager @Inject constructor(
         private const val ACTION_GAME_START = "io.chaldeaprjkt.gamespace.action.GAME_START"
         private const val ACTION_GAME_STOP = "io.chaldeaprjkt.gamespace.action.GAME_STOP"
         private const val ACTION_SERVICE_START = "game_start"
+        private const val ACTION_SERVICE_STOP = "game_stop"
         private const val GAMESPACE_PACKAGE = "io.chaldeaprjkt.gamespace"
         private const val SESSION_SERVICE_CLASS = "io.chaldeaprjkt.gamespace.gamebar.SessionService"
         private const val EXTRA_CALLER_NAME = "source"

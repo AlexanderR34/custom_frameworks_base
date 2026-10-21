@@ -34,19 +34,23 @@ private val splitShadeUserActionResult = UserActionResult(Scenes.Shade, ToSplitS
 fun singleShadeActions(
     isDownFromTopEdgeEnabled: Boolean = true,
     requireTwoPointersForTopEdgeForQs: Boolean = false,
+    smartPullDown: Boolean = false,
+    hasNotifications: Boolean = true,
 ): Array<Pair<UserAction, UserActionResult>> {
+    val forceQs = smartPullDown && !hasNotifications
+    val mainResult = if (forceQs) quickSettingsSceneUserActionResult else singleShadeUserActionResult
 
     return buildList {
-            // Swiping down, not from the edge, always goes to shade.
-            add(Swipe.Down to singleShadeUserActionResult)
-            add(Swipe.Down(pointerCount = 2) to singleShadeUserActionResult)
+            // Swiping down, not from the edge, goes to QS if forceQs, else shade.
+            add(Swipe.Down to mainResult)
+            add(Swipe.Down(pointerCount = 2) to mainResult)
             if (isDownFromTopEdgeEnabled) {
                 add(
                     swipeDownFromTopEdge() to
-                        if (requireTwoPointersForTopEdgeForQs) {
-                            singleShadeUserActionResult
-                        } else {
+                        if (forceQs || !requireTwoPointersForTopEdgeForQs) {
                             quickSettingsSceneUserActionResult
+                        } else {
+                            singleShadeUserActionResult
                         }
                 )
                 add(swipeDownFromTopEdge(pointerCount = 2) to quickSettingsSceneUserActionResult)
@@ -75,11 +79,30 @@ fun dualShadeActions(
         if (cr != null) android.provider.Settings.System.getInt(cr, "dual_shade_invert_sides", 0) == 1 else false
     } catch (e: Exception) {
         false
-    }
+    },
+    smartPullDown: Boolean = try {
+        val cr = android.app.ActivityThread.currentApplication()?.contentResolver
+        if (cr != null) android.provider.Settings.System.getInt(cr, "dual_shade_smart_pull_down", 0) == 1 else false
+    } catch (e: Exception) {
+        false
+    },
+    hasNotifications: Boolean = true,
 ): Array<Pair<UserAction, UserActionResult>> {
     return buildList {
             allPointerTypesButMouse {
-                if (invertSides) {
+                if (smartPullDown && !hasNotifications) {
+                    // Smart Pull-down: If there are no pending notifications,
+                    // swiping down from any side or area opens Quick Settings directly!
+                    add(
+                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf, pointerType = it) to
+                            Overlays.QuickSettingsShade
+                    )
+                    add(
+                        Swipe.Down(fromSource = SceneContainerArea.TopEdgeEndHalf, pointerType = it) to
+                            Overlays.QuickSettingsShade
+                    )
+                    add(Swipe.Down(pointerType = it) to Overlays.QuickSettingsShade)
+                } else if (invertSides) {
                     add(
                         Swipe.Down(fromSource = SceneContainerArea.TopEdgeStartHalf, pointerType = it) to
                             Overlays.QuickSettingsShade

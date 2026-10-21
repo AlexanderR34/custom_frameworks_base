@@ -107,6 +107,37 @@ constructor(
                 }
             }
         )
+
+        try {
+            val cr = android.app.ActivityThread.currentApplication()?.contentResolver
+            if (cr != null) {
+                val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        mainExecutor.execute {
+                            mediaListeners.forEach { (key, listener) ->
+                                if (!listener.isPlaying()) {
+                                    val newTimeout = listener.getPausedTimeoutMs()
+                                    listener.cancellation?.run()
+                                    if (newTimeout == Long.MAX_VALUE) {
+                                        listener.cancellation = null
+                                        listener.expiration = Long.MAX_VALUE
+                                    } else {
+                                        listener.expiration = systemClock.elapsedRealtime() + newTimeout
+                                        listener.cancellation = mainExecutor.executeDelayed({ listener.doTimeout() }, newTimeout)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                cr.registerContentObserver(
+                    android.provider.Settings.System.getUriFor("qs_media_card_timeout"),
+                    false,
+                    observer,
+                    android.os.UserHandle.USER_ALL
+                )
+            }
+        } catch (e: Exception) {}
     }
 
     override fun onMediaDataLoaded(
@@ -182,7 +213,6 @@ constructor(
         // Resume controls may have null token
         private var mediaController: MediaController? = null
         var cancellation: Runnable? = null
-            private set
 
         fun Int.isPlaying() = isPlayingState(this)
 
@@ -278,8 +308,13 @@ constructor(
                     if (currentResumption == true) {
                         RESUME_MEDIA_TIMEOUT
                     } else {
-                        PAUSED_MEDIA_TIMEOUT
+                        getPausedTimeoutMs()
                     }
+                if (timeout == Long.MAX_VALUE) {
+                    expiration = Long.MAX_VALUE
+                    cancellation = null
+                    return
+                }
                 expiration = systemClock.elapsedRealtime() + timeout
                 cancellation = mainExecutor.executeDelayed({ doTimeout() }, timeout)
             } else {
@@ -289,6 +324,25 @@ constructor(
                     uiExecutor.execute { timeoutCallback(key, timedOut) }
                 }
             }
+        }
+
+        fun getPausedTimeoutMs(): Long {
+            val cr = android.app.ActivityThread.currentApplication()?.contentResolver
+            if (cr != null) {
+                try {
+                    val sec = android.provider.Settings.System.getIntForUser(
+                        cr,
+                        "qs_media_card_timeout",
+                        -1,
+                        android.os.UserHandle.USER_CURRENT
+                    )
+                    if (sec == 0) return Long.MAX_VALUE
+                    if (sec > 0) return TimeUnit.SECONDS.toMillis(sec.toLong())
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+            return PAUSED_MEDIA_TIMEOUT
         }
 
         fun doTimeout() {

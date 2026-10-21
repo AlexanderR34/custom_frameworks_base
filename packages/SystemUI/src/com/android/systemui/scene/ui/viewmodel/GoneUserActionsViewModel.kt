@@ -18,12 +18,29 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 
-class GoneUserActionsViewModel
-@AssistedInject
-constructor(
+import androidx.annotation.VisibleForTesting
+import com.android.systemui.statusbar.notification.domain.interactor.ActiveNotificationsInteractor
+import kotlinx.coroutines.flow.Flow
+
+class GoneUserActionsViewModel private constructor(
     private val shadeModeInteractor: ShadeModeInteractor,
     @ShadeDisplayAware private val resources: Resources,
+    private val activeNotificationsInteractor: ActiveNotificationsInteractor?,
+    @Suppress("UNUSED_PARAMETER") marker: Unit,
 ) : UserActionsViewModel() {
+
+    @AssistedInject
+    constructor(
+        shadeModeInteractor: ShadeModeInteractor,
+        @ShadeDisplayAware resources: Resources,
+        activeNotificationsInteractor: ActiveNotificationsInteractor,
+    ) : this(shadeModeInteractor, resources, activeNotificationsInteractor, Unit)
+
+    @VisibleForTesting
+    constructor(
+        shadeModeInteractor: ShadeModeInteractor,
+        @ShadeDisplayAware resources: Resources,
+    ) : this(shadeModeInteractor, resources, null, Unit)
 
     override suspend fun hydrateActions(setActions: (Map<UserAction, UserActionResult>) -> Unit) {
         val twoFingerSwipeEnabled =
@@ -45,14 +62,44 @@ constructor(
             flowOf(false)
         }
 
-        combine(shadeModeInteractor.shadeMode, invertFlow) { shadeMode, invertSides ->
+        val smartPullDownFlow = if (cr != null) {
+            callbackFlow {
+                val uri = android.provider.Settings.System.getUriFor("dual_shade_smart_pull_down")
+                val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        trySend(android.provider.Settings.System.getInt(cr, "dual_shade_smart_pull_down", 0) == 1)
+                    }
+                }
+                cr.registerContentObserver(uri, false, observer)
+                trySend(android.provider.Settings.System.getInt(cr, "dual_shade_smart_pull_down", 0) == 1)
+                awaitClose { cr.unregisterContentObserver(observer) }
+            }
+        } else {
+            flowOf(false)
+        }
+
+        val notifFlow: Flow<Boolean> = activeNotificationsInteractor?.areAnyNotificationsPresent ?: flowOf(true)
+
+        combine(
+            shadeModeInteractor.shadeMode,
+            invertFlow,
+            smartPullDownFlow,
+            notifFlow,
+        ) { shadeMode, invertSides, smartPullDown, hasNotifications ->
             when (shadeMode) {
-                ShadeMode.Single -> singleShadeActions(requireTwoPointersForTopEdgeForQs = true)
+                ShadeMode.Single ->
+                    singleShadeActions(
+                        requireTwoPointersForTopEdgeForQs = true,
+                        smartPullDown = smartPullDown,
+                        hasNotifications = hasNotifications,
+                    )
                 ShadeMode.Split -> splitShadeActions()
                 ShadeMode.Dual ->
                     dualShadeActions(
                         twoFingerSwipeEnabled = twoFingerSwipeEnabled,
                         invertSides = invertSides,
+                        smartPullDown = smartPullDown,
+                        hasNotifications = hasNotifications,
                     )
             }.associate { it }
         }.collect { setActions(it) }
