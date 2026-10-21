@@ -6437,6 +6437,23 @@ public final class Settings {
         public static final String NOTIFICATION_AUTO_EXPAND_IMAGES = "notification_auto_expand_images";
 
         /**
+         * Color mode for the status bar chips progress bar (media & download).
+         * 0 = Dynamic Monet / App artwork (Default)
+         * 1 = Rainbow mode (Continuous animated chromatic gradient)
+         * 2 = Custom HEX color
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CHIPS_PROGRESS_BAR_COLOR_MODE = "status_bar_chips_progress_bar_color_mode";
+
+        /**
+         * Custom HEX color code when progress bar color mode is 2 (e.g. "#00E676").
+         * @hide
+         */
+        @Readable
+        public static final String STATUS_BAR_CHIPS_PROGRESS_BAR_CUSTOM_COLOR = "status_bar_chips_progress_bar_custom_color";
+
+        /**
          * Show pointer location on screen?
          * 0 = no
          * 1 = yes
@@ -7629,6 +7646,8 @@ public final class Settings {
             PRIVATE_SETTINGS.add(DOLBY_BASS_ENHANCER);
             PRIVATE_SETTINGS.add(DOLBY_VOLUME_LEVELER);
             PRIVATE_SETTINGS.add(DOLBY_STEREO_WIDENING);
+            PRIVATE_SETTINGS.add(STATUS_BAR_CHIPS_PROGRESS_BAR_COLOR_MODE);
+            PRIVATE_SETTINGS.add(STATUS_BAR_CHIPS_PROGRESS_BAR_CUSTOM_COLOR);
         }
 
         /**
