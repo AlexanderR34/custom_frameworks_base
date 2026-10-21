@@ -18,6 +18,8 @@ package com.android.systemui.statusbar.chips.ui.compose
 
 import android.annotation.IdRes
 import android.content.res.ColorStateList
+import android.os.UserHandle
+import android.provider.Settings
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -56,8 +58,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -254,8 +260,7 @@ private fun ChipBody(
                     animationSpec = tween(durationMillis = 350, easing = LinearEasing),
                     label = "mediaPlaybackProgress",
                 )
-                val progressColor = Color(model.colors.text(context))
-                val trackColor = progressColor.copy(alpha = 0.28f)
+                val baseProgressColor = Color(model.colors.text(context))
 
                 androidx.compose.ui.layout.Layout(
                     content = {
@@ -265,23 +270,13 @@ private fun ChipBody(
                             colors = model.colors,
                             modifier = Modifier.sysuiResTag(STATUS_BAR_CHIP_CONTENT_ID),
                         )
-                        Box(
-                            modifier =
-                                Modifier
-                                    .padding(start = startPadding, end = endPadding)
-                                    .height(2.dp)
-                                    .clip(RoundedCornerShape(1.dp))
-                                    .background(trackColor)
-                        ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth(fraction = animatedProgress)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(1.dp))
-                                        .background(progressColor)
-                            )
-                        }
+                        SquigglyProgressBar(
+                            progress = animatedProgress,
+                            baseColor = baseProgressColor,
+                            modifier = Modifier
+                                .padding(start = startPadding, end = endPadding)
+                                .height(6.dp),
+                        )
                     },
                     modifier = Modifier.padding(bottom = 1.dp)
                 ) { measurables, constraints ->
@@ -290,12 +285,12 @@ private fun ChipBody(
                     val width = contentPlaceable.width
 
                     // Measure progress bar to exactly match content width
-                    val spacerHeight = 1.5.dp.roundToPx()
+                    val spacerHeight = 1.dp.roundToPx()
                     val barPlaceable = if (measurables.size > 1) {
                         measurables[1].measure(
                             androidx.compose.ui.unit.Constraints.fixed(
                                 width = width,
-                                height = 2.dp.roundToPx()
+                                height = 6.dp.roundToPx()
                             )
                         )
                     } else null
@@ -464,3 +459,145 @@ private const val TAG = "OngoingActivityChip"
 // Used for end-to-end tests - if changing this, be sure to change the status bar e2e tests also.
 private const val STATUS_BAR_CHIP_CONTENT_ID = "ongoing_activity_chip_content"
 @IdRes private val CUSTOM_ICON_VIEW_ID = R.id.ongoing_activity_chip_custom_icon
+
+/**
+ * Animated Squiggly progress bar for media and download chips.
+ * Supports:
+ * 1. Fluid sine-wave motion while active.
+ * 2. Side and endpoint neon glow.
+ * 3. Color modes: Monet/Artwork (0), Rainbow animated gradient (1), Custom HEX (2).
+ */
+@Composable
+private fun SquigglyProgressBar(
+    progress: Float,
+    baseColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val colorMode = remember {
+        Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.STATUS_BAR_CHIPS_PROGRESS_BAR_COLOR_MODE,
+            0,
+            UserHandle.myUserId()
+        )
+    }
+
+    // Infinite transition for fluid wave motion and rainbow color cycle
+    val infiniteTransition = rememberInfiniteTransition(label = "squigglyWaveTransition")
+    val phaseOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6.2831853f * 2f, // 2 full cycles
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "phaseOffset",
+    )
+
+    val rainbowHue by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "rainbowHue",
+    )
+
+    val resolvedColor = remember(colorMode, rainbowHue, baseColor) {
+        when (colorMode) {
+            1 -> {
+                // Rainbow mode: HSV hue rotation
+                val hsv = floatArrayOf(rainbowHue, 0.85f, 1.0f)
+                Color(android.graphics.Color.HSVToColor(hsv))
+            }
+            2 -> {
+                // Custom HEX color
+                val hex = Settings.System.getStringForUser(
+                    context.contentResolver,
+                    Settings.System.STATUS_BAR_CHIPS_PROGRESS_BAR_CUSTOM_COLOR,
+                    UserHandle.myUserId()
+                )
+                if (!hex.isNullOrBlank()) {
+                    try {
+                        Color(android.graphics.Color.parseColor(hex.trim()))
+                    } catch (_: Exception) {
+                        baseColor
+                    }
+                } else {
+                    baseColor
+                }
+            }
+            else -> baseColor
+        }
+    }
+
+    val trackColor = resolvedColor.copy(alpha = 0.25f)
+    val glowColor = resolvedColor.copy(alpha = 0.40f)
+
+    Canvas(modifier = modifier) {
+        val totalWidth = size.width
+        val totalHeight = size.height
+        val centerY = totalHeight / 2f
+        val strokeWidthPx = 2.dp.toPx()
+        val glowStrokeWidthPx = 4.5.dp.toPx()
+
+        // 1. Draw background track (flat line)
+        drawLine(
+            color = trackColor,
+            start = androidx.compose.ui.geometry.Offset(0f, centerY),
+            end = androidx.compose.ui.geometry.Offset(totalWidth, centerY),
+            strokeWidth = strokeWidthPx,
+            cap = StrokeCap.Round,
+        )
+
+        val progressPx = (totalWidth * progress.coerceIn(0f, 1f))
+        if (progressPx <= 0.5f) return@Canvas
+
+        // 2. Build squiggly wave path up to progressPx
+        val waveLengthPx = 16.dp.toPx()
+        val amplitudePx = 1.6.dp.toPx()
+        val wavePath = Path()
+        wavePath.moveTo(0f, centerY)
+
+        var x = 0f
+        val step = 2.dp.toPx()
+        while (x <= progressPx) {
+            val angle = ((x / waveLengthPx) * 2f * Math.PI.toFloat()) - phaseOffset
+            val y = centerY + (kotlin.math.sin(angle) * amplitudePx)
+            wavePath.lineTo(x, y)
+            x += step
+        }
+        val endAngle = ((progressPx / waveLengthPx) * 2f * Math.PI.toFloat()) - phaseOffset
+        val endY = centerY + (kotlin.math.sin(endAngle) * amplitudePx)
+        wavePath.lineTo(progressPx, endY)
+
+        // 3. Draw neon glow layer (wider stroke with soft alpha)
+        drawPath(
+            path = wavePath,
+            color = glowColor,
+            style = Stroke(width = glowStrokeWidthPx, cap = StrokeCap.Round),
+        )
+
+        // 4. Draw vibrant main wave
+        drawPath(
+            path = wavePath,
+            color = resolvedColor,
+            style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
+        )
+
+        // 5. Draw neon tip / leading glow dot at the progress head
+        drawCircle(
+            color = glowColor,
+            radius = 3.5.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(progressPx, endY),
+        )
+        drawCircle(
+            color = resolvedColor,
+            radius = 1.8.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(progressPx, endY),
+        )
+    }
+}
+

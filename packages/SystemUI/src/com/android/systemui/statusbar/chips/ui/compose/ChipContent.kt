@@ -16,6 +16,7 @@
 
 package com.android.systemui.statusbar.chips.ui.compose
 
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -129,54 +130,29 @@ fun ChipContent(
                     style = textStyle,
                     softWrap = false,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier =
-                        modifier.hideTextIfDoesNotFit(
-                            text = text,
-                            textStyle = textStyle,
-                            textMeasurer = textMeasurer,
-                            maxTextWidth = maxTextWidth,
-                            startPadding = startPadding,
-                            endPadding = endPadding,
-                        ),
+                        modifier
+                            .padding(start = startPadding, end = endPadding)
+                            .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200),
                 )
             }
         }
 
         is OngoingActivityChipModel.Content.TextVariants -> {
             val textVariants = viewModel.textVariants
+            val fullText = textVariants.firstOrNull() ?: ""
 
             BoxWithConstraints(modifier = modifier) {
-                val horizontalPadding = startPadding + endPadding
-                val maxWidth =
-                    minOf(
-                            with(density) { maxTextWidth.roundToPx() },
-                            (constraints.maxWidth -
-                                with(density) { horizontalPadding.roundToPx() }),
-                        )
-                        .coerceAtLeast(constraints.minWidth)
-
-                // Look for a text variant that fits, respecting order of preference.
-                val fittingText =
-                    textVariants.firstOrNull { variant ->
-                        val result =
-                            textMeasurer.measure(
-                                text = variant,
-                                style = textStyle,
-                                softWrap = false,
-                            )
-                        result.size.width <= maxWidth
-                    } ?: textVariants.lastOrNull()
-
-                if (fittingText != null) {
+                if (fullText.isNotBlank()) {
                     Text(
-                        text = fittingText,
+                        text = fullText,
                         color = textColor,
                         style = textStyle,
                         softWrap = false,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = startPadding, end = endPadding),
+                        modifier = Modifier
+                            .padding(start = startPadding, end = endPadding)
+                            .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200),
                     )
                 }
             }
