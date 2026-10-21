@@ -6454,6 +6454,15 @@ public final class Settings {
         public static final String STATUS_BAR_CHIPS_PROGRESS_BAR_CUSTOM_COLOR = "status_bar_chips_progress_bar_custom_color";
 
         /**
+         * Whether to enable animated Monet ambient glow as background across Settings.
+         * 0 = disabled (Default)
+         * 1 = enabled
+         * @hide
+         */
+        @Readable
+        public static final String SETTINGS_AMBIENT_GLOW_ENABLED = "settings_ambient_glow_enabled";
+
+        /**
          * Show pointer location on screen?
          * 0 = no
          * 1 = yes
@@ -7648,6 +7657,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(DOLBY_STEREO_WIDENING);
             PRIVATE_SETTINGS.add(STATUS_BAR_CHIPS_PROGRESS_BAR_COLOR_MODE);
             PRIVATE_SETTINGS.add(STATUS_BAR_CHIPS_PROGRESS_BAR_CUSTOM_COLOR);
+            PRIVATE_SETTINGS.add(SETTINGS_AMBIENT_GLOW_ENABLED);
         }
 
         /**
