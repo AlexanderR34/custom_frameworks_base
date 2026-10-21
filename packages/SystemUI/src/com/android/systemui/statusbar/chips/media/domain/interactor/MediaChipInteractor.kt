@@ -70,6 +70,7 @@ constructor(
     private var activeController: MediaController? = null
     private var isFeatureEnabled = true
     private var isKeyguardShowing = false
+    private var isPausedTimedOut = false
     private var currentDuration: Long = 0L
     private var localPlaybackStartTime: Long = 0L
     private var cachedArtworkBitmap: Bitmap? = null
@@ -77,6 +78,7 @@ constructor(
     private var cachedArtistName: String? = null
 
     private val hideRunnable = Runnable {
+        isPausedTimedOut = true
         _mediaState.value = MediaChipModel.Inactive
     }
 
@@ -153,6 +155,18 @@ constructor(
                 settingsObserver,
                 UserHandle.USER_ALL,
             )
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(SETTING_MEDIA_TIMEOUT),
+                false,
+                settingsObserver,
+                UserHandle.USER_ALL,
+            )
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor("qs_media_card_timeout"),
+                false,
+                settingsObserver,
+                UserHandle.USER_ALL,
+            )
         } catch (ignored: Exception) {}
 
         keyguardStateController.addCallback(keyguardCallback)
@@ -215,6 +229,11 @@ constructor(
                                 }
                             }
                         } catch (e: Exception) {}
+                    }
+                    if (data.isPlaying == true) {
+                        isPausedTimedOut = false
+                    } else if (isPausedTimedOut) {
+                        return
                     }
                     mainHandler.post { updateMediaState() }
                 }
@@ -324,6 +343,10 @@ constructor(
             return
         }
 
+        if (isPausedTimedOut && playingController.playbackState?.state != PlaybackState.STATE_PLAYING) {
+            return
+        }
+
         if (activeController?.sessionToken != playingController.sessionToken) {
             activeController?.unregisterCallback(mediaCallback)
             activeController = playingController
@@ -339,12 +362,22 @@ constructor(
 
     private fun getMediaTimeoutSeconds(): Int {
         return try {
-            Settings.System.getIntForUser(
+            val qsTimeout = Settings.System.getIntForUser(
                 context.contentResolver,
-                SETTING_MEDIA_TIMEOUT,
-                DEFAULT_PAUSE_HIDE_DELAY_SECONDS,
+                "qs_media_card_timeout",
+                -1,
                 UserHandle.USER_CURRENT,
             )
+            if (qsTimeout != -1) {
+                qsTimeout
+            } else {
+                Settings.System.getIntForUser(
+                    context.contentResolver,
+                    SETTING_MEDIA_TIMEOUT,
+                    DEFAULT_PAUSE_HIDE_DELAY_SECONDS,
+                    UserHandle.USER_CURRENT,
+                )
+            }
         } catch (e: Exception) {
             DEFAULT_PAUSE_HIDE_DELAY_SECONDS
         }
@@ -371,6 +404,7 @@ constructor(
 
         val isPlaying = playbackStateVal == PlaybackState.STATE_PLAYING
         if (isPlaying) {
+            isPausedTimedOut = false
             mainHandler.removeCallbacks(hideRunnable)
             updateMediaState()
             mainHandler.removeCallbacks(progressTickRunnable)
@@ -378,12 +412,18 @@ constructor(
         } else {
             localPlaybackStartTime = 0L
             mainHandler.removeCallbacks(progressTickRunnable)
+            if (isPausedTimedOut) {
+                _mediaState.value = MediaChipModel.Inactive
+                return
+            }
             updateMediaState()
-            mainHandler.removeCallbacks(hideRunnable)
             val timeoutSecs = getMediaTimeoutSeconds()
             if (timeoutSecs > 0) {
-                mainHandler.postDelayed(hideRunnable, timeoutSecs * 1000L)
+                if (!mainHandler.hasCallbacks(hideRunnable)) {
+                    mainHandler.postDelayed(hideRunnable, timeoutSecs * 1000L)
+                }
             } else {
+                isPausedTimedOut = true
                 _mediaState.value = MediaChipModel.Inactive
             }
         }
@@ -420,8 +460,15 @@ constructor(
             return
         }
 
-        val metadata = controller.metadata
         val isPlaying = stateVal == PlaybackState.STATE_PLAYING && (playbackState.playbackSpeed > 0f || playbackState.position >= 0)
+        if (isPlaying) {
+            isPausedTimedOut = false
+        } else if (isPausedTimedOut) {
+            _mediaState.value = MediaChipModel.Inactive
+            return
+        }
+
+        val metadata = controller.metadata
 
         var position = playbackState.position
         if (position >= 0) {

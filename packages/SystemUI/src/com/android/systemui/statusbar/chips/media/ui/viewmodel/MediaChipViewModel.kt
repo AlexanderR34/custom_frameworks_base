@@ -193,6 +193,13 @@ constructor(
                 }
             }
 
+        val progressFraction =
+            if (state.durationMs > 0 && state.playbackPositionMs >= 0) {
+                (state.playbackPositionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                null
+            }
+
         return OngoingActivityChipModel.Active(
             key = key,
             managingPackageName = state.packageName,
@@ -200,6 +207,7 @@ constructor(
             content = content,
             colors = colors,
             clickBehavior = clickBehavior,
+            playbackProgressFraction = progressFraction,
         )
     }
 

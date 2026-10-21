@@ -128,6 +128,15 @@ constructor(
                 isShowingHeadsUpFromChipTap = isShowingHeadsUp,
             )
 
+        val progressFraction = when {
+            state.max > 0 -> (state.progress.toFloat() / state.max.toFloat()).coerceIn(0f, 1f)
+            state.progressText != null && state.progressText.contains("%") -> {
+                val pct = Regex("""(\d{1,3})""").find(state.progressText)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                pct?.let { (it.toFloat() / 100f).coerceIn(0f, 1f) }
+            }
+            else -> null
+        }
+
         return OngoingActivityChipModel.Active(
             key = key,
             notificationKey = state.notificationKey,
@@ -136,6 +145,7 @@ constructor(
             content = content,
             colors = colors,
             clickBehavior = clickBehavior,
+            playbackProgressFraction = progressFraction,
         )
     }
 

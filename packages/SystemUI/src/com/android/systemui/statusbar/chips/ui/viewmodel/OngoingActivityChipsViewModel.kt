@@ -37,6 +37,7 @@ import com.android.systemui.statusbar.chips.bluetooth.ui.viewmodel.BluetoothChip
 import com.android.systemui.statusbar.chips.call.ui.viewmodel.CallChipViewModel
 import com.android.systemui.statusbar.chips.casttootherdevice.ui.viewmodel.CastToOtherDeviceChipViewModel
 import com.android.systemui.statusbar.chips.download.ui.viewmodel.DownloadChipViewModel
+import com.android.systemui.statusbar.chips.flashlight.ui.viewmodel.FlashlightChipViewModel
 import com.android.systemui.statusbar.chips.hotspot.ui.viewmodel.HotspotChipViewModel
 import com.android.systemui.statusbar.chips.media.ui.viewmodel.MediaChipViewModel
 import com.android.systemui.statusbar.chips.navigation.ui.viewmodel.NavigationChipViewModel
@@ -86,6 +87,7 @@ constructor(
     timerChipViewModel: TimerChipViewModel,
     hotspotChipViewModel: HotspotChipViewModel,
     bluetoothChipViewModel: BluetoothChipViewModel,
+    flashlightChipViewModel: FlashlightChipViewModel,
     notifChipsViewModel: NotifChipsViewModel,
     @DisplayAware displayStateInteractor: DisplayStateInteractor,
     private val screenCaptureRecordFeaturesInteractor: ScreenCaptureRecordFeaturesInteractor,
@@ -149,6 +151,7 @@ constructor(
         val download: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val media: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val bluetooth: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val flashlight: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val notifs: List<OngoingActivityChipModel.Active> = emptyList(),
     )
 
@@ -167,6 +170,7 @@ constructor(
         val download: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val media: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val bluetooth: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
+        val flashlight: OngoingActivityChipModel = OngoingActivityChipModel.Inactive(),
         val notifs: List<OngoingActivityChipModel.Active> = emptyList(),
     )
 
@@ -214,18 +218,24 @@ constructor(
 
     private val appChips: Flow<AppChips> =
         combine(
-            navigationChipViewModel.chip,
-            hotspotChipViewModel.chip,
-            downloadChipViewModel.chip,
+            combine(
+                navigationChipViewModel.chip,
+                hotspotChipViewModel.chip,
+                downloadChipViewModel.chip,
+            ) { navigation, hotspot, download ->
+                Triple(navigation, hotspot, download)
+            },
             mediaChipViewModel.chip,
             bluetoothChipViewModel.chip,
-        ) { navigation, hotspot, download, media, bluetooth ->
+            flashlightChipViewModel.chip,
+        ) { (navigation, hotspot, download), media, bluetooth, flashlight ->
             AppChips(
                 navigation,
                 hotspot,
                 download,
                 media,
                 bluetooth,
+                flashlight,
                 emptyList(),
             )
         }.combine(notifChipsViewModel.chips) { chips, notifs ->
@@ -247,6 +257,7 @@ constructor(
                 app.download,
                 app.media,
                 app.bluetooth,
+                app.flashlight,
                 app.notifs,
             )
             ChipBundle(
@@ -261,6 +272,7 @@ constructor(
                 download = app.download,
                 media = app.media,
                 bluetooth = app.bluetooth,
+                flashlight = app.flashlight,
                 notifs = app.notifs,
             )
         }
@@ -282,6 +294,7 @@ constructor(
         download: OngoingActivityChipModel,
         media: OngoingActivityChipModel,
         bluetooth: OngoingActivityChipModel,
+        flashlight: OngoingActivityChipModel,
         notifs: List<OngoingActivityChipModel.Active>,
     ) {
         logger.log(
@@ -584,6 +597,7 @@ constructor(
         val downloadChip = if (isChipEnabled(SETTING_ENABLE_DOWNLOAD)) bundle.download else OngoingActivityChipModel.Inactive()
         val mediaChip = if (isChipEnabled(SETTING_ENABLE_MEDIA)) bundle.media else OngoingActivityChipModel.Inactive()
         val btChip = if (isChipEnabled(SETTING_ENABLE_BLUETOOTH)) bundle.bluetooth else OngoingActivityChipModel.Inactive()
+        val flashlightChip = if (isChipEnabled(SETTING_ENABLE_FLASHLIGHT)) bundle.flashlight else OngoingActivityChipModel.Inactive()
         val isBtLowBattery = (btChip as? OngoingActivityChipModel.Active)?.colors is ColorsModel.Red
         val specializedChips =
             if (isBtLowBattery) {
@@ -596,6 +610,7 @@ constructor(
                     shareToAppChip,
                     castChip,
                     timerChip,
+                    flashlightChip,
                     navChip,
                     downloadChip,
                     hotspotChip,
@@ -609,6 +624,7 @@ constructor(
                     shareToAppChip,
                     castChip,
                     timerChip,
+                    flashlightChip,
                     navChip,
                     downloadChip,
                     hotspotChip,
@@ -628,7 +644,7 @@ constructor(
             .toSet()
 
         val isMediaChipActive = specializedChips.filterIsInstance<OngoingActivityChipModel.Active>().any { it.key.startsWith("mediaChip-") }
-        val notifsChips = if (isChipEnabled(SETTING_ENABLE_NOTIFS)) bundle.notifs else emptyList()
+        val notifsChips = if (isChipEnabled(SETTING_ENABLE_NOTIFS, 0)) bundle.notifs else emptyList()
         val filteredNotifsChips = notifsChips.filter { notifChip ->
             val pkg = notifChip.managingPackageName ?: ""
             val isBrowserPkg = pkg.contains("brave") ||
@@ -691,6 +707,7 @@ constructor(
         const val SETTING_ENABLE_DOWNLOAD = "status_bar_chip_enable_download"
         const val SETTING_ENABLE_MEDIA = "status_bar_chip_enable_media"
         const val SETTING_ENABLE_BLUETOOTH = "status_bar_chip_enable_bluetooth"
+        const val SETTING_ENABLE_FLASHLIGHT = "status_bar_chip_enable_flashlight"
         const val SETTING_ENABLE_NOTIFS = "status_bar_chip_enable_notifs"
 
         const val SETTING_COLOR_CAM_MIC = "status_bar_chips_color_cam_mic"

@@ -25,6 +25,7 @@ import com.android.systemui.statusbar.chips.bluetooth.ui.viewmodel.bluetoothChip
 import com.android.systemui.statusbar.chips.call.ui.viewmodel.callChipViewModel
 import com.android.systemui.statusbar.chips.casttootherdevice.ui.viewmodel.castToOtherDeviceChipViewModel
 import com.android.systemui.statusbar.chips.download.ui.viewmodel.downloadChipViewModel
+import com.android.systemui.statusbar.chips.flashlight.ui.viewmodel.flashlightChipViewModel
 import com.android.systemui.statusbar.chips.hotspot.ui.viewmodel.hotspotChipViewModel
 import com.android.systemui.statusbar.chips.media.ui.viewmodel.mediaChipViewModel
 import com.android.systemui.statusbar.chips.navigation.ui.viewmodel.navigationChipViewModel
@@ -51,6 +52,7 @@ val Kosmos.ongoingActivityChipsViewModel: OngoingActivityChipsViewModel by
             timerChipViewModel = timerChipViewModel,
             hotspotChipViewModel = hotspotChipViewModel,
             bluetoothChipViewModel = bluetoothChipViewModel,
+            flashlightChipViewModel = flashlightChipViewModel,
             notifChipsViewModel = notifChipsViewModel,
             displayStateInteractor = displayStateInteractor,
             screenCaptureRecordFeaturesInteractor = screenCaptureRecordFeaturesInteractor,

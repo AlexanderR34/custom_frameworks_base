@@ -96,6 +96,8 @@ sealed class OngoingActivityChipModel {
          * a single chip.
          */
         val instanceId: InstanceId? = null,
+        /** Progress of media playback between 0f and 1f, or null if not applicable. */
+        val playbackProgressFraction: Float? = null,
     ) : OngoingActivityChipModel() {
         init {
             if (content == Content.IconOnly && icon == null) {

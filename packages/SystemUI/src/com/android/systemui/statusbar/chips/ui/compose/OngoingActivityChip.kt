@@ -27,6 +27,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -35,8 +36,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -225,12 +231,89 @@ private fun ChipBody(
 
         val isIconOnly = model.content is OngoingActivityChipModel.Content.IconOnly
         if (!isIconOnly) {
-            ChipContent(
-                viewModel = model.content,
-                icon = model.icon,
-                colors = model.colors,
-                modifier = Modifier.sysuiResTag(STATUS_BAR_CHIP_CONTENT_ID),
-            )
+            val progressFraction = model.playbackProgressFraction
+            if (progressFraction != null) {
+                val context = LocalContext.current
+                val chipIcon = model.icon
+                val startPadding =
+                    if (chipIcon != null && !chipIcon.hasEmbeddedPadding) {
+                        dimensionResource(id = R.dimen.ongoing_activity_chip_icon_text_padding)
+                    } else {
+                        0.dp
+                    }
+                val endPadding =
+                    if (model.icon?.hasEmbeddedPadding == true) {
+                        dimensionResource(
+                            id = R.dimen.ongoing_activity_chip_text_end_padding_for_embedded_padding_icon
+                        )
+                    } else {
+                        0.dp
+                    }
+                val animatedProgress by animateFloatAsState(
+                    targetValue = progressFraction,
+                    animationSpec = tween(durationMillis = 350, easing = LinearEasing),
+                    label = "mediaPlaybackProgress",
+                )
+                val progressColor = Color(model.colors.text(context))
+                val trackColor = progressColor.copy(alpha = 0.28f)
+
+                androidx.compose.ui.layout.Layout(
+                    content = {
+                        ChipContent(
+                            viewModel = model.content,
+                            icon = model.icon,
+                            colors = model.colors,
+                            modifier = Modifier.sysuiResTag(STATUS_BAR_CHIP_CONTENT_ID),
+                        )
+                        Box(
+                            modifier =
+                                Modifier
+                                    .padding(start = startPadding, end = endPadding)
+                                    .height(2.dp)
+                                    .clip(RoundedCornerShape(1.dp))
+                                    .background(trackColor)
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth(fraction = animatedProgress)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(1.dp))
+                                        .background(progressColor)
+                            )
+                        }
+                    },
+                    modifier = Modifier.padding(bottom = 1.dp)
+                ) { measurables, constraints ->
+                    // Measure content (ChipContent) first to get natural width without intrinsic measurements
+                    val contentPlaceable = measurables[0].measure(constraints.copy(minWidth = 0))
+                    val width = contentPlaceable.width
+
+                    // Measure progress bar to exactly match content width
+                    val spacerHeight = 1.5.dp.roundToPx()
+                    val barPlaceable = if (measurables.size > 1) {
+                        measurables[1].measure(
+                            androidx.compose.ui.unit.Constraints.fixed(
+                                width = width,
+                                height = 2.dp.roundToPx()
+                            )
+                        )
+                    } else null
+
+                    val totalHeight = contentPlaceable.height + spacerHeight + (barPlaceable?.height ?: 0)
+                    layout(width, totalHeight) {
+                        contentPlaceable.placeRelative(0, 0)
+                        barPlaceable?.placeRelative(0, contentPlaceable.height + spacerHeight)
+                    }
+                }
+            } else {
+                ChipContent(
+                    viewModel = model.content,
+                    icon = model.icon,
+                    colors = model.colors,
+                    modifier = Modifier.sysuiResTag(STATUS_BAR_CHIP_CONTENT_ID),
+                )
+            }
         }
 
         model.decorativeIcon?.let {
