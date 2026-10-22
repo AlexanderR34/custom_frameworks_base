@@ -261,6 +261,12 @@ private fun ChipBody(
                     label = "mediaPlaybackProgress",
                 )
                 val baseProgressColor = Color(model.colors.text(context))
+                val iconImpl = when (val chipIcon = model.icon) {
+                    is OngoingActivityChipModel.ChipIcon.FullColorIcon -> chipIcon.impl
+                    is OngoingActivityChipModel.ChipIcon.SingleColorIcon -> chipIcon.impl
+                    else -> null
+                }
+                val artworkDrawable = (iconImpl as? com.android.systemui.common.shared.model.Icon.Loaded)?.drawable
 
                 androidx.compose.ui.layout.Layout(
                     content = {
@@ -273,6 +279,7 @@ private fun ChipBody(
                         SquigglyProgressBar(
                             progress = animatedProgress,
                             baseColor = baseProgressColor,
+                            artworkDrawable = artworkDrawable,
                             modifier = Modifier
                                 .padding(start = startPadding, end = endPadding)
                                 .height(6.dp),
@@ -461,16 +468,17 @@ private const val STATUS_BAR_CHIP_CONTENT_ID = "ongoing_activity_chip_content"
 @IdRes private val CUSTOM_ICON_VIEW_ID = R.id.ongoing_activity_chip_custom_icon
 
 /**
- * Animated Squiggly progress bar for media and download chips.
+ * Flat clean progress bar for media and download chips.
  * Supports:
- * 1. Fluid sine-wave motion while active.
- * 2. Side and endpoint neon glow.
+ * 1. Clean, straight horizontal progress line.
+ * 2. Subtle leading tip glow dot.
  * 3. Color modes: Monet/Artwork (0), Rainbow animated gradient (1), Custom HEX (2).
  */
 @Composable
 private fun SquigglyProgressBar(
     progress: Float,
     baseColor: Color,
+    artworkDrawable: android.graphics.drawable.Drawable? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -483,18 +491,21 @@ private fun SquigglyProgressBar(
         )
     }
 
-    // Infinite transition for fluid wave motion and rainbow color cycle
-    val infiniteTransition = rememberInfiniteTransition(label = "squigglyWaveTransition")
-    val phaseOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 6.2831853f * 2f, // 2 full cycles
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "phaseOffset",
-    )
+    // Mode 0: Adaptada a Monet (Predeterminado)
+    val monetColor = remember(context) {
+        try {
+            Color(com.android.settingslib.Utils.getColorAccentDefaultColor(context))
+        } catch (_: Exception) {
+            Color(context.getColor(com.android.internal.R.color.system_accent1_500))
+        }
+    }
 
+    // Mode 1: Color de la portada del álbum (Dominant/Vibrant palette extraction)
+    val artworkColor = remember(artworkDrawable, monetColor) {
+        extractArtworkDominantColor(artworkDrawable) ?: monetColor
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "rainbowTransition")
     val rainbowHue by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -505,14 +516,16 @@ private fun SquigglyProgressBar(
         label = "rainbowHue",
     )
 
-    val resolvedColor = remember(colorMode, rainbowHue, baseColor) {
+    val resolvedColor = remember(colorMode, rainbowHue, monetColor, artworkColor, baseColor) {
         when (colorMode) {
-            1 -> {
+            0 -> monetColor // Adaptada a Monet (Predeterminado)
+            1 -> artworkColor // Color de la portada del álbum
+            2 -> {
                 // Rainbow mode: HSV hue rotation
                 val hsv = floatArrayOf(rainbowHue, 0.85f, 1.0f)
                 Color(android.graphics.Color.HSVToColor(hsv))
             }
-            2 -> {
+            3 -> {
                 // Custom HEX color
                 val hex = Settings.System.getStringForUser(
                     context.contentResolver,
@@ -523,25 +536,23 @@ private fun SquigglyProgressBar(
                     try {
                         Color(android.graphics.Color.parseColor(hex.trim()))
                     } catch (_: Exception) {
-                        baseColor
+                        monetColor
                     }
                 } else {
-                    baseColor
+                    monetColor
                 }
             }
-            else -> baseColor
+            else -> monetColor
         }
     }
 
     val trackColor = resolvedColor.copy(alpha = 0.25f)
-    val glowColor = resolvedColor.copy(alpha = 0.40f)
 
     Canvas(modifier = modifier) {
         val totalWidth = size.width
         val totalHeight = size.height
         val centerY = totalHeight / 2f
         val strokeWidthPx = 2.dp.toPx()
-        val glowStrokeWidthPx = 4.5.dp.toPx()
 
         // 1. Draw background track (flat line)
         drawLine(
@@ -555,49 +566,49 @@ private fun SquigglyProgressBar(
         val progressPx = (totalWidth * progress.coerceIn(0f, 1f))
         if (progressPx <= 0.5f) return@Canvas
 
-        // 2. Build squiggly wave path up to progressPx
-        val waveLengthPx = 16.dp.toPx()
-        val amplitudePx = 1.6.dp.toPx()
-        val wavePath = Path()
-        wavePath.moveTo(0f, centerY)
-
-        var x = 0f
-        val step = 2.dp.toPx()
-        while (x <= progressPx) {
-            val angle = ((x / waveLengthPx) * 2f * Math.PI.toFloat()) - phaseOffset
-            val y = centerY + (kotlin.math.sin(angle) * amplitudePx)
-            wavePath.lineTo(x, y)
-            x += step
-        }
-        val endAngle = ((progressPx / waveLengthPx) * 2f * Math.PI.toFloat()) - phaseOffset
-        val endY = centerY + (kotlin.math.sin(endAngle) * amplitudePx)
-        wavePath.lineTo(progressPx, endY)
-
-        // 3. Draw neon glow layer (wider stroke with soft alpha)
-        drawPath(
-            path = wavePath,
-            color = glowColor,
-            style = Stroke(width = glowStrokeWidthPx, cap = StrokeCap.Round),
-        )
-
-        // 4. Draw vibrant main wave
-        drawPath(
-            path = wavePath,
+        // 2. Draw flat, clean straight progress line
+        drawLine(
             color = resolvedColor,
-            style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
+            start = androidx.compose.ui.geometry.Offset(0f, centerY),
+            end = androidx.compose.ui.geometry.Offset(progressPx, centerY),
+            strokeWidth = strokeWidthPx,
+            cap = StrokeCap.Round,
         )
 
-        // 5. Draw neon tip / leading glow dot at the progress head
-        drawCircle(
-            color = glowColor,
-            radius = 3.5.dp.toPx(),
-            center = androidx.compose.ui.geometry.Offset(progressPx, endY),
-        )
+        // 3. Draw clean leading tip dot
         drawCircle(
             color = resolvedColor,
-            radius = 1.8.dp.toPx(),
-            center = androidx.compose.ui.geometry.Offset(progressPx, endY),
+            radius = 2.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(progressPx, centerY),
         )
     }
 }
+
+private fun extractArtworkDominantColor(drawable: android.graphics.drawable.Drawable?): Color? {
+    if (drawable == null) return null
+    return try {
+        val bitmap = when (drawable) {
+            is android.graphics.drawable.BitmapDrawable -> drawable.bitmap
+            else -> {
+                val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: 64
+                val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: 64
+                val bmp = android.graphics.Bitmap.createBitmap(
+                    w.coerceAtMost(64),
+                    h.coerceAtMost(64),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bmp)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bmp
+            }
+        }
+        val palette = androidx.palette.graphics.Palette.from(bitmap).maximumColorCount(16).generate()
+        val swatch = palette.vibrantSwatch ?: palette.dominantSwatch ?: palette.mutedSwatch
+        swatch?.let { Color(it.rgb) }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 
