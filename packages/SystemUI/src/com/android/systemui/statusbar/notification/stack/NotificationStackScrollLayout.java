@@ -63,9 +63,13 @@ import android.graphics.Shader;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.os.Trace;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.IndentingPrintWriter;
 import android.util.Log;
+
+import com.android.systemui.statusbar.phone.MonetAmbientGlowDrawable;
 import android.util.MathUtils;
 import android.view.DisplayCutout;
 import android.view.HapticFeedbackConstants;
@@ -541,6 +545,9 @@ public class NotificationStackScrollLayout
      * The clip path used to clip the view in a rounded way.
      */
     private final Path mRoundedClipPath = new Path();
+
+    /** Monet ambient glow drawable rendered behind notifications, clipped to mRoundedClipPath */
+    @Nullable private MonetAmbientGlowDrawable mMonetAmbientGlowDrawable;
 
     /** The clip path defining where we are NOT allowed to draw. */
     private final Path mNegativeRoundedClipPath = new Path();
@@ -6866,6 +6873,7 @@ public class NotificationStackScrollLayout
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
+        drawMonetAmbientGlow(canvas);
         if (mBlurEffect != null) {
             spewLog("Applying blur RenderEffect to NotificationStackScrollLayout");
             // reuse the cached RenderNode to blur
@@ -6894,6 +6902,59 @@ public class NotificationStackScrollLayout
             // Clip children individually in drawChild so swiped notifications can translate
             // across screen boundaries without being sliced horizontally.
             super.dispatchDraw(canvas);
+        }
+    }
+
+    private void drawMonetAmbientGlow(@NonNull Canvas canvas) {
+        try {
+            boolean glowEnabled = Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    Settings.System.QS_NOTIFICATION_AMBIENT_GLOW_ENABLED, 0, UserHandle.myUserId()) == 1;
+            if (!glowEnabled) {
+                if (mMonetAmbientGlowDrawable != null) {
+                    mMonetAmbientGlowDrawable.stopGlowAnimation();
+                    mMonetAmbientGlowDrawable = null;
+                }
+                return;
+            }
+
+            if (mMonetAmbientGlowDrawable == null) {
+                mMonetAmbientGlowDrawable = new MonetAmbientGlowDrawable(mContext);
+                mMonetAmbientGlowDrawable.setCallback(this);
+                setWillNotDraw(false);
+            }
+
+            // Only draw if we have content and mRoundedClipPath is active
+            if (mShouldUseRoundedRectClipping && !mRoundedClipPath.isEmpty()) {
+                int save = canvas.save();
+                canvas.clipPath(mRoundedClipPath);
+                if (mShouldUseNegativeRoundedRectClipping && !mNegativeRoundedClipPath.isEmpty()) {
+                    canvas.clipOutPath(mNegativeRoundedClipPath);
+                }
+                mMonetAmbientGlowDrawable.setBounds(
+                        mRoundedRectClippingLeft,
+                        mRoundedRectClippingTop + mRoundedRectClippingYTranslation,
+                        mRoundedRectClippingRight,
+                        mRoundedRectClippingBottom + mRoundedRectClippingYTranslation
+                );
+                mMonetAmbientGlowDrawable.draw(canvas);
+                canvas.restoreToCount(save);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    protected boolean verifyDrawable(@NonNull android.graphics.drawable.Drawable who) {
+        return super.verifyDrawable(who) || who == mMonetAmbientGlowDrawable;
+    }
+
+    @Override
+    public void invalidateDrawable(@NonNull android.graphics.drawable.Drawable who) {
+        if (who == mMonetAmbientGlowDrawable) {
+            postInvalidateOnAnimation();
+        } else {
+            super.invalidateDrawable(who);
         }
     }
 

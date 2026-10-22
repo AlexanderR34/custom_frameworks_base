@@ -25,6 +25,8 @@ import android.graphics.PointF
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Trace
+import android.os.UserHandle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -1204,6 +1206,7 @@ private class FrameLayoutTouchPassthrough(
     private val lastConfig = Configuration(context.resources.configuration)
 
     init {
+        setWillNotDraw(false)
         repeatWhenAttached {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launchTraced("FrameLayoutTouchPassthrough.logs", backgroundDispatcher) {
@@ -1229,6 +1232,7 @@ private class FrameLayoutTouchPassthrough(
     }
 
     private val currentClippingPath = Path()
+    private var monetAmbientGlowDrawable: com.android.systemui.statusbar.phone.MonetAmbientGlowDrawable? = null
 
     private val _clipData = MutableStateFlow(false to NotificationScrimClipParams())
 
@@ -1284,6 +1288,9 @@ private class FrameLayoutTouchPassthrough(
             dirtyClipData = false
             updateClippingPath()
         }
+        if (qsVisible || (width > 0 && height > 0 && alpha > 0f)) {
+            drawMonetAmbientGlow(canvas)
+        }
         if (!currentClippingPath.isEmpty) {
             canvas.translate(0f, -translationY)
             canvas.clipOutPath(currentClippingPath)
@@ -1295,6 +1302,44 @@ private class FrameLayoutTouchPassthrough(
             // As this FrameLayout doesn't have any content, and the ComposeView is the only child,
             // this is equivalent to blocking the draw in `drawChild`.
             super.dispatchDraw(canvas)
+        }
+    }
+
+    private fun drawMonetAmbientGlow(canvas: Canvas) {
+        try {
+            val glowEnabled = Settings.System.getIntForUser(
+                context.contentResolver,
+                Settings.System.QS_NOTIFICATION_AMBIENT_GLOW_ENABLED, 0, UserHandle.myUserId()
+            ) == 1
+            if (!glowEnabled) {
+                monetAmbientGlowDrawable?.stopGlowAnimation()
+                monetAmbientGlowDrawable = null
+                return
+            }
+
+            if (monetAmbientGlowDrawable == null) {
+                monetAmbientGlowDrawable = com.android.systemui.statusbar.phone.MonetAmbientGlowDrawable(context).apply {
+                    callback = this@FrameLayoutTouchPassthrough
+                }
+            }
+
+            monetAmbientGlowDrawable?.let { glow ->
+                glow.setBounds(0, 0, width, height)
+                glow.draw(canvas)
+            }
+        } catch (ignored: Exception) {
+        }
+    }
+
+    override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean {
+        return super.verifyDrawable(who) || who == monetAmbientGlowDrawable
+    }
+
+    override fun invalidateDrawable(who: android.graphics.drawable.Drawable) {
+        if (who == monetAmbientGlowDrawable) {
+            postInvalidateOnAnimation()
+        } else {
+            super.invalidateDrawable(who)
         }
     }
 

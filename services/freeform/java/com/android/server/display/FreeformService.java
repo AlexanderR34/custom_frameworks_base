@@ -60,7 +60,11 @@ public class FreeformService extends SystemService {
         LMOFreeformUIService uiService =
                 new LMOFreeformUIService(getContext(), displayManager, service);
         LMOFreeformServiceHolder.init(uiService, service);
-        publishBinderService("lmo_freeform", uiService);
+        try {
+            publishBinderService("lmo_freeform", uiService);
+        } catch (Exception e) {
+            Slog.e(TAG, "Failed to publish lmo_freeform binder service", e);
+        }
         mInitialized = true;
     }
 }

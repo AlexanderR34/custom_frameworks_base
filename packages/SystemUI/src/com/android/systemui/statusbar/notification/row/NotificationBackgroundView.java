@@ -30,6 +30,8 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.View;
 
@@ -496,9 +498,19 @@ public class NotificationBackgroundView extends View implements Dumpable,
         if (mExpandAnimationRunning) {
             return;
         }
-        mBackground.setAlpha(drawableAlpha);
+        int effectiveAlpha = drawableAlpha;
+        try {
+            boolean glowEnabled = Settings.System.getIntForUser(
+                    mContext.getContentResolver(),
+                    Settings.System.QS_NOTIFICATION_AMBIENT_GLOW_ENABLED, 0, UserHandle.myUserId()) == 1;
+            if (glowEnabled && drawableAlpha > 0) {
+                effectiveAlpha = (int) (drawableAlpha * 0.76f);
+            }
+        } catch (Exception ignored) {
+        }
+        mBackground.setAlpha(effectiveAlpha);
         if (mBackgroundBlurDrawable != null) {
-            mBackgroundBlurDrawable.setAlpha(drawableAlpha);
+            mBackgroundBlurDrawable.setAlpha(effectiveAlpha);
         }
     }
 
