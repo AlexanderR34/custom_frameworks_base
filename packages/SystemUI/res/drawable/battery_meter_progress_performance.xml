@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector android:height="@dimen/battery_meter_progress_height" android:width="@dimen/battery_meter_progress_width" android:viewportWidth="28.0" android:viewportHeight="20.0"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <path android:fillColor="@color/status_bar_battery_performance" android:pathData="M4.954,8.835C4.954,8.85 4.954,8.865 4.954,8.88V11.121C4.954,11.964 4.954,12.386 5.118,12.708C5.262,12.992 5.493,13.222 5.776,13.367C6.099,13.531 6.52,13.531 7.364,13.531H19.105C19.948,13.531 20.37,13.531 20.692,13.367C20.976,13.222 21.206,12.992 21.351,12.708C21.515,12.386 21.515,11.964 21.515,11.121V8.88C21.515,8.036 21.515,7.614 21.351,7.292C21.206,7.009 20.976,6.778 20.692,6.634C20.37,6.47 19.948,6.47 19.105,6.47H7.364C6.52,6.47 6.099,6.47 5.776,6.634C5.67,6.688 5.571,6.754 5.482,6.831V7.032C5.482,7.872 5.482,8.292 5.305,8.538C5.214,8.666 5.092,8.767 4.954,8.835Z" android:fillType="evenOdd" />
+</vector>

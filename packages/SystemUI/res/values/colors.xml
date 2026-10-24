@@ -304,4 +304,12 @@
     <color name="brightness_slider_track">@color/material_dynamic_neutral_variant80</color>
     <color name="brightness_slider_overlay_color">@android:color/transparent</color>
     <color name="qs_tile_ripple_color">@*android:color/ripple_material_dark</color>
+    <!-- HyperOS Battery Meter Colors -->
+    <color name="light_mode_icon_color_single_tone">#FFFFFFFF</color>
+    <color name="dark_mode_icon_color_single_tone">#99000000</color>
+    <color name="tint_mode_icon_color_single_tone">#FFFFFFFF</color>
+    <color name="status_bar_battery_charging">#FF34C759</color>
+    <color name="status_bar_battery_low">#FFFF3B30</color>
+    <color name="status_bar_battery_power_save">#FFFF9500</color>
+    <color name="status_bar_battery_performance">#FF007AFF</color>
 </resources>

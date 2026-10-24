@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector android:height="@dimen/battery_meter_progress_height" android:width="@dimen/battery_meter_progress_width" android:viewportWidth="28.0" android:viewportHeight="20.0"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <path android:fillColor="@color/light_mode_icon_color_single_tone" android:pathData="M4.954,8.88C4.954,8.036 4.954,7.614 5.118,7.292C5.262,7.009 5.493,6.778 5.776,6.634C6.099,6.47 6.52,6.47 7.364,6.47H19.105C19.948,6.47 20.37,6.47 20.692,6.634C20.976,6.778 21.206,7.009 21.351,7.292C21.515,7.614 21.515,8.036 21.515,8.88V11.121C21.515,11.964 21.515,12.386 21.351,12.708C21.206,12.992 20.976,13.222 20.692,13.367C20.37,13.531 19.948,13.531 19.105,13.531H7.364C6.52,13.531 6.099,13.531 5.776,13.367C5.493,13.222 5.262,12.992 5.118,12.708C4.954,12.386 4.954,11.964 4.954,11.121V8.88Z" />
+</vector>

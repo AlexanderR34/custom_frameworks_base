@@ -39,8 +39,8 @@ import com.android.systemui.battery.BatterySpecs.SHIELD_STROKE
 import com.android.systemui.battery.BatterySpecs.SHIELD_TOP_OFFSET
 
 /**
- * A battery drawable that accessorizes [ThemedBatteryDrawable] or [HyperOSBatteryDrawable] with
- * additional information if necessary.
+ * A battery drawable that accessorizes [ThemedBatteryDrawable] or [HyperOSOfficialVectorBatteryDrawable]
+ * with additional information if necessary.
  *
  * For now, it adds a shield in the bottom-right corner when [displayShield] is true.
  */
@@ -52,6 +52,7 @@ class AccessorizedBatteryDrawable(
         get() = (drawable as? ThemedBatteryDrawable) ?: defaultThemedDrawable
 
     private val defaultThemedDrawable by lazy { ThemedBatteryDrawable(context, frameColor) }
+    private var hyperOSVectorDrawable: HyperOSOfficialVectorBatteryDrawable? = null
     private var hyperOSBatteryDrawable: HyperOSBatteryDrawable? = null
 
     private var currentLevel: Int = 100
@@ -66,6 +67,23 @@ class AccessorizedBatteryDrawable(
             if (field != value) {
                 field = value
                 updateActiveDrawable()
+            }
+        }
+
+    varisHollowStyle: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                updateActiveDrawable()
+            }
+        }
+
+    var isPerformanceMode: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                syncProperties()
+                postInvalidate()
             }
         }
 
@@ -96,11 +114,18 @@ class AccessorizedBatteryDrawable(
         }
 
     private fun updateActiveDrawable() {
-        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            if (hyperOSVectorDrawable == null) {
+                hyperOSVectorDrawable = HyperOSOfficialVectorBatteryDrawable(context, frameColor)
+            }
+            hyperOSVectorDrawable?.isHollowStyle = isHollowStyle
+            hyperOSVectorDrawable?.isMiuiStyle = isMiuiStyle
+            hyperOSVectorDrawable?.showPercent = showPercent
+            drawable = hyperOSVectorDrawable
+        } else if (isWindows11Style) {
             if (hyperOSBatteryDrawable == null) {
                 hyperOSBatteryDrawable = HyperOSBatteryDrawable(context, frameColor)
             }
-            hyperOSBatteryDrawable?.miuiStyle = isMiuiStyle
             hyperOSBatteryDrawable?.windows11Style = isWindows11Style
             hyperOSBatteryDrawable?.showPercent = showPercent
             drawable = hyperOSBatteryDrawable
@@ -113,9 +138,19 @@ class AccessorizedBatteryDrawable(
     }
 
     private fun syncProperties() {
-        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            hyperOSVectorDrawable?.let {
+                it.isHollowStyle = isHollowStyle
+                it.isMiuiStyle = isMiuiStyle
+                it.isPerformanceMode = isPerformanceMode
+                it.showPercent = showPercent
+                it.setBatteryLevel(currentLevel)
+                it.charging = isCharging
+                it.powerSaveEnabled = isPowerSave
+                it.setColors(fgColor, bgColor, singleToneColor)
+            }
+        } else if (isWindows11Style) {
             hyperOSBatteryDrawable?.let {
-                it.miuiStyle = isMiuiStyle
                 it.windows11Style = isWindows11Style
                 it.showPercent = showPercent
                 it.setBatteryLevel(currentLevel)
@@ -179,7 +214,7 @@ class AccessorizedBatteryDrawable(
             return
         }
 
-        if (isHyperOSStyle || isMiuiStyle) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle || isWindows11Style) {
             drawable?.setBounds(b.left, b.top, b.right, b.bottom)
             return
         }
@@ -212,7 +247,10 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicHeight(): Int {
-        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            return hyperOSVectorDrawable?.intrinsicHeight ?: (13.5f * density).toInt()
+        }
+        if (isWindows11Style) {
             return hyperOSBatteryDrawable?.intrinsicHeight ?: (13 * density).toInt()
         }
         val height =
@@ -225,7 +263,10 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun getIntrinsicWidth(): Int {
-        if (isHyperOSStyle || isMiuiStyle || isWindows11Style) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            return hyperOSVectorDrawable?.intrinsicWidth ?: (19 * density).toInt()
+        }
+        if (isWindows11Style) {
             return hyperOSBatteryDrawable?.intrinsicWidth ?: (19 * density).toInt()
         }
         val width =
@@ -238,7 +279,7 @@ class AccessorizedBatteryDrawable(
     }
 
     override fun draw(c: Canvas) {
-        if (isHyperOSStyle || isMiuiStyle) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle || isWindows11Style) {
             drawable?.draw(c)
             return
         }
@@ -274,7 +315,9 @@ class AccessorizedBatteryDrawable(
     /** Sets whether the battery is currently charging. */
     fun setCharging(charging: Boolean) {
         isCharging = charging
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            hyperOSVectorDrawable?.charging = charging
+        } else if (isWindows11Style) {
             hyperOSBatteryDrawable?.charging = charging
         } else {
             themedBatteryDrawable.charging = charging
@@ -289,7 +332,9 @@ class AccessorizedBatteryDrawable(
     /** Sets the current level (out of 100) of the battery. */
     fun setBatteryLevel(level: Int) {
         currentLevel = level
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            hyperOSVectorDrawable?.setBatteryLevel(level)
+        } else if (isWindows11Style) {
             hyperOSBatteryDrawable?.setBatteryLevel(level)
         } else {
             themedBatteryDrawable.setBatteryLevel(level)
@@ -299,7 +344,9 @@ class AccessorizedBatteryDrawable(
     /** Sets whether power save is enabled. */
     fun setPowerSaveEnabled(powerSaveEnabled: Boolean) {
         isPowerSave = powerSaveEnabled
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            hyperOSVectorDrawable?.powerSaveEnabled = powerSaveEnabled
+        } else if (isWindows11Style) {
             hyperOSBatteryDrawable?.powerSaveEnabled = powerSaveEnabled
         } else {
             themedBatteryDrawable.powerSaveEnabled = powerSaveEnabled
@@ -317,7 +364,9 @@ class AccessorizedBatteryDrawable(
         this.bgColor = bgColor
         this.singleToneColor = singleToneColor
         shieldPaint.color = if (dualTone) fgColor else singleToneColor
-        if (isHyperOSStyle) {
+        if (isHyperOSStyle || isHollowStyle || isMiuiStyle) {
+            hyperOSVectorDrawable?.setColors(fgColor, bgColor, singleToneColor)
+        } else if (isWindows11Style) {
             hyperOSBatteryDrawable?.setColors(fgColor, bgColor, singleToneColor)
         } else {
             themedBatteryDrawable.setColors(fgColor, bgColor, singleToneColor)

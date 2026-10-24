@@ -88,6 +88,28 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     private boolean mPowerSaveEnabled;
     private boolean mIsBatteryDefender;
     private boolean mIsIncompatibleCharging;
+    private boolean mIsPerformanceMode = false;
+
+    public void setPerformanceMode(boolean isPerformanceMode) {
+        if (mIsPerformanceMode != isPerformanceMode) {
+            mIsPerformanceMode = isPerformanceMode;
+            if (mDrawable != null) {
+                mDrawable.setPerformanceMode(isPerformanceMode);
+            }
+        }
+    }
+
+    public boolean checkPerformanceMode() {
+        android.content.ContentResolver cr = getContext().getContentResolver();
+        int u = UserHandle.USER_CURRENT;
+        if (Settings.Secure.getIntForUser(cr, "power_performance_mode_open", 0, u) == 1) return true;
+        if (Settings.System.getIntForUser(cr, "performance_mode", 0, u) == 1) return true;
+        if (Settings.System.getIntForUser(cr, "high_performance_mode", 0, u) == 1) return true;
+        String pMode = Settings.System.getStringForUser(cr, "power_mode", u);
+        if ("performance".equalsIgnoreCase(pMode) || "ultimate".equalsIgnoreCase(pMode)) return true;
+        String secMode = Settings.Secure.getStringForUser(cr, "power_mode", u);
+        return "performance".equalsIgnoreCase(secMode) || "ultimate".equalsIgnoreCase(secMode);
+    }
     // Error state where we know nothing about the current battery state
     private boolean mBatteryStateUnknown;
     // Lazily-loaded since this is expected to be a rare-if-ever state
@@ -491,7 +513,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         if (mBatteryPercentView != null) {
             mEstimateText = null;
             String percentText = NumberFormat.getPercentInstance().format(mLevel / 100f);
-            if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isWindows11Style())) {
+            if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isHollowStyle() || mDrawable.isWindows11Style())) {
                 percentText = mLevel + "%";
             }
             // Setting text actually triggers a layout pass (because the text view is set to
@@ -587,7 +609,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                     || mShowPercentMode == MODE_ESTIMATE;
         }
 
-        if (mDrawable != null && mDrawable.isMiuiStyle()) {
+        if (mDrawable != null && (mDrawable.isMiuiStyle() || mDrawable.isHollowStyle())) {
             boolean showInnerPercent = (systemSetting && mShowPercentMode != MODE_OFF && !mBatteryStateUnknown)
                     || mShowPercentMode == MODE_ON;
             mDrawable.setShowPercent(showInnerPercent);
@@ -677,17 +699,21 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             style = isHyperOS ? 1 : 0;
         }
 
-        if (NewStatusBarIcons.isEnabled()) {
+        if (NewStatusBarIcons.isEnabled() && style == 0) {
             mBatteryIconView.setImageDrawable(mUnifiedBattery);
             scaleBatteryMeterViews();
         } else {
             boolean isHyperOS = (style == 1);
+            boolean isHollow = (style == 6);
             boolean isMiui = (style == 3);
             boolean isWindows11 = (style == 5);
+            boolean isPerf = checkPerformanceMode();
             if (mDrawable != null) {
                 mDrawable.setHyperOSStyle(isHyperOS);
+                mDrawable.setHollowStyle(isHollow);
                 mDrawable.setMiuiStyle(isMiui);
                 mDrawable.setWindows11Style(isWindows11);
+                mDrawable.setPerformanceMode(isPerf);
             }
             mBatteryIconView.setImageDrawable(mDrawable);
             scaleBatteryMeterViewsLegacy();
@@ -711,13 +737,13 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         float mainBatteryWidth =
                 res.getDimensionPixelSize(R.dimen.status_bar_battery_icon_width) * iconScaleFactor;
 
-        if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle() || mDrawable.isWindows11Style())) {
+        if (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isHollowStyle() || mDrawable.isMiuiStyle() || mDrawable.isWindows11Style())) {
             float density = res.getDisplayMetrics().density;
-            mainBatteryWidth = (mDrawable.isMiuiStyle() && mDrawable.getShowPercent() ? 23.5f : 19f) * density * iconScaleFactor;
+            mainBatteryWidth = (mDrawable.isHollowStyle() || (mDrawable.isMiuiStyle() && mDrawable.getShowPercent()) ? 23.5f : 19f) * density * iconScaleFactor;
             mainBatteryHeight = 11.5f * density * iconScaleFactor;
         }
 
-        boolean displayShield = mIsBatteryDefender && (mDrawable == null || (!mDrawable.isHyperOSStyle() && !mDrawable.isMiuiStyle() && !mDrawable.isWindows11Style()));
+        boolean displayShield = mIsBatteryDefender && (mDrawable == null || (!mDrawable.isHyperOSStyle() && !mDrawable.isHollowStyle() && !mDrawable.isMiuiStyle() && !mDrawable.isWindows11Style()));
         float fullBatteryIconHeight =
                 BatterySpecs.getFullBatteryHeight(mainBatteryHeight, displayShield);
         float fullBatteryIconWidth =
@@ -737,7 +763,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             marginTop = 0;
         }
 
-        int marginBottom = (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isMiuiStyle() || mDrawable.isWindows11Style()))
+        int marginBottom = (mDrawable != null && (mDrawable.isHyperOSStyle() || mDrawable.isHollowStyle() || mDrawable.isMiuiStyle() || mDrawable.isWindows11Style()))
                 ? 0
                 : res.getDimensionPixelSize(R.dimen.battery_margin_bottom);
 

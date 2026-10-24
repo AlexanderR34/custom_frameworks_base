@@ -228,6 +228,31 @@ public class BatteryMeterViewController extends ViewController<BatteryMeterView>
                 false,
                 mSettingObserver,
                 user);
+        mContentResolver.registerContentObserver(
+                Settings.Secure.getUriFor("power_performance_mode_open"),
+                false,
+                mSettingObserver,
+                user);
+        mContentResolver.registerContentObserver(
+                Settings.System.getUriFor("performance_mode"),
+                false,
+                mSettingObserver,
+                user);
+        mContentResolver.registerContentObserver(
+                Settings.System.getUriFor("high_performance_mode"),
+                false,
+                mSettingObserver,
+                user);
+        mContentResolver.registerContentObserver(
+                Settings.System.getUriFor("power_mode"),
+                false,
+                mSettingObserver,
+                user);
+        mContentResolver.registerContentObserver(
+                Settings.Secure.getUriFor("power_mode"),
+                false,
+                mSettingObserver,
+                user);
     }
 
     private void registerGlobalBatteryUpdateObserver() {
