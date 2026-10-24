@@ -5105,4 +5105,8 @@
     <string name="set_video_wallpaper">Set as wallpaper</string>
     <string name="select_video_wallpaper">Choose video</string>
     <string name="video_wallpaper_saved">Video wallpaper applied successfully</string>
+    <!-- Quick Settings Performance Tile -->
+    <string name="quick_settings_performance_label">Performance</string>
+    <string name="quick_settings_performance_active_label">120Hz &amp; Boost</string>
+    <string name="quick_settings_performance_inactive_label">Normal</string>
 </resources>

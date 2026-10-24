@@ -1932,4 +1932,8 @@
     <string name="set_video_wallpaper">Establecer como fondo</string>
     <string name="select_video_wallpaper">Elegir video</string>
     <string name="video_wallpaper_saved">Fondo de pantalla en video aplicado correctamente</string>
+    <!-- Quick Settings Performance Tile -->
+    <string name="quick_settings_performance_label">Modo Rendimiento</string>
+    <string name="quick_settings_performance_active_label">120Hz y Boost</string>
+    <string name="quick_settings_performance_inactive_label">Normal</string>
 </resources>

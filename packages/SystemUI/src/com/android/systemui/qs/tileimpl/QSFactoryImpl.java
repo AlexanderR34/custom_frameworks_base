@@ -24,6 +24,7 @@ import com.android.systemui.plugins.qs.QSFactory;
 import com.android.systemui.plugins.qs.QSTile;
 import com.android.systemui.qs.QSHost;
 import com.android.systemui.qs.external.CustomTile;
+import com.android.systemui.qs.tiles.PerformanceTile;
 
 import dagger.Lazy;
 
@@ -51,15 +52,18 @@ public class QSFactoryImpl implements QSFactory {
     protected final Map<String, Provider<QSTileImpl<?>>> mTileMap;
     private final Lazy<QSHost> mQsHostLazy;
     private final Provider<CustomTile.Factory> mCustomTileFactoryProvider;
+    private final Provider<PerformanceTile> mPerformanceTileProvider;
 
     @Inject
     public QSFactoryImpl(
             Lazy<QSHost> qsHostLazy,
             Provider<CustomTile.Factory> customTileFactoryProvider,
-            Map<String, Provider<QSTileImpl<?>>> tileMap) {
+            Map<String, Provider<QSTileImpl<?>>> tileMap,
+            Provider<PerformanceTile> performanceTileProvider) {
         mQsHostLazy = qsHostLazy;
         mCustomTileFactoryProvider = customTileFactoryProvider;
         mTileMap = tileMap;
+        mPerformanceTileProvider = performanceTileProvider;
     }
 
     /** Creates a tile with a type based on {@code tileSpec} */
@@ -76,6 +80,10 @@ public class QSFactoryImpl implements QSFactory {
 
     @Nullable
     protected QSTileImpl createTileInternal(String tileSpec) {
+        if (PerformanceTile.TILE_SPEC.equals(tileSpec)) {
+            return mPerformanceTileProvider.get();
+        }
+
         // Stock tiles.
         if (mTileMap.containsKey(tileSpec)) {
             return mTileMap.get(tileSpec).get();
