@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2026 The Android Open Source Project
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dynamic_island_pill_root"
+    android:layout_width="wrap_content"
+    android:layout_height="36dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="8dp"
+    android:paddingEnd="10dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Leading content (Left of notch) -->
+    <FrameLayout
+        android:id="@+id/pill_leading_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical">
+
+        <!-- Circular Album Art (Music) -->
+        <ImageView
+            android:id="@+id/pill_album_art"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+
+        <!-- Activity Icon (Call, Timer, Bolt, REC) -->
+        <ImageView
+            android:id="@+id/pill_icon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:scaleType="fitCenter"
+            android:visibility="visible" />
+    </FrameLayout>
+
+    <!-- Center clearance  punch-hole cutout (~32dp) -->
+    <Space
+        android:id="@+id/pill_notch_cutout_space"
+        android:layout_width="32dp"
+        android:layout_height="match_parent" />
+
+    <!-- Trailing content (Right of notch) -->
+    <LinearLayout
+        android:id="@+id/pill_trailing_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Waveform equalizer (Music) -->
+        <com.android.systemui.statusbar.phone.island.WaveformView
+            android:id="@+id/pill_waveform"
+            android:layout_width="wrap_content"
+            android:layout_height="16dp"
+            android:visibility="gone" />
+
+        <!-- Trailing icon (for hotspot client count, etc.) -->
+        <ImageView
+            android:id="@+id/pill_trailing_icon"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginEnd="3dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+
+        <!-- Text / Chronometer / Percentage -->
+        <TextView
+            android:id="@+id/pill_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:singleLine="true"
+            android:visibility="visible" />
+    </LinearLayout>
+
+</LinearLayout>

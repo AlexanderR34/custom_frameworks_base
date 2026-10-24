@@ -151,4 +151,71 @@
     <!-- Status Bar Chips -->
     <string name="media_chip_paused">Pausa</string>
     <string name="download_chip_default_label">Descarga</string>
+    <!-- Dynamic Island Strings  -->
+    <string name="island_hotspot">Punto de acceso</string>
+    <string name="island_hotspot_active">Punto de acceso activo</string>
+    <string name="island_timer">Temporizador</string>
+    <string name="island_call_in_progress">Llamada en curso</string>
+    <string name="island_active">Activo</string>
+    <string name="island_clipboard_copied">Copiado</string>
+    <string name="island_clipboard_title">Copiado al portapapeles</string>
+    <string name="island_torch_on">Linterna encendida</string>
+    <string name="island_torch_tap_off">Toca para apagar</string>
+    <string name="island_cast">Transmitir</string>
+    <string name="island_torch_pill">ON</string>
+    <string name="island_casting_screen">Transmitiendo pantalla</string>
+    <string name="island_hotspot_devices_none">Sin dispositivos conectados</string>
+    <string name="island_hotspot_devices_one">1 dispositivo conectado</string>
+    <string name="island_hotspot_devices_many">%1$d dispositivos conectados</string>
+    <string name="island_turn_off">Desactivar</string>
+    
+    <string name="island_download">Descarga</string>
+    <string name="island_downloading">Descargando</string>
+    <string name="island_download_cancelled">Descarga cancelada</string>
+    <string name="island_download_failed_stopped">Error al descargar • Proceso detenido</string>
+    <string name="island_download_complete">Descarga completada</string>
+    <string name="island_cancelled">Cancelado</string>
+    <string name="island_failed">Falló</string>
+    <string name="island_completed">Completada</string>
+    <string name="island_close">Cerrar</string>
+    <string name="island_done">Listo</string>
+    <string name="island_cancel">Cancelar</string>
+
+    <string name="island_privacy_title">Privacidad y Sensores</string>
+    <string name="island_in_use_by">En uso por: %1$s</string>
+    <string name="island_camera">Cámara</string>
+    <string name="island_microphone">Micrófono</string>
+    <string name="island_location">Ubicación</string>
+    <string name="island_system_app">Sistema</string>
+
+    <string name="island_screen_recording">Grabación de Pantalla</string>
+    <string name="island_stop_rec">Detener REC</string>
+    <string name="island_recording_time">Tiempo: %1$s</string>
+
+    <string name="island_now_playing">En reproducción</string>
+    <string name="island_unknown_artist">Desconocido</string>
+    <string name="island_nav_route">Ruta</string>
+    <string name="island_nav_on_route">En ruta</string>
+    <string name="island_wireless_display">Pantalla inalámbrica</string>
+
+    <string name="island_charging_hypercharge">HyperCharge 90W Ultra</string>
+    <string name="island_charging_turbo">Carga Ultra Rápida</string>
+    <string name="island_charging_fast">Carga Rápida</string>
+    <string name="island_charging_battery">Cargando Batería</string>
+
+    <string name="island_headphones_connected">Audífonos Conectados</string>
+    <string name="island_headphones_hires">Conectado • LDAC Hi-Res Audio</string>
+    <string name="island_dolby_atmos">Dolby Atmos</string>
+    <string name="island_low_latency">Baja Latencia 94ms</string>
+
+    <string name="island_mode_silent">Modo Silencio</string>
+    <string name="island_mode_vibrate">Modo Vibración</string>
+    <string name="island_mode_sound">Modo Sonido</string>
+    <string name="island_mode_dnd">No Molestar</string>
+    <string name="island_dnd_off">No molestar desactivado</string>
+    <string name="island_silent_desc">Llamadas y notificaciones silenciadas</string>
+    <string name="island_vibrate_desc">Llamadas y notificaciones en vibración</string>
+    <string name="island_sound_desc">Volumen de llamadas restaurado</string>
+    <string name="island_dnd_active_desc">Modo No molestar activado</string>
+    <string name="island_dnd_inactive_desc">Modo No molestar desactivado</string>
 </resources>

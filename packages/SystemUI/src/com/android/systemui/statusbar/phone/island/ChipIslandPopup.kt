@@ -22,7 +22,7 @@ import com.android.systemui.res.R
 
 /**
  * Reusable 3-Button Squircle Quick-Action Mini Menu (Dynamic Island Style)
- * Anchors beneath status bar chips (Timer, Hotspot, Bluetooth, etc.) on POCO X7 Pro (rodin).
+ * Anchors beneath status bar chips (Timer, Hotspot, Bluetooth, etc.) .
  */
 class ChipIslandPopup(
     private val context: Context,

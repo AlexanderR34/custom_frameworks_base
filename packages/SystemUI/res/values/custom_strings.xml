@@ -152,4 +152,71 @@
     <!-- Status Bar Chips -->
     <string name="media_chip_paused">Paused</string>
     <string name="download_chip_default_label">Download</string>
+    <!-- Dynamic Island Strings  -->
+    <string name="island_hotspot">Hotspot</string>
+    <string name="island_hotspot_active">Hotspot active</string>
+    <string name="island_timer">Timer</string>
+    <string name="island_call_in_progress">Call in progress</string>
+    <string name="island_active">Active</string>
+    <string name="island_clipboard_copied">Copied</string>
+    <string name="island_clipboard_title">Copied to clipboard</string>
+    <string name="island_torch_on">Flashlight on</string>
+    <string name="island_torch_tap_off">Tap to turn off</string>
+    <string name="island_cast">Cast</string>
+    <string name="island_torch_pill">ON</string>
+    <string name="island_casting_screen">Casting screen</string>
+    <string name="island_hotspot_devices_none">No connected devices</string>
+    <string name="island_hotspot_devices_one">1 connected device</string>
+    <string name="island_hotspot_devices_many">%1$d connected devices</string>
+    <string name="island_turn_off">Turn Off</string>
+    
+    <string name="island_download">Download</string>
+    <string name="island_downloading">Downloading</string>
+    <string name="island_download_cancelled">Download cancelled</string>
+    <string name="island_download_failed_stopped">Download failed • Process stopped</string>
+    <string name="island_download_complete">Download complete</string>
+    <string name="island_cancelled">Cancelled</string>
+    <string name="island_failed">Failed</string>
+    <string name="island_completed">Completed</string>
+    <string name="island_close">Close</string>
+    <string name="island_done">Done</string>
+    <string name="island_cancel">Cancel</string>
+
+    <string name="island_privacy_title">Privacy &amp; Sensors</string>
+    <string name="island_in_use_by">In use by: %1$s</string>
+    <string name="island_camera">Camera</string>
+    <string name="island_microphone">Microphone</string>
+    <string name="island_location">Location</string>
+    <string name="island_system_app">System</string>
+
+    <string name="island_screen_recording">Screen Recording</string>
+    <string name="island_stop_rec">Stop REC</string>
+    <string name="island_recording_time">Time: %1$s</string>
+
+    <string name="island_now_playing">Now playing</string>
+    <string name="island_unknown_artist">Unknown</string>
+    <string name="island_nav_route">Route</string>
+    <string name="island_nav_on_route">On route</string>
+    <string name="island_wireless_display">Wireless display</string>
+
+    <string name="island_charging_hypercharge">HyperCharge 90W Ultra</string>
+    <string name="island_charging_turbo">Turbo Charge</string>
+    <string name="island_charging_fast">Fast Charge</string>
+    <string name="island_charging_battery">Charging Battery</string>
+
+    <string name="island_headphones_connected">Headphones Connected</string>
+    <string name="island_headphones_hires">Connected • LDAC Hi-Res Audio</string>
+    <string name="island_dolby_atmos">Dolby Atmos</string>
+    <string name="island_low_latency">Low Latency 94ms</string>
+
+    <string name="island_mode_silent">Silent Mode</string>
+    <string name="island_mode_vibrate">Vibrate Mode</string>
+    <string name="island_mode_sound">Sound Mode</string>
+    <string name="island_mode_dnd">Do Not Disturb</string>
+    <string name="island_dnd_off">Do Not Disturb Off</string>
+    <string name="island_silent_desc">Calls and notifications muted</string>
+    <string name="island_vibrate_desc">Calls and notifications set to vibrate</string>
+    <string name="island_sound_desc">Call volume restored</string>
+    <string name="island_dnd_active_desc">Do Not Disturb mode active</string>
+    <string name="island_dnd_inactive_desc">Do Not Disturb mode inactive</string>
 </resources>

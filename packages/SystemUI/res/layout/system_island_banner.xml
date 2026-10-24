@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (C) 2026 The Android Open Source Project
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/system_island_banner_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:minWidth="180dp"
+    android:maxWidth="320dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp"
+    android:elevation="14dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Left Icon: 26dp -->
+    <ImageView
+        android:id="@+id/system_island_icon"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_marginEnd="10dp"
+        android:scaleType="fitCenter" />
+
+    <!-- Center text labels -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/system_island_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/system_island_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif"
+            android:textColor="#B0BEC5" />
+    </LinearLayout>
+
+    <!-- Right badge/wattage/percent indicator -->
+    <TextView
+        android:id="@+id/system_island_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:singleLine="true"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-medium"
+        android:textColor="#38BDF8"
+        android:visibility="gone" />
+
+</LinearLayout>

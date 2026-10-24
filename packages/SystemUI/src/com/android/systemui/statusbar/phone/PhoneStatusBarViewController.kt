@@ -101,6 +101,7 @@ private constructor(
     private lateinit var startSideContainer: View
     private lateinit var endSideContainer: View
     private var musicIslandController: com.android.systemui.statusbar.phone.island.MusicIslandController? = null
+    private var dynamicIslandController: com.android.systemui.statusbar.phone.island.DynamicIslandController? = null
     private var clockPositionSettingObserver: ContentObserver? = null
 
     private val shadeInvocationSplitRatio: Float =
@@ -219,6 +220,19 @@ private constructor(
             musicIslandController?.attachView(musicIslandView)
         }
 
+
+        dynamicIslandController = com.android.systemui.statusbar.phone.island.DynamicIslandController(mView.context)
+        dynamicIslandController?.onIslandWidthChanged = { widthPx, isExpanded, isVisible ->
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                updateStatusBarIconsOcclusion(widthPx, isExpanded, isVisible)
+            } else {
+                mView.post {
+                    updateStatusBarIconsOcclusion(widthPx, isExpanded, isVisible)
+                }
+            }
+        }
+        dynamicIslandController?.attach()
+
         registerClockPositionObserver()
         updateClockAndIslandPosition()
     }
@@ -278,6 +292,10 @@ private constructor(
         unregisterClockPositionObserver()
         musicIslandController?.detach()
         musicIslandController = null
+        dynamicIslandController?.onIslandWidthChanged = null
+        dynamicIslandController?.detach()
+        dynamicIslandController = null
+        resetStatusBarIconsOcclusion()
         removeDarkReceivers()
         startSideContainer.setOnHoverListener(null)
         endSideContainer.setOnHoverListener(null)
@@ -512,6 +530,243 @@ private constructor(
                 }
             }
         }
+    }
+
+    private fun updateStatusBarIconsOcclusion(islandWidthPx: Int, isExpanded: Boolean, isVisible: Boolean) {
+        val isAvoidOverlapEnabled = try {
+            Settings.System.getIntForUser(
+                mView.context.contentResolver,
+                "status_bar_island_avoid_overlap",
+                1,
+                UserHandle.USER_CURRENT
+            ) == 1
+        } catch (e: Exception) {
+            true
+        }
+
+        if (!isAvoidOverlapEnabled) {
+            resetStatusBarIconsOcclusion()
+            return
+        }
+
+        val notifContainer = mView.findViewById<View>(R.id.start_side_notif_and_chip_container)
+            ?: mView.findViewById<View>(R.id.notification_icon_area)
+        val statusIcons = mView.findViewById<View>(R.id.statusIcons)
+        val networkTraffic = mView.findViewById<View>(R.id.network_traffic_holder)
+        val userSwitcher = mView.findViewById<View>(R.id.user_switcher_container)
+        val musicIsland = mView.findViewById<View>(R.id.music_island_view)
+
+        val density = resources.displayMetrics.density
+        val displayWidth = mView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val centerX = displayWidth / 2f
+
+        var targetNotifTransX = 0f
+        var targetNotifAlpha = 1f
+
+        var targetStatusTransX = 0f
+        var targetStatusAlpha = 1f
+
+        val duration = if (isExpanded) 300L else 240L
+        val interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
+
+        if (!isVisible || islandWidthPx <= 0) {
+            targetNotifTransX = 0f
+            targetNotifAlpha = 1f
+            targetStatusTransX = 0f
+            targetStatusAlpha = 1f
+            com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
+        } else if (isExpanded) {
+            // Modo tarjeta expandida: Ocupa casi todo el ancho.
+            // Regla estricta: ÚNICAMENTE el Reloj (izquierda) y la Batería (derecha) permanecen visibles.
+            targetNotifTransX = -TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 28f, resources.displayMetrics)
+            targetNotifAlpha = 0f
+
+            targetStatusTransX = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 28f, resources.displayMetrics)
+            targetStatusAlpha = 0f
+            com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = true
+        } else {
+            // Modo píldora activa: Desplazamiento y desvanecimiento dinámico según solapamiento físico
+            val islandHalfWidth = islandWidthPx / 2f
+            val islandLeft = centerX - islandHalfWidth
+            val islandRight = centerX + islandHalfWidth
+            val safetyMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 12f, resources.displayMetrics)
+
+            // 1. Lado Izquierdo: Iconos de notificaciones
+            if (notifContainer != null && notifContainer.width > 0) {
+                val notifLoc = IntArray(2)
+                notifContainer.getLocationOnScreen(notifLoc)
+                val currentNotifLeft = notifLoc[0].toFloat() - notifContainer.translationX
+                val notifRight = currentNotifLeft + notifContainer.width
+
+                if (islandLeft < notifRight + safetyMargin) {
+                    val overlap = (notifRight + safetyMargin) - islandLeft
+                    val clockLoc = IntArray(2)
+                    clock.getLocationOnScreen(clockLoc)
+                    val clockRight = clockLoc[0].toFloat() + clock.width
+
+                    // Espacio máximo para deslizarse hacia la izquierda antes de colisionar con el reloj
+                    val maxSlideLeft = (currentNotifLeft - (clockRight + safetyMargin)).coerceAtLeast(0f)
+
+                    if (overlap <= maxSlideLeft) {
+                        targetNotifTransX = -overlap
+                        targetNotifAlpha = 1f
+                    } else {
+                        val excess = overlap - maxSlideLeft
+                        targetNotifTransX = -maxSlideLeft
+                        targetNotifAlpha = (1f - (excess / (32f * density))).coerceIn(0f, 1f)
+                    }
+                } else {
+                    targetNotifTransX = 0f
+                    targetNotifAlpha = 1f
+                }
+            } else {
+                if (islandLeft < (centerX - 90f * density)) {
+                    val excess = (centerX - 90f * density) - islandLeft
+                    targetNotifTransX = -16f * density
+                    targetNotifAlpha = (1f - (excess / (40f * density))).coerceIn(0f, 1f)
+                } else {
+                    targetNotifTransX = 0f
+                    targetNotifAlpha = 1f
+                }
+            }
+
+            // 2. Lado Derecho: Iconos de red, Wi-Fi, monitor de tráfico
+            val rightStartView = if (networkTraffic != null && networkTraffic.visibility == View.VISIBLE && networkTraffic.width > 0) {
+                networkTraffic
+            } else if (userSwitcher != null && userSwitcher.visibility == View.VISIBLE && userSwitcher.width > 0) {
+                userSwitcher
+            } else {
+                statusIcons
+            }
+
+            if (rightStartView != null && rightStartView.width > 0) {
+                val rightLoc = IntArray(2)
+                rightStartView.getLocationOnScreen(rightLoc)
+                val rightStart = rightLoc[0].toFloat() - rightStartView.translationX
+
+                if (islandRight > rightStart - safetyMargin) {
+                    val overlap = islandRight - (rightStart - safetyMargin)
+                    val maxSlideRight = 24f * density
+
+                    if (overlap <= maxSlideRight) {
+                        targetStatusTransX = overlap
+                        targetStatusAlpha = 1f
+                        com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
+                    } else {
+                        val excess = overlap - maxSlideRight
+                        targetStatusTransX = maxSlideRight
+                        targetStatusAlpha = (1f - (excess / (32f * density))).coerceIn(0f, 1f)
+                        com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = (targetStatusAlpha == 0f)
+                    }
+                } else {
+                    targetStatusTransX = 0f
+                    targetStatusAlpha = 1f
+                    com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
+                }
+            } else {
+                if (islandRight > (centerX + 90f * density)) {
+                    val excess = islandRight - (centerX + 90f * density)
+                    targetStatusTransX = 16f * density
+                    targetStatusAlpha = (1f - (excess / (40f * density))).coerceIn(0f, 1f)
+                    com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = (targetStatusAlpha == 0f)
+                } else {
+                    targetStatusTransX = 0f
+                    targetStatusAlpha = 1f
+                    com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
+                }
+            }
+        }
+
+        // Animar notificaciones del lado izquierdo
+        notifContainer?.let { v ->
+            v.animate().cancel()
+            v.animate()
+                .translationX(targetNotifTransX)
+                .alpha(targetNotifAlpha)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .start()
+        }
+
+        // Si la mini isla musical está presente, acompañar a las notificaciones
+        musicIsland?.let { v ->
+            if (v.visibility == View.VISIBLE) {
+                v.animate().cancel()
+                v.animate()
+                    .translationX(targetNotifTransX)
+                    .alpha(targetNotifAlpha)
+                    .setDuration(duration)
+                    .setInterpolator(interpolator)
+                    .start()
+            }
+        }
+
+        // Animar iconos del sistema / red / Wi-Fi del lado derecho (sin tocar la batería)
+        statusIcons?.let { v ->
+            v.animate().cancel()
+            v.animate()
+                .translationX(targetStatusTransX)
+                .alpha(targetStatusAlpha)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .start()
+        }
+
+        networkTraffic?.let { v ->
+            v.animate().cancel()
+            v.animate()
+                .translationX(targetStatusTransX)
+                .alpha(targetStatusAlpha)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .start()
+        }
+
+        userSwitcher?.let { v ->
+            v.animate().cancel()
+            v.animate()
+                .translationX(targetStatusTransX)
+                .alpha(targetStatusAlpha)
+                .setDuration(duration)
+                .setInterpolator(interpolator)
+                .start()
+        }
+    }
+
+    private fun resetStatusBarIconsOcclusion() {
+        val notifContainer = mView.findViewById<View>(R.id.start_side_notif_and_chip_container)
+            ?: mView.findViewById<View>(R.id.notification_icon_area)
+        val statusIcons = mView.findViewById<View>(R.id.statusIcons)
+        val networkTraffic = mView.findViewById<View>(R.id.network_traffic_holder)
+        val userSwitcher = mView.findViewById<View>(R.id.user_switcher_container)
+        val musicIsland = mView.findViewById<View>(R.id.music_island_view)
+
+        notifContainer?.apply {
+            animate().cancel()
+            translationX = 0f
+            alpha = 1f
+        }
+        statusIcons?.apply {
+            animate().cancel()
+            translationX = 0f
+            alpha = 1f
+        }
+        networkTraffic?.apply {
+            animate().cancel()
+            translationX = 0f
+            alpha = 1f
+        }
+        userSwitcher?.apply {
+            animate().cancel()
+            translationX = 0f
+            alpha = 1f
+        }
+        musicIsland?.apply {
+            animate().cancel()
+            translationX = 0f
+            alpha = 1f
+        }
+        com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
     }
 
     @Deprecated(
