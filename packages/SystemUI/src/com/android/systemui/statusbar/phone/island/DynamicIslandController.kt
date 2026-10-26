@@ -2125,22 +2125,27 @@ class DynamicIslandController(
                 }
             }
 
-            if (downloadState.isDownloading && (downloadState.sourcePackage == "download_manager" || downloadState.sourcePackage.isBlank())) {
+            if (downloadState.isDownloading) {
                 var actuallyCompleted = false
-                if (downloadState.progress >= 90) {
-                    try {
-                        val finishedQuery = DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
-                        val finishedCursor = dm?.query(finishedQuery)
-                        if (finishedCursor != null) {
-                            if (finishedCursor.moveToFirst()) {
-                                actuallyCompleted = true
+                if (downloadState.progress >= 85) {
+                    if (downloadState.sourcePackage == "download_manager" || downloadState.sourcePackage.isBlank()) {
+                        try {
+                            val finishedQuery = DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
+                            val finishedCursor = dm?.query(finishedQuery)
+                            if (finishedCursor != null) {
+                                if (finishedCursor.moveToFirst()) {
+                                    actuallyCompleted = true
+                                }
+                                finishedCursor.close()
                             }
-                            finishedCursor.close()
-                        }
-                    } catch (_: Exception) {}
+                        } catch (_: Exception) {}
+                    } else {
+                        // For browsers/other apps, no active progress notification remains
+                        actuallyCompleted = true
+                    }
                 }
 
-                if (actuallyCompleted || downloadState.progress >= 98) {
+                if (actuallyCompleted || downloadState.progress >= 95) {
                     downloadState = downloadState.copy(
                         isDownloading = false,
                         isCompleted = true,
@@ -2296,12 +2301,82 @@ class DynamicIslandController(
             (parsedPercent ?: 0).coerceIn(0, 100)
         }
 
-        val hasProgressBar = maxProgress > 0 || parsedPercent != null
-        val isActivelyDownloading = (maxProgress > 0 && curProgress < maxProgress) ||
-                (parsedPercent != null && parsedPercent < 100) ||
-                (isProgressIndeterminate && isDownloadPkgOrChannel)
+        val cancelAction = notification.actions?.firstOrNull { action ->
+            val at = action.title?.toString()?.lowercase() ?: ""
+            at.contains("cancel") || at.contains("cancelar") || at.contains("pausar") || at.contains("pause")
+        }
 
-        // 1. ACTIVE RUNNING DOWNLOAD
+        val hasOpenAction = notification.actions?.any { action ->
+            val at = action.title?.toString()?.lowercase() ?: ""
+            at.contains("abrir") || at.contains("open") || at.contains("compartir") || at.contains("share") || at.contains("instalar") || at.contains("install")
+        } == true
+
+        // 1. COMPLETED DOWNLOAD (Must be checked BEFORE actively downloading to avoid 99% freeze)
+        val isFinishedText = allTexts.contains("descarga completa", ignoreCase = true) ||
+                allTexts.contains("descarga completada", ignoreCase = true) ||
+                allTexts.contains("descarga finalizada", ignoreCase = true) ||
+                allTexts.contains("descarga correcta", ignoreCase = true) ||
+                allTexts.contains("descargad", ignoreCase = true) ||
+                allTexts.contains("se descarg", ignoreCase = true) ||
+                allTexts.contains("download complete", ignoreCase = true) ||
+                allTexts.contains("download completed", ignoreCase = true) ||
+                allTexts.contains("download finished", ignoreCase = true) ||
+                allTexts.contains("downloaded", ignoreCase = true) ||
+                allTexts.contains("download successful", ignoreCase = true) ||
+                hasOpenAction ||
+                (percent >= 100 && (maxProgress > 0 || parsedPercent != null))
+
+        val wasDownloading = downloadState.isDownloading && (downloadState.sourcePackage == pkg || downloadState.sourcePackage.isBlank())
+        val isFinished = isFinishedText || (wasDownloading && downloadState.progress >= 80 && (maxProgress == 0 || curProgress >= maxProgress) && cancelAction == null)
+
+        if (isFinished && isDownloadEnabled) {
+            downloadState = downloadState.copy(
+                isDownloading = false,
+                isCompleted = true,
+                isFailed = false,
+                progress = 100,
+                fileName = if (title.isNotBlank() && !title.contains("descarg", ignoreCase = true) && !title.contains("download", ignoreCase = true)) {
+                    title
+                } else {
+                    downloadState.fileName.ifBlank { "Descarga completa" }
+                }
+            )
+            islandView?.showDownload(downloadState)
+            refreshCurrentActivity()
+            mainHandler.removeCallbacks(downloadDismissRunnable)
+            mainHandler.postDelayed(downloadDismissRunnable, 3500L)
+            return
+        }
+
+        // 2. FAILED DOWNLOAD
+        val isFailedText = allTexts.contains("error al descargar", ignoreCase = true) ||
+                allTexts.contains("descarga cancelada", ignoreCase = true) ||
+                allTexts.contains("descarga fallida", ignoreCase = true) ||
+                allTexts.contains("download failed", ignoreCase = true) ||
+                allTexts.contains("download cancelled", ignoreCase = true)
+
+        if (isFailedText && downloadState.isDownloading) {
+            if (isDownloadEnabled) {
+                downloadState = downloadState.copy(
+                    isDownloading = false,
+                    isCompleted = false,
+                    isFailed = true,
+                    fileName = title.ifBlank { downloadState.fileName.ifBlank { "Descarga fallida" } }
+                )
+                islandView?.showDownload(downloadState)
+                refreshCurrentActivity()
+                mainHandler.removeCallbacks(downloadDismissRunnable)
+                mainHandler.postDelayed(downloadDismissRunnable, 3500L)
+            }
+            return
+        }
+
+        // 3. ACTIVE RUNNING DOWNLOAD (Only if not finished, not failed, and has active progress)
+        val hasProgressBar = maxProgress > 0 || parsedPercent != null
+        val isActivelyDownloading = ((maxProgress > 0 && curProgress < maxProgress) ||
+                (parsedPercent != null && parsedPercent < 100) ||
+                (isProgressIndeterminate && isDownloadPkgOrChannel)) && !isFinished
+
         if (isActivelyDownloading && isDownloadEnabled) {
             val bigTitle = extras.getCharSequence(android.app.Notification.EXTRA_TITLE_BIG)?.toString()?.trim() ?: ""
             val titleText = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()?.trim() ?: ""
@@ -2340,11 +2415,6 @@ class DynamicIslandController(
             }
             val cleanSpeed = if (parsedSpeed == "0 B" || parsedSpeed.startsWith("0 B")) "" else parsedSpeed
 
-            val cancelAction = notification.actions?.firstOrNull { action ->
-                val at = action.title?.toString()?.lowercase() ?: ""
-                at.contains("cancel") || at.contains("cancelar") || at.contains("pausar") || at.contains("pause")
-            }
-
             downloadState = IslandDownloadState(
                 isDownloading = true,
                 fileName = downloadTitle,
@@ -2360,54 +2430,6 @@ class DynamicIslandController(
             islandView?.showDownload(downloadState)
             mainHandler.removeCallbacks(downloadDismissRunnable)
             refreshCurrentActivity()
-            return
-        }
-
-        // 2. FAILED DOWNLOAD (Only if was previously downloading)
-        val isFailedText = allTexts.contains("error al descargar", ignoreCase = true) ||
-                allTexts.contains("descarga cancelada", ignoreCase = true) ||
-                allTexts.contains("descarga fallida", ignoreCase = true) ||
-                allTexts.contains("download failed", ignoreCase = true) ||
-                allTexts.contains("download cancelled", ignoreCase = true)
-
-        if (isFailedText && downloadState.isDownloading) {
-            if (isDownloadEnabled) {
-                downloadState = downloadState.copy(
-                    isDownloading = false,
-                    isCompleted = false,
-                    isFailed = true,
-                    fileName = title.ifBlank { downloadState.fileName.ifBlank { "Descarga fallida" } }
-                )
-                islandView?.showDownload(downloadState)
-                refreshCurrentActivity()
-                mainHandler.removeCallbacks(downloadDismissRunnable)
-                mainHandler.postDelayed(downloadDismissRunnable, 3500L)
-            }
-            return
-        }
-
-        // 3. COMPLETED DOWNLOAD (Must have been downloading or explicit finished match)
-        val isFinishedText = allTexts.contains("descarga completa", ignoreCase = true) ||
-                allTexts.contains("descarga finalizada", ignoreCase = true) ||
-                allTexts.contains("descarga correcta", ignoreCase = true) ||
-                allTexts.contains("download complete", ignoreCase = true) ||
-                allTexts.contains("download finished", ignoreCase = true) ||
-                (percent >= 100 && hasProgressBar)
-
-        if (isFinishedText && downloadState.isDownloading) {
-            if (isDownloadEnabled) {
-                downloadState = downloadState.copy(
-                    isDownloading = false,
-                    isCompleted = true,
-                    isFailed = false,
-                    progress = 100,
-                    fileName = title.ifBlank { downloadState.fileName.ifBlank { "Descarga completa" } }
-                )
-                islandView?.showDownload(downloadState)
-                refreshCurrentActivity()
-                mainHandler.removeCallbacks(downloadDismissRunnable)
-                mainHandler.postDelayed(downloadDismissRunnable, 3500L)
-            }
             return
         }
     }

@@ -464,9 +464,9 @@ private fun DynamicIslandInternal(
     val cornerFraction = (bounceAnimProgress * safeProgress).coerceIn(0f, 1f)
     val currentCornerRadius = lerp((currentHeight / 2).coerceAtLeast(0.dp), 32.dp, cornerFraction).coerceAtLeast(0.dp)
 
-    val pillContentAlpha = (((safeProgress - 0.28f) / 0.72f).coerceIn(0f, 1f)) *
+    val pillContentAlpha = if (!hasContent) 0f else (((safeProgress - 0.28f) / 0.72f).coerceIn(0f, 1f)) *
             ((1f - (bounceAnimProgress / 0.32f)).coerceIn(0f, 1f))
-    val expandedAlpha = (((bounceAnimProgress - 0.38f) / 0.62f).coerceIn(0f, 1f)) * safeProgress
+    val expandedAlpha = if (!hasContent) 0f else (((bounceAnimProgress - 0.38f) / 0.62f).coerceIn(0f, 1f)) * safeProgress
 
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = FontFamily.Default)
@@ -517,7 +517,7 @@ private fun DynamicIslandInternal(
                 contentAlignment = Alignment.Center
             ) {
 
-                val isShowingMediaExpanded = animProgress > 0.05f &&
+                val isShowingMediaExpanded = hasContent && animProgress > 0.05f &&
                         mediaState.hasActiveMedia &&
                         !isClipboardCardActive &&
                         !isShowingBanner &&
@@ -547,8 +547,8 @@ private fun DynamicIslandInternal(
                     )
                 }
 
-                if (pillContentAlpha > 0f) {
-                    val activeActivity = if (currentActivityType != IslandActivityType.NONE) currentActivityType else lastActiveActivityType
+                if (pillContentAlpha > 0f && hasContent) {
+                    val activeActivity = if (currentActivityType != IslandActivityType.NONE) currentActivityType else IslandActivityType.NONE
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1311,7 +1311,7 @@ private fun DynamicIslandInternal(
                                     }
                                 }
                             )
-                        } else if (isMediaActive || activeActivity == IslandActivityType.MEDIA) {
+                        } else if (hasContent && (isMediaActive || activeActivity == IslandActivityType.MEDIA)) {
 
                             PillNotchScaffold(
                                 notchMarginDp = config.notchMarginDp,
@@ -2548,60 +2548,72 @@ private fun ExpandedDownloadCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text = downloadState.fileName.ifBlank { stringResource(R.string.downloading) },
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = downloadState.fileName.ifBlank { stringResource(R.string.downloading) },
+                        color = Color.White,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (downloadState.isDownloading && downloadState.progress > 0) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${downloadState.progress}%",
+                            color = PixelTokens.Blue,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 if (downloadState.isCancelled) {
                     Text(
                         text = stringResource(R.string.download_cancelled),
                         color = Color(0xFFFF3B30),
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 } else if (downloadState.isFailed) {
                     Text(
                         text = stringResource(R.string.download_failed_stopped),
                         color = Color(0xFFFF3B30),
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 } else if (downloadState.isCompleted) {
                     Text(
                         text = stringResource(R.string.download_complete) + " • 100%",
                         color = PixelTokens.Green,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 } else {
-                    val displaySpeed = if (downloadState.speedText.isNotBlank() && downloadState.speedText != "0 B" && !downloadState.speedText.startsWith("0 B")) {
-                        downloadState.speedText
-                    } else if (downloadState.totalSizeText.isNotBlank() && downloadState.totalSizeText != "0 B" && !downloadState.totalSizeText.startsWith("0 B")) {
-                        downloadState.totalSizeText
-                    } else {
-                        ""
-                    }
-                    val statusText = if (displaySpeed.isNotBlank()) {
-                        if (displaySpeed.contains("%")) {
-                            "${stringResource(R.string.downloading)} • $displaySpeed"
-                        } else {
-                            "${stringResource(R.string.downloading)} • $displaySpeed (${downloadState.progress}%)"
-                        }
-                    } else if (downloadState.progress > 0) {
-                        "${stringResource(R.string.downloading)} • ${downloadState.progress}%"
-                    } else {
-                        stringResource(R.string.downloading)
+                    val displayInfo = when {
+                        downloadState.speedText.isNotBlank() && downloadState.speedText != "0 B" && !downloadState.speedText.startsWith("0 B") -> downloadState.speedText
+                        downloadState.totalSizeText.isNotBlank() && downloadState.totalSizeText != "0 B" && !downloadState.totalSizeText.startsWith("0 B") -> downloadState.totalSizeText
+                        else -> stringResource(R.string.downloading)
                     }
                     Text(
-                        text = statusText,
-                        color = PixelTokens.Blue,
+                        text = displayInfo,
+                        color = PixelTokens.TextSecondary,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
