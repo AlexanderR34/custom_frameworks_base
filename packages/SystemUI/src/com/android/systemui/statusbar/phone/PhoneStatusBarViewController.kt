@@ -94,6 +94,7 @@ private constructor(
     private val shadeExpansionTargetDisplayInteractor: ShadeExpansionTargetDisplayInteractor,
     private val lazyShadeDisplaysRepository: Lazy<ShadeDisplaysRepository>,
     private val statusBarWindowControllerStore: StatusBarWindowControllerStore,
+    private val notificationListener: com.android.systemui.statusbar.NotificationListener,
 ) : ViewController<PhoneStatusBarView>(view) {
 
     private lateinit var clock: Clock
@@ -221,15 +222,10 @@ private constructor(
         }
 
 
-        dynamicIslandController = com.android.systemui.statusbar.phone.island.DynamicIslandController(mView.context)
+        // Native Compose Dynamic Island
+        dynamicIslandController = com.android.systemui.statusbar.phone.island.DynamicIslandController(mView.context, notificationListener)
         dynamicIslandController?.onIslandWidthChanged = { widthPx, isExpanded, isVisible ->
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                updateStatusBarIconsOcclusion(widthPx, isExpanded, isVisible)
-            } else {
-                mView.post {
-                    updateStatusBarIconsOcclusion(widthPx, isExpanded, isVisible)
-                }
-            }
+            updateStatusBarIconsOcclusion(widthPx, isExpanded, isVisible)
         }
         dynamicIslandController?.attach()
 
@@ -570,64 +566,39 @@ private constructor(
         val interpolator = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
 
         if (!isVisible || islandWidthPx <= 0) {
-            targetNotifTransX = 0f
-            targetNotifAlpha = 1f
-            targetStatusTransX = 0f
-            targetStatusAlpha = 1f
-            com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
+            resetStatusBarIconsOcclusion()
+            return
         } else if (isExpanded) {
-            // Modo tarjeta expandida: Ocupa casi todo el ancho.
-            // Regla estricta: ÚNICAMENTE el Reloj (izquierda) y la Batería (derecha) permanecen visibles.
-            targetNotifTransX = -TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 28f, resources.displayMetrics)
-            targetNotifAlpha = 0f
-
-            targetStatusTransX = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 28f, resources.displayMetrics)
-            targetStatusAlpha = 0f
-            com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = true
+            // Cuando la isla se expande hacia abajo, no desplaza ni oculta los iconos de la barra de estado
+            resetStatusBarIconsOcclusion()
+            return
         } else {
-            // Modo píldora activa: Desplazamiento y desvanecimiento dinámico según solapamiento físico
+            // Modo píldora activa: No ocultar los iconos; solo deslizar suavemente si hay solapamiento físico real con iconos visibles
             val islandHalfWidth = islandWidthPx / 2f
             val islandLeft = centerX - islandHalfWidth
             val islandRight = centerX + islandHalfWidth
-            val safetyMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 12f, resources.displayMetrics)
+            val safetyMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8f, resources.displayMetrics)
 
-            // 1. Lado Izquierdo: Iconos de notificaciones
-            if (notifContainer != null && notifContainer.width > 0) {
-                val notifLoc = IntArray(2)
-                notifContainer.getLocationOnScreen(notifLoc)
-                val currentNotifLeft = notifLoc[0].toFloat() - notifContainer.translationX
-                val notifRight = currentNotifLeft + notifContainer.width
+            // 1. Lado Izquierdo: Notificaciones
+            val actualNotifRight = getActualVisibleContentRight(notifContainer)
+            if (actualNotifRight > 0f && islandLeft < actualNotifRight + safetyMargin) {
+                val overlap = (actualNotifRight + safetyMargin) - islandLeft
+                val clockLoc = IntArray(2)
+                clock.getLocationOnScreen(clockLoc)
+                val clockRight = clockLoc[0].toFloat() + clock.width
 
-                if (islandLeft < notifRight + safetyMargin) {
-                    val overlap = (notifRight + safetyMargin) - islandLeft
-                    val clockLoc = IntArray(2)
-                    clock.getLocationOnScreen(clockLoc)
-                    val clockRight = clockLoc[0].toFloat() + clock.width
-
-                    // Espacio máximo para deslizarse hacia la izquierda antes de colisionar con el reloj
-                    val maxSlideLeft = (currentNotifLeft - (clockRight + safetyMargin)).coerceAtLeast(0f)
-
-                    if (overlap <= maxSlideLeft) {
-                        targetNotifTransX = -overlap
-                        targetNotifAlpha = 1f
-                    } else {
-                        val excess = overlap - maxSlideLeft
-                        targetNotifTransX = -maxSlideLeft
-                        targetNotifAlpha = (1f - (excess / (32f * density))).coerceIn(0f, 1f)
-                    }
+                val actualNotifLeft = getActualVisibleContentLeft(notifContainer)
+                val maxSlideLeft = if (actualNotifLeft < Float.MAX_VALUE) {
+                    (actualNotifLeft - (clockRight + safetyMargin)).coerceAtLeast(0f)
                 } else {
-                    targetNotifTransX = 0f
-                    targetNotifAlpha = 1f
+                    24f * density
                 }
+
+                targetNotifTransX = (-overlap).coerceAtLeast(-maxSlideLeft)
+                targetNotifAlpha = 1f
             } else {
-                if (islandLeft < (centerX - 90f * density)) {
-                    val excess = (centerX - 90f * density) - islandLeft
-                    targetNotifTransX = -16f * density
-                    targetNotifAlpha = (1f - (excess / (40f * density))).coerceIn(0f, 1f)
-                } else {
-                    targetNotifTransX = 0f
-                    targetNotifAlpha = 1f
-                }
+                targetNotifTransX = 0f
+                targetNotifAlpha = 1f
             }
 
             // 2. Lado Derecho: Iconos de red, Wi-Fi, monitor de tráfico
@@ -639,41 +610,17 @@ private constructor(
                 statusIcons
             }
 
-            if (rightStartView != null && rightStartView.width > 0) {
-                val rightLoc = IntArray(2)
-                rightStartView.getLocationOnScreen(rightLoc)
-                val rightStart = rightLoc[0].toFloat() - rightStartView.translationX
-
-                if (islandRight > rightStart - safetyMargin) {
-                    val overlap = islandRight - (rightStart - safetyMargin)
-                    val maxSlideRight = 24f * density
-
-                    if (overlap <= maxSlideRight) {
-                        targetStatusTransX = overlap
-                        targetStatusAlpha = 1f
-                        com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
-                    } else {
-                        val excess = overlap - maxSlideRight
-                        targetStatusTransX = maxSlideRight
-                        targetStatusAlpha = (1f - (excess / (32f * density))).coerceIn(0f, 1f)
-                        com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = (targetStatusAlpha == 0f)
-                    }
-                } else {
-                    targetStatusTransX = 0f
-                    targetStatusAlpha = 1f
-                    com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
-                }
+            val actualRightStart = getActualVisibleContentLeft(rightStartView)
+            if (actualRightStart < Float.MAX_VALUE && islandRight > actualRightStart - safetyMargin) {
+                val overlap = islandRight - (actualRightStart - safetyMargin)
+                val maxSlideRight = 24f * density
+                targetStatusTransX = overlap.coerceAtMost(maxSlideRight)
+                targetStatusAlpha = 1f
+                com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
             } else {
-                if (islandRight > (centerX + 90f * density)) {
-                    val excess = islandRight - (centerX + 90f * density)
-                    targetStatusTransX = 16f * density
-                    targetStatusAlpha = (1f - (excess / (40f * density))).coerceIn(0f, 1f)
-                    com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = (targetStatusAlpha == 0f)
-                } else {
-                    targetStatusTransX = 0f
-                    targetStatusAlpha = 1f
-                    com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
-                }
+                targetStatusTransX = 0f
+                targetStatusAlpha = 1f
+                com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
             }
         }
 
@@ -767,6 +714,50 @@ private constructor(
             alpha = 1f
         }
         com.android.systemui.statusbar.phone.island.DynamicIslandController.isRightSideOccluded = false
+    }
+
+    private fun getActualVisibleContentRight(container: View?): Float {
+        if (container == null || container.visibility != View.VISIBLE) return 0f
+        var maxRight = 0f
+        fun scan(v: View) {
+            if (v.visibility != View.VISIBLE) return
+            if (v is ViewGroup && v.childCount > 0) {
+                for (i in 0 until v.childCount) {
+                    scan(v.getChildAt(i))
+                }
+            } else if (v.width > 0) {
+                val loc = IntArray(2)
+                v.getLocationOnScreen(loc)
+                val r = loc[0].toFloat() + v.width - v.translationX
+                if (r > maxRight) {
+                    maxRight = r
+                }
+            }
+        }
+        scan(container)
+        return maxRight
+    }
+
+    private fun getActualVisibleContentLeft(container: View?): Float {
+        if (container == null || container.visibility != View.VISIBLE) return Float.MAX_VALUE
+        var minLeft = Float.MAX_VALUE
+        fun scan(v: View) {
+            if (v.visibility != View.VISIBLE) return
+            if (v is ViewGroup && v.childCount > 0) {
+                for (i in 0 until v.childCount) {
+                    scan(v.getChildAt(i))
+                }
+            } else if (v.width > 0) {
+                val loc = IntArray(2)
+                v.getLocationOnScreen(loc)
+                val l = loc[0].toFloat() - v.translationX
+                if (l < minLeft) {
+                    minLeft = l
+                }
+            }
+        }
+        scan(container)
+        return minLeft
     }
 
     @Deprecated(
@@ -911,6 +902,7 @@ private constructor(
         private val shadeExpansionTargetDisplayInteractor: ShadeExpansionTargetDisplayInteractor,
         private val lazyShadeDisplaysRepository: Lazy<ShadeDisplaysRepository>,
         private val statusBarWindowControllerStore: StatusBarWindowControllerStore,
+        private val notificationListener: com.android.systemui.statusbar.NotificationListener,
     ) {
         fun create(view: PhoneStatusBarView): PhoneStatusBarViewController {
             return PhoneStatusBarViewController(
@@ -936,6 +928,7 @@ private constructor(
                 shadeExpansionTargetDisplayInteractor,
                 lazyShadeDisplaysRepository,
                 statusBarWindowControllerStore,
+                notificationListener,
             )
         }
     }

@@ -574,17 +574,24 @@ public class ImageWallpaper extends WallpaperService {
 
             boolean needsReload = false;
             synchronized (mSurfaceLock) {
-                if (mSurfaceHolder != null) {
-                    mSurfaceHolder.setFixedSize(targetW, targetH);
-                }
-                mJellyMesh.setSize(targetW, targetH);
                 if (mJellyEnabled) {
+                    if (mSurfaceHolder != null) {
+                        mSurfaceHolder.setFixedSize(targetW, targetH);
+                    }
+                    mJellyMesh.setSize(targetW, targetH);
                     if (mBitmap == null || mBitmap.isRecycled()
                             || mBitmap.getWidth() != targetW
                             || mBitmap.getHeight() != targetH) {
                         needsReload = true;
                     }
                 } else {
+                    if (mBitmap != null && !mBitmap.isRecycled()) {
+                        int surfaceW = Math.max(MIN_SURFACE_WIDTH, mBitmap.getWidth());
+                        int surfaceH = Math.max(MIN_SURFACE_HEIGHT, mBitmap.getHeight());
+                        if (mSurfaceHolder != null) {
+                            mSurfaceHolder.setFixedSize(surfaceW, surfaceH);
+                        }
+                    }
                     if (mBitmap == null || mBitmap.isRecycled()) {
                         needsReload = true;
                     }
@@ -609,11 +616,29 @@ public class ImageWallpaper extends WallpaperService {
             setTouchEventsEnabled(true);
             mWallpaperManager = getDisplayContext().getSystemService(WallpaperManager.class);
             mSurfaceHolder = surfaceHolder;
-            Rect displayBounds = getDisplayBounds();
-            int width = displayBounds.width();
-            int height = displayBounds.height();
-            mSurfaceHolder.setFixedSize(width, height);
-            mJellyMesh.setSize(width, height);
+
+            int enabledVal = Settings.System.getInt(
+                    getDisplayContext().getContentResolver(),
+                    KEY_JELLY_WALLPAPER, -1);
+            if (enabledVal == -1) {
+                enabledVal = Settings.System.getInt(
+                        getDisplayContext().getContentResolver(),
+                        KEY_JELLY_LEGACY, 0);
+            }
+            mJellyEnabled = (enabledVal == 1);
+
+            if (mJellyEnabled) {
+                Rect displayBounds = getDisplayBounds();
+                int width = displayBounds.width();
+                int height = displayBounds.height();
+                mSurfaceHolder.setFixedSize(width, height);
+                mJellyMesh.setSize(width, height);
+            } else {
+                Rect dimensions = mWallpaperManager.peekBitmapDimensions(getSourceFlag(), true);
+                int width = Math.max(MIN_SURFACE_WIDTH, dimensions.width());
+                int height = Math.max(MIN_SURFACE_HEIGHT, dimensions.height());
+                mSurfaceHolder.setFixedSize(width, height);
+            }
 
             Context context = getDisplayContext();
             if (context != null) {
@@ -2783,7 +2808,7 @@ public class ImageWallpaper extends WallpaperService {
 
         @Override
         public boolean shouldZoomOutWallpaper() {
-            return false;
+            return !mJellyEnabled;
         }
 
         @Override
@@ -2896,7 +2921,21 @@ public class ImageWallpaper extends WallpaperService {
             if (canvas != null) {
                 Rect dest = mSurfaceHolder.getSurfaceFrame();
                 try {
-                    canvas.drawBitmap(bitmap, null, dest, null);
+                    if (!mJellyEnabled && dest != null && dest.width() > 0 && dest.height() > 0
+                            && (dest.width() != bitmap.getWidth() || dest.height() != bitmap.getHeight())) {
+                        // Protect against transitional frames where surface dimensions haven't updated yet:
+                        // Draw bitmap centered and maintaining aspect ratio to prevent ANY stretching/distortion
+                        float scale = Math.max((float) dest.width() / bitmap.getWidth(),
+                                (float) dest.height() / bitmap.getHeight());
+                        float drawnW = bitmap.getWidth() * scale;
+                        float drawnH = bitmap.getHeight() * scale;
+                        float left = (dest.width() - drawnW) / 2f;
+                        float top = (dest.height() - drawnH) / 2f;
+                        RectF targetRect = new RectF(left, top, left + drawnW, top + drawnH);
+                        canvas.drawBitmap(bitmap, null, targetRect, null);
+                    } else {
+                        canvas.drawBitmap(bitmap, null, dest, null);
+                    }
                     if (mJellyEnabled && mLightSourceEnabled && dest != null) {
                         drawLightAndEdgeSheen(canvas, dest.width(), dest.height());
                     }
@@ -3018,10 +3057,18 @@ public class ImageWallpaper extends WallpaperService {
                 }
 
                 synchronized (mSurfaceLock) {
-                    if (mSurfaceHolder != null) {
-                        mSurfaceHolder.setFixedSize(targetW, targetH);
+                    if (mJellyEnabled) {
+                        if (mSurfaceHolder != null) {
+                            mSurfaceHolder.setFixedSize(targetW, targetH);
+                        }
+                        mJellyMesh.setSize(targetW, targetH);
+                    } else {
+                        int surfaceW = Math.max(MIN_SURFACE_WIDTH, bitmap.getWidth());
+                        int surfaceH = Math.max(MIN_SURFACE_HEIGHT, bitmap.getHeight());
+                        if (mSurfaceHolder != null) {
+                            mSurfaceHolder.setFixedSize(surfaceW, surfaceH);
+                        }
                     }
-                    mJellyMesh.setSize(targetW, targetH);
 
                     // recycle the previously loaded bitmap
                     if (mBitmap != null && mBitmap != bitmap) {

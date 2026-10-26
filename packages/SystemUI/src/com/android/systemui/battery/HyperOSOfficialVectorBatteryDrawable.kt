@@ -253,9 +253,7 @@ class HyperOSOfficialVectorBatteryDrawable(
             canvas.clipRect(b.left.toFloat(), b.top.toFloat(), clipEndPx, b.bottom.toFloat())
             activeProgress.bounds = b
 
-            // Normal state matches status bar theme tint (white on dark / black on light)
-            // Low (red), charging (green), power save (orange) and performance/ultimate (blue) preserve their dedicated vector alert colors
-            if (!charging && !powerSaveEnabled && !isPerformanceMode && batteryLevel > 15) {
+            if (!isPerformanceMode) {
                 activeProgress.setTint(singleToneColor)
             }
             activeProgress.draw(canvas)

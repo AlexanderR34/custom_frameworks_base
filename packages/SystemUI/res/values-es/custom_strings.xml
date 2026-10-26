@@ -154,14 +154,17 @@
     <!-- Dynamic Island Strings  -->
     <string name="island_hotspot">Punto de acceso</string>
     <string name="island_hotspot_active">Punto de acceso activo</string>
+    <string name="island_hotspot_inactive">Punto de acceso desactivado</string>
     <string name="island_timer">Temporizador</string>
     <string name="island_call_in_progress">Llamada en curso</string>
     <string name="island_active">Activo</string>
     <string name="island_clipboard_copied">Copiado</string>
     <string name="island_clipboard_title">Copiado al portapapeles</string>
     <string name="island_torch_on">Linterna encendida</string>
+    <string name="island_torch_off">Linterna apagada</string>
     <string name="island_torch_tap_off">Toca para apagar</string>
     <string name="island_cast">Transmitir</string>
+    <string name="island_cast_audio_only">Transmitir solo audio</string>
     <string name="island_torch_pill">ON</string>
     <string name="island_casting_screen">Transmitiendo pantalla</string>
     <string name="island_hotspot_devices_none">Sin dispositivos conectados</string>
@@ -189,8 +192,10 @@
     <string name="island_system_app">Sistema</string>
 
     <string name="island_screen_recording">Grabación de Pantalla</string>
-    <string name="island_stop_rec">Detener REC</string>
+    <string name="island_stop_rec">Detener grabación</string>
     <string name="island_recording_time">Tiempo: %1$s</string>
+    <string name="island_hotspot_off">Zona Wi-Fi desactivada</string>
+    <string name="island_charger_disconnected">Cargador desconectado</string>
 
     <string name="island_now_playing">En reproducción</string>
     <string name="island_unknown_artist">Desconocido</string>
@@ -204,6 +209,8 @@
     <string name="island_charging_battery">Cargando Batería</string>
 
     <string name="island_headphones_connected">Audífonos Conectados</string>
+    <string name="island_headphones_disconnected">Audífonos desconectados</string>
+    <string name="island_disconnected">Desconectado</string>
     <string name="island_headphones_hires">Conectado • LDAC Hi-Res Audio</string>
     <string name="island_dolby_atmos">Dolby Atmos</string>
     <string name="island_low_latency">Baja Latencia 94ms</string>
@@ -218,4 +225,9 @@
     <string name="island_sound_desc">Volumen de llamadas restaurado</string>
     <string name="island_dnd_active_desc">Modo No molestar activado</string>
     <string name="island_dnd_inactive_desc">Modo No molestar desactivado</string>
+
+    <string name="island_battery_low">Batería baja</string>
+    <string name="island_battery_low_sub">Queda %1$d%% de batería</string>
+    <string name="island_battery_saver_btn">Ahorro de batería</string>
+    <string name="island_battery_saver_desc">Extiende la duración de la batería</string>
 </resources>

@@ -230,7 +230,7 @@ class HyperOSBatteryDrawable(
         canvas.drawRoundRect(innerCavityRect, innerCornerRadius, innerCornerRadius, cavityPaint)
 
         // 4. Determine inner fill color based on state
-        val activeFillColor = when {
+        val activeFillColor = if (fillColor != 0) fillColor else when {
             windows11Style -> when {
                 charging -> COLOR_WIN11_GREEN
                 batteryLevel <= 20 -> COLOR_WIN11_RED

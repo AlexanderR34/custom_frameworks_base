@@ -116,4 +116,26 @@ sealed interface BatteryColors {
             private val highAlphaBg = Color.White.copy(alpha = 0.55f)
         }
     }
+
+    data class Custom(
+        override val fill: Color,
+        override val glyph: Color,
+        override val backgroundOnly: Color,
+        override val backgroundWithGlyph: Color,
+        override val attribution: Color,
+    ) : BatteryColors
 }
+
+fun BatteryColors.withOverrides(
+    fill: Color? = null,
+    glyph: Color? = null,
+    backgroundOnly: Color? = null,
+    backgroundWithGlyph: Color? = null,
+    attribution: Color? = null,
+): BatteryColors = BatteryColors.Custom(
+    fill = fill ?: this.fill,
+    glyph = glyph ?: this.glyph,
+    backgroundOnly = backgroundOnly ?: this.backgroundOnly,
+    backgroundWithGlyph = backgroundWithGlyph ?: this.backgroundWithGlyph,
+    attribution = attribution ?: this.attribution,
+)

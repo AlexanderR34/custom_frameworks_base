@@ -36,6 +36,14 @@ import kotlinx.coroutines.flow.MutableStateFlow;
 import kotlinx.coroutines.flow.StateFlow;
 import kotlinx.coroutines.flow.StateFlowKt;
 
+import android.database.ContentObserver;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.UserHandle;
+import android.provider.Settings;
+import android.text.TextUtils;
+import com.android.settingslib.Utils;
+
 import java.io.PrintWriter;
 import java.util.ArrayList;
 
@@ -47,10 +55,17 @@ import javax.inject.Inject;
 public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
         LightBarTransitionsController.DarkIntensityApplier, LifecycleListener {
 
+    public static final String STATUS_BAR_COLORS_MONET = "status_bar_colors_monet";
+    public static final String STATUS_BAR_ICONS_COLOR = "status_bar_icons_color";
+
     private final LightBarTransitionsController mTransitionsController;
     private final ArrayList<Rect> mTintAreas = new ArrayList<>();
     private final ArrayMap<Object, DarkReceiver> mReceivers = new ArrayMap<>();
     private final DumpManager mDumpManager;
+
+    private final Context mContext;
+    private boolean mUseMonetColor;
+    private int mCustomIconColor;
 
     private int mIconTint = DEFAULT_ICON_TINT;
     private int mContrastTint = DEFAULT_INVERSE_ICON_TINT;
@@ -61,6 +76,14 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
     private float mDarkIntensity;
     private int mDarkModeIconColorSingleTone;
     private int mLightModeIconColorSingleTone;
+
+    private final ContentObserver mColorObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+        @Override
+        public void onChange(boolean selfChange) {
+            updateColorsFromSettings();
+            applyDarkIntensity(mDarkIntensity);
+        }
+    };
 
     private final MutableStateFlow<DarkChange> mDarkChangeFlow = StateFlowKt.MutableStateFlow(
             DarkChange.EMPTY);
@@ -73,6 +96,7 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
             @DisplayAware Context context,
             LightBarTransitionsController.Factory lightBarTransitionsControllerFactory,
             DumpManager dumpManager) {
+        mContext = context;
         mDumpManager = dumpManager;
         if (newStatusBarIcons()) {
             mDarkModeIconColorSingleTone = Color.BLACK;
@@ -88,11 +112,41 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
 
         mDumpableName = getDumpableName(displayId);
         dumpManager.registerNormalDumpable(mDumpableName, this);
+
+        try {
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(STATUS_BAR_COLORS_MONET),
+                    false, mColorObserver, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(STATUS_BAR_ICONS_COLOR),
+                    false, mColorObserver, UserHandle.USER_ALL);
+        } catch (Throwable ignored) {}
+        updateColorsFromSettings();
+    }
+
+    private void updateColorsFromSettings() {
+        try {
+            mUseMonetColor = Settings.System.getIntForUser(
+                    mContext.getContentResolver(), STATUS_BAR_COLORS_MONET, 0, UserHandle.USER_CURRENT) == 1;
+            String hex = Settings.System.getStringForUser(
+                    mContext.getContentResolver(), STATUS_BAR_ICONS_COLOR, UserHandle.USER_CURRENT);
+            if (!TextUtils.isEmpty(hex)) {
+                mCustomIconColor = Color.parseColor(hex.trim());
+            } else {
+                mCustomIconColor = 0;
+            }
+        } catch (Throwable t) {
+            mUseMonetColor = false;
+            mCustomIconColor = 0;
+        }
     }
 
     @Override
     public void stop() {
         mDumpManager.unregisterDumpable(mDumpableName);
+        try {
+            mContext.getContentResolver().unregisterContentObserver(mColorObserver);
+        } catch (Throwable ignored) {}
     }
 
     private String getDumpableName(int displayId) {
@@ -160,8 +214,17 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
         mDarkIntensity = darkIntensity;
         ArgbEvaluator evaluator = ArgbEvaluator.getInstance();
 
+        int lightModeColor = mLightModeIconColorSingleTone;
+        int darkModeColor = mDarkModeIconColorSingleTone;
+
+        if (mUseMonetColor) {
+            lightModeColor = Utils.getColorAttrDefaultColor(mContext, android.R.attr.colorAccent);
+        } else if (mCustomIconColor != 0) {
+            lightModeColor = mCustomIconColor;
+        }
+
         mIconTint = (int) evaluator.evaluate(darkIntensity,
-                mLightModeIconColorSingleTone, mDarkModeIconColorSingleTone);
+                lightModeColor, darkModeColor);
         mContrastTint = (int) evaluator
                 .evaluate(darkIntensity, mLightModeContrastColor, mDarkModeContrastColor);
 

@@ -379,6 +379,8 @@ constructor(
                     SETTING_COLOR_LOCATION,
                     SETTING_COLOR_COMBO,
                     SETTING_COLOR_ALL,
+                    "status_bar_dynamic_island_enabled",
+                    "status_bar_island_hide_chips",
                 )
                 for (key in keysToObserve) {
                     context.contentResolver.registerContentObserver(
@@ -520,8 +522,29 @@ constructor(
     val chips: StateFlow<MultipleOngoingActivityChipsModel> =
         unrefinedChips
             .map { unrefinedChips ->
-                chipsRefiners.fold(unrefinedChips) { currentOutput, refiner ->
-                    refiner.transform(currentOutput)
+                val islandEnabled = try {
+                    Settings.System.getIntForUser(
+                        context.contentResolver,
+                        "status_bar_dynamic_island_enabled",
+                        0,
+                        UserHandle.USER_CURRENT
+                    ) == 1
+                } catch (e: Exception) { false }
+                val hideChipsSetting = try {
+                    Settings.System.getIntForUser(
+                        context.contentResolver,
+                        "status_bar_island_hide_chips",
+                        1,
+                        UserHandle.USER_CURRENT
+                    ) == 1
+                } catch (e: Exception) { false }
+                val hideChips = islandEnabled && hideChipsSetting
+                if (hideChips) {
+                    MultipleOngoingActivityChipsModel()
+                } else {
+                    chipsRefiners.fold(unrefinedChips) { currentOutput, refiner ->
+                        refiner.transform(currentOutput)
+                    }
                 }
             }
             .stateIn(scope, SharingStarted.Lazily, MultipleOngoingActivityChipsModel())

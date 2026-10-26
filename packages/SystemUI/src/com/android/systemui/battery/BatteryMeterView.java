@@ -21,6 +21,7 @@ import static com.android.systemui.DejankUtils.whitelistIpcs;
 
 import static java.lang.annotation.RetentionPolicy.SOURCE;
 
+import android.animation.ArgbEvaluator;
 import android.animation.LayoutTransition;
 import android.animation.ObjectAnimator;
 import android.annotation.IntDef;
@@ -28,6 +29,11 @@ import android.annotation.IntRange;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.database.ContentObserver;
+import android.graphics.Color;
+import android.os.Handler;
+import android.os.Looper;
+import com.android.settingslib.Utils;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
@@ -125,6 +131,32 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     private BatteryColors mUnifiedBatteryColors = BatteryColors.LIGHT_THEME_COLORS;
     private BatteryDrawableState mUnifiedBatteryState =
             BatteryDrawableState.Companion.getDefaultInitialState();
+
+    public static final String STATUS_BAR_COLORS_MONET = "status_bar_colors_monet";
+    public static final String STATUS_BAR_ICONS_COLOR = "status_bar_icons_color";
+    public static final String STATUS_BAR_BATTERY_COLOR = "status_bar_battery_color";
+    public static final String STATUS_BAR_BATTERY_CHARGING_COLOR = "status_bar_battery_charging_color";
+    public static final String STATUS_BAR_BATTERY_LOW_COLOR = "status_bar_battery_low_color";
+    public static final String STATUS_BAR_BATTERY_SAVER_COLOR = "status_bar_battery_saver_color";
+
+    private boolean mUseMonetColor;
+    private int mCustomIconColor;
+    private int mCustomNormalBatteryColor;
+    private int mCustomChargingColor;
+    private int mCustomLowBatteryColor;
+    private int mCustomPowerSaveColor;
+
+    private ArrayList<Rect> mDarkAreas = new ArrayList<>();
+    private float mDarkIntensity = 0f;
+    private int mDarkTint = DarkIconDispatcher.DEFAULT_ICON_TINT;
+
+    private final ContentObserver mColorObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+        @Override
+        public void onChange(boolean selfChange) {
+            updateColorsFromSettings();
+            onDarkChanged(mDarkAreas, mDarkIntensity, mDarkTint);
+        }
+    };
 
     public BatteryMeterView(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
@@ -254,6 +286,104 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         return false;
     }
 
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        try {
+            android.content.ContentResolver cr = mContext.getContentResolver();
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_COLORS_MONET), false, mColorObserver, UserHandle.USER_ALL);
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_ICONS_COLOR), false, mColorObserver, UserHandle.USER_ALL);
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_COLOR), false, mColorObserver, UserHandle.USER_ALL);
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_CHARGING_COLOR), false, mColorObserver, UserHandle.USER_ALL);
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_LOW_COLOR), false, mColorObserver, UserHandle.USER_ALL);
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_SAVER_COLOR), false, mColorObserver, UserHandle.USER_ALL);
+        } catch (Throwable ignored) {}
+        updateColorsFromSettings();
+        onDarkChanged(mDarkAreas, mDarkIntensity, mDarkTint);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        try {
+            mContext.getContentResolver().unregisterContentObserver(mColorObserver);
+        } catch (Throwable ignored) {}
+    }
+
+    private void updateColorsFromSettings() {
+        try {
+            android.content.ContentResolver cr = mContext.getContentResolver();
+            int u = UserHandle.USER_CURRENT;
+            mUseMonetColor = Settings.System.getIntForUser(cr, STATUS_BAR_COLORS_MONET, 0, u) == 1;
+
+            mCustomIconColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_ICONS_COLOR, u));
+            mCustomNormalBatteryColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_COLOR, u));
+            mCustomChargingColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_CHARGING_COLOR, u));
+            mCustomLowBatteryColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_LOW_COLOR, u));
+            mCustomPowerSaveColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_SAVER_COLOR, u));
+        } catch (Throwable t) {
+            mUseMonetColor = false;
+            mCustomIconColor = 0;
+            mCustomNormalBatteryColor = 0;
+            mCustomChargingColor = 0;
+            mCustomLowBatteryColor = 0;
+            mCustomPowerSaveColor = 0;
+        }
+    }
+
+    private int parseHexColor(String hex) {
+        if (!TextUtils.isEmpty(hex)) {
+            try {
+                return Color.parseColor(hex.trim());
+            } catch (Throwable ignored) {}
+        }
+        return 0;
+    }
+
+    private int resolveCustomBatteryColor(float intensity, int defaultColor) {
+        int targetColor = 0;
+        if (isCharging() && mCustomChargingColor != 0) {
+            targetColor = mCustomChargingColor;
+        } else if (mLevel <= 20 && mCustomLowBatteryColor != 0) {
+            targetColor = mCustomLowBatteryColor;
+        } else if (mPowerSaveEnabled && mCustomPowerSaveColor != 0) {
+            targetColor = mCustomPowerSaveColor;
+        } else if (mUseMonetColor) {
+            targetColor = Utils.getColorAttrDefaultColor(mContext, android.R.attr.colorAccent);
+        } else if (mCustomNormalBatteryColor != 0) {
+            targetColor = mCustomNormalBatteryColor;
+        } else if (mCustomIconColor != 0) {
+            targetColor = mCustomIconColor;
+        }
+
+        if (targetColor == 0) {
+            return defaultColor;
+        }
+
+        // DarkIcon contrast adaptation:
+        if (intensity > 0.5f) {
+            if (mUseMonetColor) {
+                int monetDark;
+                try {
+                    monetDark = mContext.getColor(com.android.internal.R.color.system_accent1_900_light);
+                } catch (Exception e) {
+                    try {
+                        monetDark = mContext.getColor(com.android.internal.R.color.system_accent2_800);
+                    } catch (Exception ex) {
+                        monetDark = Color.BLACK;
+                    }
+                }
+                return (int) ArgbEvaluator.getInstance().evaluate(intensity, targetColor, monetDark);
+            } else {
+                float luminance = Color.luminance(targetColor);
+                if (luminance > 0.65f) {
+                    return (int) ArgbEvaluator.getInstance().evaluate(intensity, targetColor, Color.BLACK);
+                }
+            }
+        }
+        return targetColor;
+    }
+
     /**
      * Update battery level
      *
@@ -284,6 +414,8 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                     );
 
             setBatteryDrawableState(newState);
+        } else {
+            onDarkChangedLegacy(mDarkAreas, mDarkIntensity, mDarkTint);
         }
     }
 
@@ -342,7 +474,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             mDrawable.setPowerSaveEnabled(isPowerSave);
         }
         if (!NewStatusBarIcons.isEnabled()) {
-            // Updated in mDrawable
+            onDarkChangedLegacy(mDarkAreas, mDarkIntensity, mDarkTint);
         } else {
             setBatteryDrawableState(
                     new BatteryDrawableState(
@@ -703,8 +835,8 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             mBatteryIconView.setImageDrawable(mUnifiedBattery);
             scaleBatteryMeterViews();
         } else {
-            boolean isHyperOS = (style == 1);
-            boolean isHollow = (style == 6);
+            boolean isHyperOS = (style == 1 || style == 6);
+            boolean isHollow = false;
             boolean isMiui = (style == 3);
             boolean isWindows11 = (style == 5);
             boolean isPerf = checkPerformanceMode();
@@ -780,6 +912,9 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
     @Override
     public void onDarkChanged(ArrayList<Rect> areas, float darkIntensity, int tint) {
+        mDarkAreas = areas;
+        mDarkIntensity = darkIntensity;
+        mDarkTint = tint;
         if (mIsStaticColor) return;
 
         if (!NewStatusBarIcons.isEnabled()) {
@@ -811,6 +946,12 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
         int nonAdaptedSingleToneColor = mDualToneHandler.getSingleColor(intensity);
         int nonAdaptedForegroundColor = mDualToneHandler.getFillColor(intensity);
         int nonAdaptedBackgroundColor = mDualToneHandler.getBackgroundColor(intensity);
+
+        int customColor = resolveCustomBatteryColor(intensity, nonAdaptedSingleToneColor);
+        if (customColor != 0) {
+            nonAdaptedSingleToneColor = customColor;
+            nonAdaptedForegroundColor = customColor;
+        }
 
         updateColors(nonAdaptedForegroundColor, nonAdaptedBackgroundColor,
                 nonAdaptedSingleToneColor);

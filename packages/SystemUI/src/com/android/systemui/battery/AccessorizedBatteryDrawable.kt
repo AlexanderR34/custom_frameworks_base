@@ -70,7 +70,7 @@ class AccessorizedBatteryDrawable(
             }
         }
 
-    varisHollowStyle: Boolean = false
+    var isHollowStyle: Boolean = false
         set(value) {
             if (field != value) {
                 field = value

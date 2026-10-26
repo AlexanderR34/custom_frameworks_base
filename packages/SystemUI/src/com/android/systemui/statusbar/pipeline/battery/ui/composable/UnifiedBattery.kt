@@ -81,10 +81,12 @@ import androidx.compose.ui.util.fastFirstOrNull
 import com.android.systemui.common.ui.compose.load
 import com.android.systemui.compose.modifiers.sysuiResTag
 import com.android.systemui.statusbar.phone.domain.interactor.IsAreaDark
+import com.android.settingslib.Utils
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryColors
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryFrame
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.BatteryGlyph
 import com.android.systemui.statusbar.pipeline.battery.shared.ui.PathSpec
+import com.android.systemui.statusbar.pipeline.battery.shared.ui.withOverrides
 import com.android.systemui.statusbar.pipeline.battery.ui.viewmodel.BatteryViewModel
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -206,6 +208,8 @@ fun HyperOSBattery(
     isCharging: Boolean,
     isPowerSave: Boolean,
     isDark: Boolean,
+    customFillColor: Color? = null,
+    customFrameColor: Color? = null,
     modifier: Modifier = Modifier,
     contentDescription: String = "",
 ) {
@@ -231,10 +235,11 @@ fun HyperOSBattery(
         )
         val frameCornerRadius = CornerRadius(3.2f * (h / 12f))
         val neutralColor = if (isDark) Color.White else Color.Black
+        val frameColor = customFrameColor ?: neutralColor
 
         // 1. Draw outer battery frame
         drawRoundRect(
-            color = neutralColor,
+            color = frameColor,
             topLeft = frameRect.topLeft,
             size = frameRect.size,
             cornerRadius = frameCornerRadius,
@@ -244,7 +249,7 @@ fun HyperOSBattery(
         // 2. Draw terminal cap on the right
         val capTop = (h - capHeight) / 2f
         drawRoundRect(
-            color = neutralColor,
+            color = frameColor,
             topLeft = Offset(frameRect.right + (strokeWidth * 0.6f), capTop),
             size = Size(capWidth, capHeight),
             cornerRadius = capCornerRadius,
@@ -264,19 +269,20 @@ fun HyperOSBattery(
 
             // 4. Draw soft cavity background
             drawRoundRect(
-                color = neutralColor.copy(alpha = 0.18f),
+                color = (customFillColor ?: neutralColor).copy(alpha = if (isDark) 0.22f else 0.15f),
                 topLeft = Offset(innerLeft, innerTop),
                 size = Size(innerWidth, innerHeight),
                 cornerRadius = innerCornerRadius,
             )
 
             // 5. Determine active fill color (HyperOS vibrant green for charging: 0xFF34C759)
-            val activeFillColor = when {
+            val defaultFillColor = when {
                 isCharging -> Color(0xFF34C759)
                 isPowerSave -> Color(0xFFF59E0B)
                 level <= 15 -> Color(0xFFEF4444)
                 else -> neutralColor
             }
+            val activeFillColor = customFillColor ?: defaultFillColor
 
             // 6. Draw dynamic level progress fill
             val currentFillWidth = (innerWidth * (level.coerceIn(0, 100) / 100f)).coerceIn(0f, innerWidth)
@@ -347,11 +353,14 @@ fun Windows11Battery(
     isCharging: Boolean,
     isPowerSave: Boolean,
     isDark: Boolean,
+    customFillColor: Color? = null,
+    customFrameColor: Color? = null,
     modifier: Modifier = Modifier,
     contentDescription: String = "",
 ) {
     val clampedLevel = level.coerceIn(0, 100)
     val neutralColor = if (isDark) Color.White else Color.Black
+    val frameColor = customFrameColor ?: neutralColor
 
     Canvas(
         modifier = modifier.fillMaxSize().sysuiResTag(BatteryViewModel.TEST_TAG),
@@ -377,7 +386,7 @@ fun Windows11Battery(
 
         // 1. Draw outer battery frame
         drawRoundRect(
-            color = neutralColor,
+            color = frameColor,
             topLeft = frameRect.topLeft,
             size = frameRect.size,
             cornerRadius = frameCornerRadius,
@@ -387,7 +396,7 @@ fun Windows11Battery(
         // 2. Draw positive terminal cap on right
         val capTop = (h - capHeight) / 2f
         drawRoundRect(
-            color = neutralColor,
+            color = frameColor,
             topLeft = Offset(frameRect.right + (strokeWidth * 0.6f), capTop),
             size = Size(capWidth, capHeight),
             cornerRadius = capCornerRadius,
@@ -407,12 +416,13 @@ fun Windows11Battery(
 
             // 4. Determine fill color matching Windows 11 Fluent Design:
             // Critical/Low (<= 20%): Red, Medium/PowerSave (< 50%): Amber, Normal/Charging: Green
-            val activeFillColor = when {
+            val defaultFillColor = when {
                 isCharging -> Color(0xFF107C41)
                 clampedLevel <= 20 -> Color(0xFFE81123)
                 isPowerSave || clampedLevel < 50 -> Color(0xFFFFB900)
                 else -> Color(0xFF107C41)
             }
+            val activeFillColor = customFillColor ?: defaultFillColor
 
             // 5. Draw dynamic level progress fill
             val currentFillWidth = (innerWidth * (clampedLevel / 100f)).coerceIn(0f, innerWidth)
@@ -487,17 +497,26 @@ fun MiuiBattery(
     isCharging: Boolean,
     isPowerSave: Boolean,
     isDark: Boolean,
+    customFillColor: Color? = null,
+    customFrameColor: Color? = null,
     modifier: Modifier = Modifier,
     contentDescription: String = "",
 ) {
     val clampedLevel = level.coerceIn(0, 100)
     val neutralColor = if (isDark) Color.White else Color.Black
+    val frameColor = customFrameColor ?: neutralColor
 
-    val (activeFillColor, textColor) = when {
+    val (defaultFillColor, defaultTextColor) = when {
         isCharging -> Color(0xFF34C759) to Color.White
         isPowerSave -> Color(0xFFF59E0B) to Color.White
         clampedLevel <= 15 -> Color(0xFFEF4444) to Color.White
         else -> (if (isDark) Color(0x65FFFFFF) else Color(0x55000000)) to neutralColor
+    }
+    val activeFillColor = customFillColor ?: defaultFillColor
+    val textColor = if (customFillColor != null) {
+        if (isCharging || isPowerSave || clampedLevel <= 15) Color.White else (customFrameColor ?: neutralColor)
+    } else {
+        defaultTextColor
     }
 
     Box(
@@ -527,7 +546,7 @@ fun MiuiBattery(
 
             // 1. Draw outer pill frame
             drawRoundRect(
-                color = neutralColor,
+                color = frameColor,
                 topLeft = frameRect.topLeft,
                 size = frameRect.size,
                 cornerRadius = frameCornerRadius,
@@ -537,7 +556,7 @@ fun MiuiBattery(
             // 2. Draw right terminal cap
             val capTop = (h - capHeight) / 2f
             drawRoundRect(
-                color = neutralColor,
+                color = frameColor,
                 topLeft = Offset(frameRect.right + (strokeWidth * 0.6f), capTop),
                 size = Size(capWidth, capHeight),
                 cornerRadius = capCornerRadius,
@@ -557,7 +576,7 @@ fun MiuiBattery(
 
                 // 4. Soft cavity background
                 drawRoundRect(
-                    color = neutralColor.copy(alpha = 0.16f),
+                    color = (customFillColor ?: frameColor).copy(alpha = 0.16f),
                     topLeft = Offset(innerLeft, innerTop),
                     size = Size(innerWidth, innerHeight),
                     cornerRadius = innerCornerRadius,
@@ -816,6 +835,42 @@ private fun getBatteryStyle(context: android.content.Context): Int {
     return if (hyperOs == 1) 1 else 0
 }
 
+private data class CustomBatteryConfig(
+    val useMonet: Boolean = false,
+    val normalColor: Color? = null,
+    val chargingColor: Color? = null,
+    val lowColor: Color? = null,
+    val saverColor: Color? = null,
+    val iconColor: Color? = null,
+)
+
+private fun parseHexToColor(hex: String?): Color? {
+    if (!hex.isNullOrBlank()) {
+        try {
+            return Color(android.graphics.Color.parseColor(hex.trim()))
+        } catch (_: Throwable) {}
+    }
+    return null
+}
+
+private fun loadCustomBatteryConfig(context: android.content.Context): CustomBatteryConfig {
+    val cr = context.contentResolver
+    val useMonet = Settings.System.getIntForUser(cr, "status_bar_colors_monet", 0, UserHandle.USER_CURRENT) == 1
+    val normalStr = Settings.System.getStringForUser(cr, "status_bar_battery_color", UserHandle.USER_CURRENT)
+    val chargingStr = Settings.System.getStringForUser(cr, "status_bar_battery_charging_color", UserHandle.USER_CURRENT)
+    val lowStr = Settings.System.getStringForUser(cr, "status_bar_battery_low_color", UserHandle.USER_CURRENT)
+    val saverStr = Settings.System.getStringForUser(cr, "status_bar_battery_saver_color", UserHandle.USER_CURRENT)
+    val iconStr = Settings.System.getStringForUser(cr, "status_bar_icons_color", UserHandle.USER_CURRENT)
+    return CustomBatteryConfig(
+        useMonet = useMonet,
+        normalColor = parseHexToColor(normalStr),
+        chargingColor = parseHexToColor(chargingStr),
+        lowColor = parseHexToColor(lowStr),
+        saverColor = parseHexToColor(saverStr),
+        iconColor = parseHexToColor(iconStr),
+    )
+}
+
 /**
  * A battery icon that supports Stock AOSP, HyperOS, and Samsung One UI styles.
  */
@@ -840,6 +895,9 @@ fun UnifiedBattery(
             ) == 1
         )
     }
+    var customColors by remember {
+        mutableStateOf(loadCustomBatteryConfig(context))
+    }
 
     DisposableEffect(context) {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -851,22 +909,101 @@ fun UnifiedBattery(
                     0,
                     UserHandle.USER_CURRENT
                 ) == 1
+                customColors = loadCustomBatteryConfig(context)
             }
         }
+        val cr = context.contentResolver
         val uri1 = Settings.System.getUriFor("status_bar_battery_style_hyperos")
         val uri2 = Settings.System.getUriFor("status_bar_battery_style")
         val uri3 = Settings.System.getUriFor(Settings.System.SHOW_BATTERY_PERCENT)
-        context.contentResolver.registerContentObserver(uri1, false, observer, UserHandle.USER_CURRENT)
-        context.contentResolver.registerContentObserver(uri2, false, observer, UserHandle.USER_CURRENT)
-        context.contentResolver.registerContentObserver(uri3, false, observer, UserHandle.USER_CURRENT)
+        val uri4 = Settings.System.getUriFor("status_bar_colors_monet")
+        val uri5 = Settings.System.getUriFor("status_bar_battery_color")
+        val uri6 = Settings.System.getUriFor("status_bar_battery_charging_color")
+        val uri7 = Settings.System.getUriFor("status_bar_battery_low_color")
+        val uri8 = Settings.System.getUriFor("status_bar_battery_saver_color")
+        val uri9 = Settings.System.getUriFor("status_bar_icons_color")
+
+        cr.registerContentObserver(uri1, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri2, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri3, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri4, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri5, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri6, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri7, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri8, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri9, false, observer, UserHandle.USER_CURRENT)
+
         onDispose {
-            context.contentResolver.unregisterContentObserver(observer)
+            cr.unregisterContentObserver(observer)
         }
     }
 
     val isDark = isDarkProvider().isDarkTheme(bounds)
     val neutralColor = if (isDark) Color.White else Color.Black
     val contentDesc = viewModel.contentDescription.load() ?: ""
+
+    val monetAccent = remember(isDark, customColors.useMonet) {
+        if (!customColors.useMonet) null
+        else if (isDark) {
+            Color(Utils.getColorAttrDefaultColor(context, android.R.attr.colorAccent))
+        } else {
+            try {
+                Color(context.getColor(com.android.internal.R.color.system_accent1_900_light))
+            } catch (_: Throwable) {
+                Color(Utils.getColorAttrDefaultColor(context, android.R.attr.colorAccent))
+            }
+        }
+    }
+
+    val adaptedNormalColor = remember(customColors.normalColor, isDark) {
+        customColors.normalColor?.let { c ->
+            if (!isDark) {
+                val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+                if (lum > 0.75f) Color.Black else c
+            } else c
+        }
+    }
+
+    val adaptedIconColor = remember(customColors.iconColor, isDark) {
+        customColors.iconColor?.let { c ->
+            if (!isDark) {
+                val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+                if (lum > 0.75f) Color.Black else c
+            } else c
+        }
+    }
+
+    val resolvedFillColor: Color? = when {
+        viewModel.isCharging -> {
+            customColors.chargingColor
+                ?: monetAccent
+        }
+        viewModel.attribution == BatteryGlyph.Plus -> {
+            customColors.saverColor
+                ?: monetAccent
+        }
+        (viewModel.level ?: 100) <= 20 -> {
+            customColors.lowColor
+                ?: monetAccent
+        }
+        monetAccent != null -> monetAccent
+        adaptedNormalColor != null -> adaptedNormalColor
+        adaptedIconColor != null -> adaptedIconColor
+        else -> null
+    }
+
+    val resolvedFrameColor: Color? = when {
+        adaptedNormalColor != null -> adaptedNormalColor
+        adaptedIconColor != null -> adaptedIconColor
+        monetAccent != null -> monetAccent
+        else -> null
+    }
+
+    val baseColors = if (isDark) viewModel.colorProfile.dark else viewModel.colorProfile.light
+    val resolvedColors = baseColors.withOverrides(
+        fill = resolvedFillColor ?: baseColors.fill,
+        attribution = resolvedFrameColor ?: baseColors.attribution,
+    )
 
     when (batteryStyle) {
         1 -> {
@@ -888,6 +1025,8 @@ fun UnifiedBattery(
                     isCharging = viewModel.isCharging,
                     isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
                     isDark = isDark,
+                    customFillColor = resolvedFillColor,
+                    customFrameColor = resolvedFrameColor,
                     modifier = Modifier
                         .align(Alignment.CenterVertically)
                         .aspectRatio(20.5f / 11.5f)
@@ -897,7 +1036,7 @@ fun UnifiedBattery(
                 if (showPercent && viewModel.level != null) {
                     Text(
                         text = "${viewModel.level}%",
-                        color = neutralColor,
+                        color = resolvedFrameColor ?: neutralColor,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -923,12 +1062,11 @@ fun UnifiedBattery(
                 (viewModel.level ?: 0) >= 100 -> 25f / 11.5f
                 else -> 23f / 11.5f
             }
-            val colors = if (isDark) viewModel.colorProfile.dark else viewModel.colorProfile.light
             SamsungBattery(
                 level = viewModel.level ?: 100,
                 showPercent = showPercent,
                 isCharging = viewModel.isCharging,
-                colors = colors,
+                colors = resolvedColors,
                 modifier = modifier
                     .sysuiResTag(BatteryViewModel.TEST_TAG)
                     .onLayoutRectChanged { relativeLayoutBounds ->
@@ -953,6 +1091,8 @@ fun UnifiedBattery(
                 isCharging = viewModel.isCharging,
                 isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
                 isDark = isDark,
+                customFillColor = resolvedFillColor,
+                customFrameColor = resolvedFrameColor,
                 modifier = modifier
                     .sysuiResTag(BatteryViewModel.TEST_TAG)
                     .onLayoutRectChanged { relativeLayoutBounds ->
@@ -971,11 +1111,10 @@ fun UnifiedBattery(
                 (viewModel.level ?: 0) >= 100 -> 25.5f / 11.5f
                 else -> 23.5f / 11.5f
             }
-            val color = if (isDark) viewModel.colorProfile.dark else viewModel.colorProfile.light
             ColorOSBattery(
                 level = viewModel.level ?: 100,
                 showPercent = showPercent,
-                colors = color,
+                colors = resolvedColors,
                 modifier = modifier
                     .sysuiResTag(BatteryViewModel.TEST_TAG)
                     .onLayoutRectChanged { relativeLayoutBounds ->
@@ -1005,6 +1144,8 @@ fun UnifiedBattery(
                     isCharging = viewModel.isCharging,
                     isPowerSave = (viewModel.attribution == BatteryGlyph.Plus),
                     isDark = isDark,
+                    customFillColor = resolvedFillColor,
+                    customFrameColor = resolvedFrameColor,
                     modifier = Modifier
                         .align(Alignment.CenterVertically)
                         .aspectRatio(21f / 11.5f)
@@ -1014,7 +1155,7 @@ fun UnifiedBattery(
                 if (showPercent && viewModel.level != null) {
                     Text(
                         text = "${viewModel.level}%",
-                        color = neutralColor,
+                        color = resolvedFrameColor ?: neutralColor,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -1031,20 +1172,12 @@ fun UnifiedBattery(
         }
         else -> {
             // Style 0 (or default): Stock AOSP unified battery
-            val colorProvider = {
-                if (isDark) {
-                    viewModel.colorProfile.dark
-                } else {
-                    viewModel.colorProfile.light
-                }
-            }
-
             BatteryLayout(
                 attribution = viewModel.attribution,
                 levelProvider = { viewModel.level },
                 isFullProvider = { viewModel.isFull },
                 glyphsProvider = { viewModel.glyphList },
-                colorsProvider = colorProvider,
+                colorsProvider = { resolvedColors },
                 modifier = modifier
                     .sysuiResTag(BatteryViewModel.TEST_TAG)
                     .onLayoutRectChanged { relativeLayoutBounds ->

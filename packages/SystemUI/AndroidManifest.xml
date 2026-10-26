@@ -203,6 +203,7 @@
     <permission android:name="com.android.systemui.permission.SELF"
             android:protectionLevel="signature" />
     <uses-permission android:name="com.android.systemui.permission.SELF" />
+    <uses-permission android:name="android.permission.ACCESS_ALL_DOWNLOADS" />
 
     <permission android:name="com.android.systemui.permission.PLUGIN"
             android:protectionLevel="signature" />

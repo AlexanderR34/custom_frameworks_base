@@ -301,7 +301,7 @@ constructor(
             val iconTint = if (useMonet) {
                 if (android.graphics.Color.luminance(bgColor) > 0.55f) {
                     try {
-                        com.android.settingslib.Utils.getColorAttrDefaultColor(context, com.android.internal.R.attr.colorOnPrimary)
+                        context.getColor(com.android.internal.R.color.materialColorOnPrimary)
                     } catch (_: Exception) {
                         android.graphics.Color.BLACK
                     }

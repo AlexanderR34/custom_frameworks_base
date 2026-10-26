@@ -57,6 +57,11 @@ import com.android.systemui.statusbar.phone.ui.StatusBarIconController;
 import com.android.systemui.tuner.TunerService;
 import com.android.systemui.tuner.TunerService.Tunable;
 
+import android.database.ContentObserver;
+import android.graphics.Color;
+import android.os.Looper;
+import android.provider.Settings;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -72,6 +77,8 @@ public class Clock extends TextView implements
         DarkReceiver {
 
     public static final String CLOCK_SECONDS = "clock_seconds";
+    public static final String STATUS_BAR_COLORS_MONET = "status_bar_colors_monet";
+    public static final String STATUS_BAR_CLOCK_COLOR = "status_bar_clock_color";
     private static final String CLOCK_SUPER_PARCELABLE = "clock_super_parcelable";
     private static final String CURRENT_USER_ID = "current_user_id";
     private static final String SHOW_SECONDS = "show_seconds";
@@ -101,6 +108,20 @@ public class Clock extends TextView implements
     private final InterestingConfigChanges mInterestingConfigChanges;
 
     private boolean mShouldApplyPadding = true;
+
+    private boolean mUseMonetColor;
+    private int mCustomClockColor;
+    private float mDarkIntensity;
+    private ArrayList<Rect> mDarkAreas = new ArrayList<>();
+    private int mDarkTint;
+
+    private final ContentObserver mColorObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+        @Override
+        public void onChange(boolean selfChange) {
+            updateColorsFromSettings();
+            applyClockTextColor();
+        }
+    };
 
     /**
      * Color to be set on this {@link TextView}, when wallpaperTextColor is <b>not</b> utilized.
@@ -194,11 +215,25 @@ public class Clock extends TextView implements
         // Make sure we update to the current time
         updateClock();
         updateShowSeconds();
+
+        try {
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(STATUS_BAR_COLORS_MONET),
+                    false, mColorObserver, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(STATUS_BAR_CLOCK_COLOR),
+                    false, mColorObserver, UserHandle.USER_ALL);
+        } catch (Throwable ignored) {}
+        updateColorsFromSettings();
+        applyClockTextColor();
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        try {
+            mContext.getContentResolver().unregisterContentObserver(mColorObserver);
+        } catch (Throwable ignored) {}
         if (mScreenReceiverRegistered) {
             mScreenReceiverRegistered = false;
             mBroadcastDispatcher.unregisterReceiver(mScreenReceiver);
@@ -213,6 +248,46 @@ public class Clock extends TextView implements
             Dependency.get(TunerService.class).removeTunable(this);
             mUserTracker.removeCallback(mUserChangedCallback);
         }
+    }
+
+    private void updateColorsFromSettings() {
+        try {
+            mUseMonetColor = Settings.System.getIntForUser(
+                    mContext.getContentResolver(), STATUS_BAR_COLORS_MONET, 0, UserHandle.USER_CURRENT) == 1;
+            String hex = Settings.System.getStringForUser(
+                    mContext.getContentResolver(), STATUS_BAR_CLOCK_COLOR, UserHandle.USER_CURRENT);
+            if (!TextUtils.isEmpty(hex)) {
+                mCustomClockColor = Color.parseColor(hex.trim());
+            } else {
+                mCustomClockColor = 0;
+            }
+        } catch (Throwable t) {
+            mUseMonetColor = false;
+            mCustomClockColor = 0;
+        }
+    }
+
+    private void applyClockTextColor() {
+        if (mUseMonetColor) {
+            if (mDarkIntensity > 0.5f) {
+                setTextColor(DarkIconDispatcher.getTint(mDarkAreas, this, mDarkTint));
+            } else {
+                int monetColor = Utils.getColorAttrDefaultColor(mContext, android.R.attr.colorAccent);
+                setTextColor(monetColor);
+            }
+            return;
+        }
+
+        if (mCustomClockColor != 0) {
+            if (mDarkIntensity > 0.5f) {
+                setTextColor(DarkIconDispatcher.getTint(mDarkAreas, this, mDarkTint));
+            } else {
+                setTextColor(mCustomClockColor);
+            }
+            return;
+        }
+
+        setTextColor(mNonAdaptedColor);
     }
 
     private final BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
@@ -279,8 +354,11 @@ public class Clock extends TextView implements
 
     @Override
     public void onDarkChanged(ArrayList<Rect> areas, float darkIntensity, int tint) {
+        mDarkAreas = areas;
+        mDarkIntensity = darkIntensity;
+        mDarkTint = tint;
         mNonAdaptedColor = DarkIconDispatcher.getTint(areas, this, tint);
-        setTextColor(mNonAdaptedColor);
+        applyClockTextColor();
     }
 
     // Update text color based when shade scrim changes color.
