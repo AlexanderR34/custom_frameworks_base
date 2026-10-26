@@ -41,6 +41,7 @@ import android.text.style.RelativeSizeSpan;
 import android.util.AttributeSet;
 import android.view.ContextThemeWrapper;
 import android.view.Display;
+import android.animation.ArgbEvaluator;
 import android.widget.TextView;
 
 import com.android.settingslib.Utils;
@@ -79,6 +80,7 @@ public class Clock extends TextView implements
     public static final String CLOCK_SECONDS = "clock_seconds";
     public static final String STATUS_BAR_COLORS_MONET = "status_bar_colors_monet";
     public static final String STATUS_BAR_CLOCK_COLOR = "status_bar_clock_color";
+    public static final String STATUS_BAR_CLOCK_DARK_COLOR = "status_bar_clock_dark_color";
     private static final String CLOCK_SUPER_PARCELABLE = "clock_super_parcelable";
     private static final String CURRENT_USER_ID = "current_user_id";
     private static final String SHOW_SECONDS = "show_seconds";
@@ -111,6 +113,7 @@ public class Clock extends TextView implements
 
     private boolean mUseMonetColor;
     private int mCustomClockColor;
+    private int mCustomClockDarkColor;
     private float mDarkIntensity;
     private ArrayList<Rect> mDarkAreas = new ArrayList<>();
     private int mDarkTint;
@@ -223,6 +226,9 @@ public class Clock extends TextView implements
             mContext.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(STATUS_BAR_CLOCK_COLOR),
                     false, mColorObserver, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(STATUS_BAR_CLOCK_DARK_COLOR),
+                    false, mColorObserver, UserHandle.USER_ALL);
         } catch (Throwable ignored) {}
         updateColorsFromSettings();
         applyClockTextColor();
@@ -261,16 +267,30 @@ public class Clock extends TextView implements
             } else {
                 mCustomClockColor = 0;
             }
+            String darkHex = Settings.System.getStringForUser(
+                    mContext.getContentResolver(), STATUS_BAR_CLOCK_DARK_COLOR, UserHandle.USER_CURRENT);
+            if (!TextUtils.isEmpty(darkHex)) {
+                mCustomClockDarkColor = Color.parseColor(darkHex.trim());
+            } else {
+                mCustomClockDarkColor = 0;
+            }
         } catch (Throwable t) {
             mUseMonetColor = false;
             mCustomClockColor = 0;
+            mCustomClockDarkColor = 0;
         }
     }
 
     private void applyClockTextColor() {
         if (mUseMonetColor) {
             if (mDarkIntensity > 0.5f) {
-                setTextColor(DarkIconDispatcher.getTint(mDarkAreas, this, mDarkTint));
+                int monetDark;
+                try {
+                    monetDark = mContext.getColor(com.android.internal.R.color.system_accent1_900_light);
+                } catch (Exception e) {
+                    monetDark = Color.BLACK;
+                }
+                setTextColor(monetDark);
             } else {
                 int monetColor = Utils.getColorAttrDefaultColor(mContext, android.R.attr.colorAccent);
                 setTextColor(monetColor);
@@ -278,12 +298,14 @@ public class Clock extends TextView implements
             return;
         }
 
-        if (mCustomClockColor != 0) {
-            if (mDarkIntensity > 0.5f) {
-                setTextColor(DarkIconDispatcher.getTint(mDarkAreas, this, mDarkTint));
-            } else {
-                setTextColor(mCustomClockColor);
-            }
+        if (mCustomClockColor != 0 || mCustomClockDarkColor != 0) {
+            int lightColor = (mCustomClockColor != 0) ? mCustomClockColor : Color.WHITE;
+            int darkColor = (mCustomClockDarkColor != 0) ? mCustomClockDarkColor : Color.BLACK;
+
+            boolean inArea = DarkIconDispatcher.isInAreas(mDarkAreas, this);
+            int targetDark = inArea ? darkColor : lightColor;
+            int evaluated = (int) ArgbEvaluator.getInstance().evaluate(mDarkIntensity, lightColor, targetDark);
+            setTextColor(evaluated);
             return;
         }
 

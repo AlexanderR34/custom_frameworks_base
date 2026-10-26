@@ -135,6 +135,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     public static final String STATUS_BAR_COLORS_MONET = "status_bar_colors_monet";
     public static final String STATUS_BAR_ICONS_COLOR = "status_bar_icons_color";
     public static final String STATUS_BAR_BATTERY_COLOR = "status_bar_battery_color";
+    public static final String STATUS_BAR_BATTERY_DARK_COLOR = "status_bar_battery_dark_color";
     public static final String STATUS_BAR_BATTERY_CHARGING_COLOR = "status_bar_battery_charging_color";
     public static final String STATUS_BAR_BATTERY_LOW_COLOR = "status_bar_battery_low_color";
     public static final String STATUS_BAR_BATTERY_SAVER_COLOR = "status_bar_battery_saver_color";
@@ -142,6 +143,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
     private boolean mUseMonetColor;
     private int mCustomIconColor;
     private int mCustomNormalBatteryColor;
+    private int mCustomNormalBatteryDarkColor;
     private int mCustomChargingColor;
     private int mCustomLowBatteryColor;
     private int mCustomPowerSaveColor;
@@ -294,6 +296,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
             cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_COLORS_MONET), false, mColorObserver, UserHandle.USER_ALL);
             cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_ICONS_COLOR), false, mColorObserver, UserHandle.USER_ALL);
             cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_COLOR), false, mColorObserver, UserHandle.USER_ALL);
+            cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_DARK_COLOR), false, mColorObserver, UserHandle.USER_ALL);
             cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_CHARGING_COLOR), false, mColorObserver, UserHandle.USER_ALL);
             cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_LOW_COLOR), false, mColorObserver, UserHandle.USER_ALL);
             cr.registerContentObserver(Settings.System.getUriFor(STATUS_BAR_BATTERY_SAVER_COLOR), false, mColorObserver, UserHandle.USER_ALL);
@@ -318,6 +321,7 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
 
             mCustomIconColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_ICONS_COLOR, u));
             mCustomNormalBatteryColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_COLOR, u));
+            mCustomNormalBatteryDarkColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_DARK_COLOR, u));
             mCustomChargingColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_CHARGING_COLOR, u));
             mCustomLowBatteryColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_LOW_COLOR, u));
             mCustomPowerSaveColor = parseHexColor(Settings.System.getStringForUser(cr, STATUS_BAR_BATTERY_SAVER_COLOR, u));
@@ -374,6 +378,8 @@ public class BatteryMeterView extends LinearLayout implements DarkReceiver {
                     }
                 }
                 return (int) ArgbEvaluator.getInstance().evaluate(intensity, targetColor, monetDark);
+            } else if (mCustomNormalBatteryDarkColor != 0 && (targetColor == mCustomNormalBatteryColor || targetColor == mCustomIconColor)) {
+                return (int) ArgbEvaluator.getInstance().evaluate(intensity, targetColor, mCustomNormalBatteryDarkColor);
             } else {
                 float luminance = Color.luminance(targetColor);
                 if (luminance > 0.65f) {

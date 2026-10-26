@@ -57,6 +57,7 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
 
     public static final String STATUS_BAR_COLORS_MONET = "status_bar_colors_monet";
     public static final String STATUS_BAR_ICONS_COLOR = "status_bar_icons_color";
+    public static final String STATUS_BAR_ICONS_DARK_COLOR = "status_bar_icons_dark_color";
 
     private final LightBarTransitionsController mTransitionsController;
     private final ArrayList<Rect> mTintAreas = new ArrayList<>();
@@ -66,6 +67,7 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
     private final Context mContext;
     private boolean mUseMonetColor;
     private int mCustomIconColor;
+    private int mCustomDarkIconColor;
 
     private int mIconTint = DEFAULT_ICON_TINT;
     private int mContrastTint = DEFAULT_INVERSE_ICON_TINT;
@@ -120,6 +122,9 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
             mContext.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(STATUS_BAR_ICONS_COLOR),
                     false, mColorObserver, UserHandle.USER_ALL);
+            mContext.getContentResolver().registerContentObserver(
+                    Settings.System.getUriFor(STATUS_BAR_ICONS_DARK_COLOR),
+                    false, mColorObserver, UserHandle.USER_ALL);
         } catch (Throwable ignored) {}
         updateColorsFromSettings();
     }
@@ -135,9 +140,17 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
             } else {
                 mCustomIconColor = 0;
             }
+            String darkHex = Settings.System.getStringForUser(
+                    mContext.getContentResolver(), STATUS_BAR_ICONS_DARK_COLOR, UserHandle.USER_CURRENT);
+            if (!TextUtils.isEmpty(darkHex)) {
+                mCustomDarkIconColor = Color.parseColor(darkHex.trim());
+            } else {
+                mCustomDarkIconColor = 0;
+            }
         } catch (Throwable t) {
             mUseMonetColor = false;
             mCustomIconColor = 0;
+            mCustomDarkIconColor = 0;
         }
     }
 
@@ -219,8 +232,18 @@ public class DarkIconDispatcherImpl implements SysuiDarkIconDispatcher,
 
         if (mUseMonetColor) {
             lightModeColor = Utils.getColorAttrDefaultColor(mContext, android.R.attr.colorAccent);
-        } else if (mCustomIconColor != 0) {
-            lightModeColor = mCustomIconColor;
+            try {
+                darkModeColor = mContext.getColor(com.android.internal.R.color.system_accent1_900_light);
+            } catch (Exception e) {
+                darkModeColor = mDarkModeIconColorSingleTone;
+            }
+        } else {
+            if (mCustomIconColor != 0) {
+                lightModeColor = mCustomIconColor;
+            }
+            if (mCustomDarkIconColor != 0) {
+                darkModeColor = mCustomDarkIconColor;
+            }
         }
 
         mIconTint = (int) evaluator.evaluate(darkIntensity,
