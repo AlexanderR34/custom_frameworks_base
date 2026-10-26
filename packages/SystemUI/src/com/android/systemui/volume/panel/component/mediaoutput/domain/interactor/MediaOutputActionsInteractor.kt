@@ -107,7 +107,7 @@ constructor(
                     if (fixOutputSwitcherMultiuserSupport()) {
                         mediaOutputDialogManager.createAndShowWithController(
                             packageName = model.session.packageName,
-                            aboveStatusBar = false,
+                            aboveStatusBar = true,
                             controller = expandable?.dialogController(),
                             userHandle =
                                 UserHandle.getUserHandleForUid(model.session.sessionToken.uid),
@@ -119,7 +119,7 @@ constructor(
                     } else {
                         mediaOutputDialogManager.createAndShowWithController(
                             packageName = model.session.packageName,
-                            aboveStatusBar = false,
+                            aboveStatusBar = true,
                             controller = expandable?.dialogController(),
                             onDialogEventListener = onDialogEventListener,
                             mediaSwitchingType = mediaSwitchingType,

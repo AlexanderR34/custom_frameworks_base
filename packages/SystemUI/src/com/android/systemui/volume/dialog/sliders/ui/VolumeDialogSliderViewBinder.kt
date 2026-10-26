@@ -348,8 +348,8 @@ private fun HyperOSVolumeVerticalLayout(
     val progressFraction by animateFloatAsState(
         targetValue = rawProgressFraction,
         animationSpec = spring(
-            dampingRatio = 0.85f,
-            stiffness = 400f
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 450f
         ),
         label = "VolumeSliderProgress"
     )
@@ -395,8 +395,19 @@ private fun HyperOSVolumeVerticalLayout(
         mutableStateOf(
             Settings.System.getIntForUser(
                 context.contentResolver,
-                "hyperos_volume_use_monet",
+                Settings.System.HYPEROS_VOLUME_USE_MONET,
                 1,
+                UserHandle.USER_CURRENT
+            ) == 1
+        )
+    }
+
+    var showPercent by remember {
+        mutableStateOf(
+            Settings.System.getIntForUser(
+                context.contentResolver,
+                Settings.System.HYPEROS_VOLUME_SHOW_PERCENT,
+                0,
                 UserHandle.USER_CURRENT
             ) == 1
         )
@@ -425,21 +436,34 @@ private fun HyperOSVolumeVerticalLayout(
             observer,
             UserHandle.USER_CURRENT
         )
-        val uriMonet = Settings.System.getUriFor("hyperos_volume_use_monet")
+        val uriMonet = Settings.System.getUriFor(Settings.System.HYPEROS_VOLUME_USE_MONET)
         val monetObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
                 useMonet = Settings.System.getIntForUser(
                     context.contentResolver,
-                    "hyperos_volume_use_monet",
+                    Settings.System.HYPEROS_VOLUME_USE_MONET,
                     1,
                     UserHandle.USER_CURRENT
                 ) == 1
             }
         }
         context.contentResolver.registerContentObserver(uriMonet, false, monetObserver, UserHandle.USER_CURRENT)
+        val uriPercent = Settings.System.getUriFor(Settings.System.HYPEROS_VOLUME_SHOW_PERCENT)
+        val percentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                showPercent = Settings.System.getIntForUser(
+                    context.contentResolver,
+                    Settings.System.HYPEROS_VOLUME_SHOW_PERCENT,
+                    0,
+                    UserHandle.USER_CURRENT
+                ) == 1
+            }
+        }
+        context.contentResolver.registerContentObserver(uriPercent, false, percentObserver, UserHandle.USER_CURRENT)
         onDispose {
             context.contentResolver.unregisterContentObserver(observer)
             context.contentResolver.unregisterContentObserver(monetObserver)
+            context.contentResolver.unregisterContentObserver(percentObserver)
         }
     }
 
@@ -565,7 +589,8 @@ private fun HyperOSVolumeVerticalLayout(
                 targetStream = targetSecondaryStream,
                 isLandscape = isLandscape,
                 useMonet = useMonet,
-                isCollapsed = isCollapsed
+                isCollapsed = isCollapsed,
+                showPercent = showPercent
             )
         }
 
@@ -729,7 +754,13 @@ private fun HyperOSVolumeVerticalLayout(
                                             .size(if (isLandscape) 3.5.dp else 4.5.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (boostAnimationProgress > 0.5f) Color(0xEEFFFFFF) else Color(0xFFB0B0B0)
+                                                if (boostAnimationProgress > 0.5f) {
+                                                    Color(0xEEFFFFFF)
+                                                } else if (progressFraction >= 0.90f) {
+                                                    if (useMonet) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else Color(0xFF2A72E5).copy(alpha = 0.8f)
+                                                } else {
+                                                    if (useMonet) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else Color(0xFFB0B0B0)
+                                                }
                                             )
                                     )
                                 }
@@ -749,6 +780,26 @@ private fun HyperOSVolumeVerticalLayout(
                                     .graphicsLayer {
                                         alpha = boostAnimationProgress * contentAlpha
                                         translationY = (1f - boostAnimationProgress) * -12f
+                                    }
+                            )
+                        } else if (showPercent) {
+                            val volumePercent = (progressFraction * 100).roundToInt().coerceIn(0, 100)
+                            val percentTextColor = if (progressFraction >= 0.78f) {
+                                if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
+                            } else {
+                                if (useMonet) MaterialTheme.colorScheme.primary else Color(0xEEFFFFFF)
+                            }
+                            Text(
+                                text = "$volumePercent%",
+                                color = percentTextColor.copy(alpha = contentAlpha),
+                                fontSize = if (isLandscape) 11.sp else 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.SansSerif,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = topPadding + (if (isLandscape) 28.dp else 34.dp))
+                                    .graphicsLayer {
+                                        alpha = contentAlpha
                                     }
                             )
                         }
@@ -867,7 +918,8 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
     targetStream: Int,
     isLandscape: Boolean = false,
     useMonet: Boolean = true,
-    isCollapsed: Boolean = false
+    isCollapsed: Boolean = false,
+    showPercent: Boolean = false
 ) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val minVol = remember(targetStream) { audioManager.getStreamMinVolume(targetStream).toFloat() }
@@ -1015,6 +1067,25 @@ private fun HyperOSSecondaryVolumeVerticalCapsule(
                 modifier = Modifier.size(iconSize)
             )
         }
+
+        if (showPercent && !isCollapsed) {
+            val secPercentVal = (progressFraction * 100).roundToInt().coerceIn(0, 100)
+            val secPercentTextColor = if (progressFraction >= 0.82f) {
+                if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF2A72E5)
+            } else {
+                if (useMonet) MaterialTheme.colorScheme.primary else Color(0xEEFFFFFF)
+            }
+            Text(
+                text = "$secPercentVal%",
+                color = secPercentTextColor,
+                fontSize = if (isLandscape) 9.sp else 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = if (isLandscape) 8.dp else 12.dp)
+            )
+        }
     }
 }
 
@@ -1029,10 +1100,10 @@ private fun HyperOSRingerPill(
     var ringerMode by remember { mutableStateOf(audioManager.ringerModeInternal) }
     val isSilentOrVibrate = ringerMode != AudioManager.RINGER_MODE_NORMAL
 
-    val pillWidth = 62.dp
-    val pillHeight = 48.dp
-    val pillCorner = 18.dp
-    val iconSize = 24.dp
+    val pillWidth = if (isLandscape) 52.dp else 62.dp
+    val pillHeight = if (isLandscape) 38.dp else 46.dp
+    val pillCorner = if (isLandscape) 15.dp else 18.dp
+    val iconSize = if (isLandscape) 19.dp else 22.dp
 
     val animatedBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (isSilentOrVibrate) Color.White else Color(0x8A1A1A1A),
@@ -1104,10 +1175,10 @@ private fun HyperOSDndPill(
         )
     }
 
-    val pillWidth = 62.dp
-    val pillHeight = 48.dp
-    val pillCorner = 18.dp
-    val iconSize = 24.dp
+    val pillWidth = if (isLandscape) 52.dp else 62.dp
+    val pillHeight = if (isLandscape) 38.dp else 46.dp
+    val pillCorner = if (isLandscape) 15.dp else 18.dp
+    val iconSize = if (isLandscape) 19.dp else 22.dp
 
     val animatedBg by androidx.compose.animation.animateColorAsState(
         targetValue = if (isDndActive) Color.White else Color(0x8A1A1A1A),

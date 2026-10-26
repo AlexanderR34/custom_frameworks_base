@@ -53,16 +53,11 @@ data class MediaStreamStyle(
                 )
             } else {
                 MediaStreamStyle(
-                    paddingStart = 0.dp,
-                    backgroundColor =
-                        if (isVolumeAndPowerBlurEnabled()) {
-                            Color.Transparent
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        },
+                    paddingStart = 16.dp,
+                    backgroundColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     labelTextStyle =
                         MaterialTheme.typography.labelMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                     deviceNameTextStyle =
                         MaterialTheme.typography.titleMedium.copy(

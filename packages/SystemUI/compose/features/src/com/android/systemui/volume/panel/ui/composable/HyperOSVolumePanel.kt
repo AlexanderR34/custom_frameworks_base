@@ -22,9 +22,11 @@ import android.media.AudioManager
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -63,7 +65,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,9 +145,22 @@ fun HyperOSVolumePanel(
         }
     }
 
+    val coroutineScope = rememberCoroutineScope()
+    var isDismissing by remember { mutableStateOf(false) }
+
+    val dismissWithAnimation: () -> Unit = {
+        if (!isDismissing) {
+            isDismissing = true
+            isVisible = false
+            coroutineScope.launch {
+                delay(260)
+                onDismissRequest()
+            }
+        }
+    }
+
     BackHandler {
-        isVisible = false
-        onDismissRequest()
+        dismissWithAnimation()
     }
 
     LaunchedEffect(Unit) {
@@ -170,8 +188,7 @@ fun HyperOSVolumePanel(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                isVisible = false
-                onDismissRequest()
+                dismissWithAnimation()
             },
         contentAlignment = Alignment.TopEnd
     ) {
@@ -179,12 +196,12 @@ fun HyperOSVolumePanel(
             visible = isVisible,
             enter = slideInHorizontally(
                 initialOffsetX = { it },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-            ) + fadeIn(),
+                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(durationMillis = 200)),
             exit = slideOutHorizontally(
                 targetOffsetX = { it },
-                animationSpec = spring(stiffness = Spring.StiffnessMedium)
-            ) + fadeOut()
+                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+            ) + fadeOut(animationSpec = tween(durationMillis = 200))
         ) {
             // Floating Card (HyperOS full-sized aesthetic)
             Box(
@@ -505,16 +522,14 @@ private fun HyperOSTimersSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(if (isLandscape) 8.dp else 12.dp)
     ) {
-        // 1. Silent Mode Timer Row (30m to 8h) with Monet adaptive fill
+        // 1. Silent Mode Timer Row (15m to 8h) with Monet adaptive fill
         HyperOSTimerRow(
             settingKey = "hyperos_silent",
             isSystemActive = isSilentActive,
             iconRes = R.drawable.ic_hyperos_bell_normal,
             activeIconRes = R.drawable.ic_hyperos_bell_mute,
             label = "Silenciar dispositivo",
-            defaultTimerText = "Deslice para establecer un temporizador",
-            minMinutes = 30,
-            maxMinutes = 480, // 8 hours
+            defaultTimerText = "Deslice para temporizador",
             activeColor = Color(0xFFFF3B30),
             isLandscape = isLandscape,
             useMonet = useMonet,
@@ -529,16 +544,14 @@ private fun HyperOSTimersSection(
             }
         )
 
-        // 2. DND (Do Not Disturb) Timer Row (30m to 8h) with Monet adaptive fill
+        // 2. DND (Do Not Disturb) Timer Row (15m to 8h) with Monet adaptive fill
         HyperOSTimerRow(
             settingKey = "hyperos_dnd",
             isSystemActive = isDndActive,
             iconRes = R.drawable.ic_hyperos_dnd_moon,
             activeIconRes = R.drawable.ic_hyperos_dnd_moon,
             label = "No molestar",
-            defaultTimerText = "Deslice para establecer un temporizador",
-            minMinutes = 30,
-            maxMinutes = 480, // 8 hours
+            defaultTimerText = "Deslice para temporizador",
             activeColor = Color(0xFF7C4DFF),
             isLandscape = isLandscape,
             useMonet = useMonet,
@@ -568,8 +581,6 @@ private fun HyperOSTimerRow(
     activeIconRes: Int,
     label: String,
     defaultTimerText: String,
-    minMinutes: Int,
-    maxMinutes: Int,
     activeColor: Color,
     isLandscape: Boolean,
     useMonet: Boolean,
@@ -579,6 +590,26 @@ private fun HyperOSTimerRow(
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
+    val view = LocalView.current
+
+    val timerSteps = remember { listOf(15, 30, 45, 60, 90, 120, 180, 240, 360, 480) }
+
+    fun getMinutesForProgress(progress: Float): Int {
+        if (progress <= 0.04f) return 0
+        val stepFraction = ((progress - 0.04f) / 0.96f).coerceIn(0f, 1f)
+        val stepIndex = (stepFraction * (timerSteps.size - 1)).roundToInt().coerceIn(0, timerSteps.size - 1)
+        return timerSteps[stepIndex]
+    }
+
+    fun getProgressForMinutes(minutes: Int): Float {
+        val index = timerSteps.indexOf(minutes)
+        if (index >= 0) {
+            val stepFraction = index.toFloat() / (timerSteps.size - 1).toFloat()
+            return (0.10f + stepFraction * 0.90f).coerceIn(0.10f, 1f)
+        }
+        val maxMins = timerSteps.last().toFloat()
+        return (minutes.toFloat() / maxMins).coerceIn(0.10f, 1f)
+    }
 
     // Load stored timer from persistent storage
     val now = System.currentTimeMillis()
@@ -592,6 +623,11 @@ private fun HyperOSTimerRow(
             android.provider.Settings.System.getLong(contentResolver, "${settingKey}_timer_initial", 0L)
         } catch (e: Exception) { 0L }
     }
+    val storedProgress = remember(settingKey) {
+        try {
+            android.provider.Settings.System.getFloat(contentResolver, "${settingKey}_timer_progress", 0f)
+        } catch (e: Exception) { 0f }
+    }
 
     val hasValidTimer = isSystemActive && storedEnd > now && storedInitial > 0L
     val initialRemainingSecs = if (hasValidTimer) (storedEnd - now) / 1000L else 0L
@@ -601,31 +637,40 @@ private fun HyperOSTimerRow(
     var initialTotalSeconds by remember(storedInitial) { mutableStateOf(if (hasValidTimer) storedInitial else 0L) }
     var isCountingDown by remember(hasValidTimer) { mutableStateOf(hasValidTimer) }
     var dragProgress by remember { mutableFloatStateOf(0f) }
-
-    val maxSeconds = remember(maxMinutes) { (maxMinutes * 60f).coerceAtLeast(1f) }
+    var selectedAnchorProgress by remember(storedProgress, storedInitial) {
+        mutableFloatStateOf(
+            if (storedProgress > 0.04f) storedProgress
+            else if (hasValidTimer && storedInitial > 0L) getProgressForMinutes((storedInitial / 60L).toInt())
+            else 0f
+        )
+    }
+    var lastHapticStep by remember { mutableIntStateOf(-1) }
 
     // Real-time 1-second ticker countdown
     LaunchedEffect(isCountingDown, remainingSeconds) {
         if (isCountingDown && remainingSeconds > 0L) {
-            kotlinx.coroutines.delay(1000L)
+            delay(1000L)
             remainingSeconds -= 1L
             if (remainingSeconds <= 0L) {
                 isCountingDown = false
                 isActive = false
                 dragProgress = 0f
+                selectedAnchorProgress = 0f
                 try {
                     android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", 0L)
                     android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", 0L)
+                    android.provider.Settings.System.putFloat(contentResolver, "${settingKey}_timer_progress", 0f)
                 } catch (e: Exception) {}
                 onToggle(false)
             }
         }
     }
 
-    // Dynamic progress fraction (shrinks progressively as countdown proceeds)
-    val liveFraction = remember(isCountingDown, remainingSeconds, maxSeconds, dragProgress) {
-        if (isCountingDown && remainingSeconds > 0L) {
-            (remainingSeconds.toFloat() / maxSeconds).coerceIn(0f, 1f)
+    // Dynamic progress fraction: retreats from the user-selected position back to 0
+    val liveFraction = remember(isCountingDown, remainingSeconds, initialTotalSeconds, dragProgress, selectedAnchorProgress) {
+        if (isCountingDown && remainingSeconds > 0L && initialTotalSeconds > 0L) {
+            val anchor = if (selectedAnchorProgress > 0.04f) selectedAnchorProgress else getProgressForMinutes((initialTotalSeconds / 60L).toInt())
+            (anchor * (remainingSeconds.toFloat() / initialTotalSeconds.toFloat())).coerceIn(0f, 1f)
         } else {
             dragProgress
         }
@@ -647,13 +692,14 @@ private fun HyperOSTimerRow(
                 mins > 0L -> if (isLandscape) "Temp: ${mins}m ${secs}s" else "Temporizador: ${mins}m ${secs}s"
                 else -> if (isLandscape) "Temp: ${secs}s" else "Temporizador: ${secs}s"
             }
-        } else if (dragProgress > 0.02f) {
-            val totalMins = (((minMinutes + dragProgress * (maxMinutes - minMinutes)) / 15).roundToInt() * 15).coerceIn(minMinutes, maxMinutes)
+        } else if (dragProgress > 0.04f) {
+            val totalMins = getMinutesForProgress(dragProgress)
             val hours = totalMins / 60
             val mins = totalMins % 60
             when {
-                hours > 0 -> if (isLandscape) "Temp: ${hours}h ${mins}m" else "Temporizador: ${hours}h ${mins}m 00s"
-                else -> if (isLandscape) "Temp: ${mins}m 00s" else "Temporizador: ${mins}m 00s"
+                hours > 0 && mins > 0 -> if (isLandscape) "Temp: ${hours}h ${mins}m" else "Temporizador: ${hours}h ${mins}m"
+                hours > 0 -> if (isLandscape) "Temp: ${hours}h" else "Temporizador: ${hours} ${if (hours == 1) "hora" else "horas"}"
+                else -> if (isLandscape) "Temp: ${mins}m" else "Temporizador: ${mins} minutos"
             }
         } else {
             if (isLandscape) "Deslice para temporizador" else defaultTimerText
@@ -690,9 +736,11 @@ private fun HyperOSTimerRow(
                         remainingSeconds = 0L
                         initialTotalSeconds = 0L
                         dragProgress = 0f
+                        selectedAnchorProgress = 0f
                         try {
                             android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", 0L)
                             android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", 0L)
+                            android.provider.Settings.System.putFloat(contentResolver, "${settingKey}_timer_progress", 0f)
                         } catch (e: Exception) {}
                         onToggle(false)
                     } else {
@@ -721,32 +769,48 @@ private fun HyperOSTimerRow(
                     detectHorizontalDragGestures(
                         onDragStart = { offset ->
                             val width = size.width
-                            dragProgress = (offset.x / width).coerceIn(0f, 1f)
+                            val progress = (offset.x / width).coerceIn(0f, 1f)
+                            dragProgress = progress
                             isCountingDown = false
+                            val currentMins = getMinutesForProgress(progress)
+                            if (currentMins > 0) {
+                                lastHapticStep = currentMins
+                                view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                            }
                         },
                         onHorizontalDrag = { change, _ ->
                             change.consume()
                             val width = size.width
-                            dragProgress = (change.position.x / width).coerceIn(0f, 1f)
+                            val progress = (change.position.x / width).coerceIn(0f, 1f)
+                            dragProgress = progress
                             isCountingDown = false
+
+                            val currentMins = getMinutesForProgress(progress)
+                            if (currentMins != lastHapticStep && currentMins > 0) {
+                                lastHapticStep = currentMins
+                                view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_TICK)
+                            }
                         },
                         onDragEnd = {
-                            if (dragProgress > 0.05f) {
-                                val totalMins = (((minMinutes + dragProgress * (maxMinutes - minMinutes)) / 15).roundToInt() * 15).coerceIn(minMinutes, maxMinutes)
+                            val totalMins = getMinutesForProgress(dragProgress)
+                            if (totalMins > 0) {
                                 val secs = totalMins * 60L
                                 remainingSeconds = secs
                                 initialTotalSeconds = secs
+                                selectedAnchorProgress = dragProgress.coerceIn(0.10f, 1f)
                                 isCountingDown = true
                                 isActive = true
                                 val endMillis = System.currentTimeMillis() + (secs * 1000L)
                                 try {
                                     android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", endMillis)
                                     android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", secs)
+                                    android.provider.Settings.System.putFloat(contentResolver, "${settingKey}_timer_progress", selectedAnchorProgress)
                                 } catch (e: Exception) {}
                                 onToggle(true)
                                 onTimerChanged(totalMins)
                             } else {
                                 dragProgress = 0f
+                                selectedAnchorProgress = 0f
                                 remainingSeconds = 0L
                                 initialTotalSeconds = 0L
                                 isCountingDown = false
@@ -754,6 +818,7 @@ private fun HyperOSTimerRow(
                                 try {
                                     android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_end", 0L)
                                     android.provider.Settings.System.putLong(contentResolver, "${settingKey}_timer_initial", 0L)
+                                    android.provider.Settings.System.putFloat(contentResolver, "${settingKey}_timer_progress", 0f)
                                 } catch (e: Exception) {}
                                 onToggle(false)
                             }

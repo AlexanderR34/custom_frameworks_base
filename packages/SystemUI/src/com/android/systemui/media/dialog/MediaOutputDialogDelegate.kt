@@ -109,9 +109,7 @@ constructor(
     override fun createDialog(): SystemUIDialog {
         val dialog =
             systemUIDialogFactory.create(this, context, R.style.Theme_SystemUI_Dialog_Media)
-        if (!aboveStatusBar) {
-            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-        }
+        dialog.window?.setType(WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
         currentDialog = dialog
         return dialog
     }

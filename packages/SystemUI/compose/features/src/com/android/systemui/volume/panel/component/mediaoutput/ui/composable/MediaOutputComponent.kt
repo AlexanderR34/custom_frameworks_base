@@ -172,85 +172,23 @@ class MediaOutputComponent @Inject constructor(private val viewModel: MediaOutpu
         deviceIconViewModel: DeviceIconViewModel,
         modifier: Modifier = Modifier,
     ) {
-        val transition = updateTransition(deviceIconViewModel, label = "MediaOutputIconTransition")
-        val isTransitionIdle by
-            remember(transition) {
-                derivedStateOf {
-                    transition.currentState == transition.targetState && !transition.isRunning
-                }
-            }
         Box(
-            modifier =
-                modifier.size(56.dp).motionTestValues {
-                    isTransitionIdle exportAs
-                        MediaOutputComponentMotionTestKeys.isIconTransitionIdle
-                },
+            modifier = modifier.size(56.dp),
             contentAlignment = Alignment.Center,
         ) {
-            transition.AnimatedContent(
-                contentKey = { it.backgroundColor },
-                transitionSpec = {
-                    if (targetState is DeviceIconViewModel.IsPlaying) {
-                        scaleIn(
-                            initialScale = 0.9f,
-                            animationSpec = isPlayingInIconBackgroundSpec(),
-                        ) + fadeIn(animationSpec = isPlayingInIconBackgroundSpec()) togetherWith
-                            fadeOut(animationSpec = snap())
-                    } else {
-                        fadeIn(animationSpec = snap(delayMillis = 900)) togetherWith
-                            scaleOut(targetScale = 0.9f, animationSpec = isPlayingOutSpec()) +
-                                fadeOut(animationSpec = isPlayingOutSpec())
-                    }
-                },
-            ) { targetViewModel ->
-                Spacer(
-                    modifier =
-                        Modifier.fillMaxSize()
-                            .background(
-                                color = targetViewModel.backgroundColor.toColor(),
-                                shape = RoundedCornerShape(16.dp),
-                            )
-                            .sysuiResTag(
-                                if (targetViewModel is DeviceIconViewModel.IsPlaying) {
-                                    MediaOutputComponentMotionTestKeys.PLAYING_ICON_BACKGROUND_TAG
-                                } else {
-                                    MediaOutputComponentMotionTestKeys.IDLE_ICON_BACKGROUND_TAG
-                                }
-                            )
-                )
-            }
-            transition.AnimatedContent(
-                contentKey = { Objects.hash(it.icon, it.iconColor) },
-                transitionSpec = {
-                    if (targetState is DeviceIconViewModel.IsPlaying) {
-                        fadeIn(animationSpec = snap(delayMillis = 700)) togetherWith
-                            slideOutVertically(
-                                targetOffsetY = { it },
-                                animationSpec = isPlayingInIconSpec(),
-                            ) + fadeOut(animationSpec = isNotPlayingOutIconSpec())
-                    } else {
-                        slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = isNotPlayingInIconSpec(),
-                        ) + fadeIn(animationSpec = isNotPlayingInIconSpec()) togetherWith
-                            fadeOut(animationSpec = isPlayingOutSpec())
-                    }
-                },
-            ) { targetViewModel ->
-                Icon(
-                    icon = targetViewModel.icon,
-                    tint = targetViewModel.iconColor.toColor(),
-                    modifier =
-                        Modifier.size(24.dp)
-                            .sysuiResTag(
-                                if (targetViewModel is DeviceIconViewModel.IsPlaying) {
-                                    MediaOutputComponentMotionTestKeys.PLAYING_ICON_TAG
-                                } else {
-                                    MediaOutputComponentMotionTestKeys.IDLE_ICON_TAG
-                                }
-                            ),
-                )
-            }
+            Spacer(
+                modifier =
+                    Modifier.fillMaxSize()
+                        .background(
+                            color = deviceIconViewModel.backgroundColor.toColor(),
+                            shape = RoundedCornerShape(16.dp),
+                        )
+            )
+            Icon(
+                icon = deviceIconViewModel.icon,
+                tint = deviceIconViewModel.iconColor.toColor(),
+                modifier = Modifier.size(24.dp),
+            )
         }
     }
 }

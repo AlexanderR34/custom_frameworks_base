@@ -247,9 +247,7 @@ constructor(
                 marginEnd = 0
             }
 
-            if (soundAssistantButton is android.widget.ImageView) {
-                soundAssistantButton.setImageResource(R.drawable.ic_hyperos_speaker_mid)
-            }
+            updateSoundAssistantStyle(root)
             soundAssistantContainer?.let {
                 launchTraced("VDVB#soundAssistantTouchableBounds") {
                     viewModel.addTouchableBounds(it)
@@ -268,6 +266,52 @@ constructor(
 
         for (viewBinder in viewBinders) {
             with(viewBinder) { bind(root) }
+        }
+    }
+
+    private fun updateSoundAssistantStyle(view: View) {
+        val soundAssistantButton = view.findViewById<View?>(R.id.volume_dialog_sound_assistant_button) ?: return
+        val context = view.context
+        val useMonet = Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.HYPEROS_VOLUME_USE_MONET,
+            1,
+            android.os.UserHandle.USER_CURRENT
+        ) == 1
+
+        val bgColor = if (useMonet) {
+            com.android.settingslib.Utils.getColorAttrDefaultColor(context, android.R.attr.colorAccent)
+        } else {
+            android.graphics.Color.parseColor("#FF0D84FF")
+        }
+
+        val shapeDrawable = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(bgColor)
+            val sizePx = (44 * view.resources.displayMetrics.density).toInt()
+            setSize(sizePx, sizePx)
+        }
+        val rippleColor = android.content.res.ColorStateList.valueOf(
+            com.android.settingslib.Utils.getColorAttrDefaultColor(context, android.R.attr.colorControlHighlight)
+        )
+        soundAssistantButton.background = android.graphics.drawable.RippleDrawable(rippleColor, shapeDrawable, null)
+
+        if (soundAssistantButton is android.widget.ImageView) {
+            soundAssistantButton.setImageResource(R.drawable.ic_hyperos_speaker_mid)
+            val iconTint = if (useMonet) {
+                if (android.graphics.Color.luminance(bgColor) > 0.55f) {
+                    try {
+                        com.android.settingslib.Utils.getColorAttrDefaultColor(context, com.android.internal.R.attr.colorOnPrimary)
+                    } catch (_: Exception) {
+                        android.graphics.Color.BLACK
+                    }
+                } else {
+                    android.graphics.Color.WHITE
+                }
+            } else {
+                android.graphics.Color.WHITE
+            }
+            soundAssistantButton.imageTintList = android.content.res.ColorStateList.valueOf(iconTint)
         }
     }
 
@@ -359,6 +403,9 @@ constructor(
                         if (isHyperOS && isVolumeDialogVertical) {
                             val shouldShow = shouldShowSoundAssistant(view.context)
                             soundAssistantContainer?.visibility = if (shouldShow) View.VISIBLE else View.GONE
+                            if (shouldShow) {
+                                updateSoundAssistantStyle(view)
+                            }
                         } else {
                             soundAssistantContainer?.visibility = View.GONE
                         }

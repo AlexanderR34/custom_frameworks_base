@@ -145,6 +145,9 @@ constructor(
                 setDimAmount(0f)
                 setBackgroundDrawableResource(android.R.color.transparent)
                 setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                if (isHyperOS) {
+                    setWindowAnimations(0)
+                }
                 decorView.setOnTouchListener { _, event ->
                     if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
                         dialog.dismiss()
@@ -212,26 +215,29 @@ constructor(
             },
         )
         dialog.setCanceledOnTouchOutside(true)
-        dialog.window?.apply {
-            addFlags(
-                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
-                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-            )
-            addPrivateFlags(android.view.WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
-            setType(android.view.WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
-            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(0f)
-            setBackgroundDrawableResource(android.R.color.transparent)
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            decorView.setOnTouchListener { _, event ->
-                if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
-                    dialog.dismiss()
-                    true
-                } else {
-                    false
+        if (isHyperOS) {
+            dialog.window?.apply {
+                addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                        android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                )
+                addPrivateFlags(android.view.WindowManager.LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY)
+                setType(android.view.WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY)
+                clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                setDimAmount(0f)
+                setBackgroundDrawableResource(android.R.color.transparent)
+                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                setWindowAnimations(0)
+                decorView.setOnTouchListener { _, event ->
+                    if (event.action == android.view.MotionEvent.ACTION_OUTSIDE) {
+                        dialog.dismiss()
+                        true
+                    } else {
+                        false
+                    }
                 }
             }
         }
