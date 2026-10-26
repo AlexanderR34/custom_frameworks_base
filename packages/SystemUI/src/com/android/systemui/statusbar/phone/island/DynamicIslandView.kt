@@ -130,17 +130,7 @@ class DynamicIslandView @JvmOverloads constructor(
         }
     }
 
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (visibility != View.VISIBLE || alpha <= 0f) {
-            return false
-        }
-        tempRect.setEmpty()
-        computeTouchableRegion(tempRect)
-        if (tempRect.isEmpty || !tempRect.contains(ev.x.toInt(), ev.y.toInt())) {
-            return false
-        }
-        return super.dispatchTouchEvent(ev)
-    }
+
 
     fun resolveActiveActivity(): ComposeActivityType {
         val banner = DynamicIslandManager.transientBanner.value

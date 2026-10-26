@@ -1374,6 +1374,7 @@ class DynamicIslandController(
         view.animate().cancel()
 
         if (!isWindowAttached) {
+            view.visibility = View.VISIBLE
             view.alpha = 0f
             view.scaleX = 0.7f
             view.scaleY = 0.7f
@@ -1394,6 +1395,7 @@ class DynamicIslandController(
                 .start()
             notifyIslandWidthChanged()
         } else {
+            view.visibility = View.VISIBLE
             view.alpha = 1f
             view.scaleX = 1f
             view.scaleY = 1f
