@@ -210,6 +210,10 @@ class VariableDateViewController(
         broadcastDispatcher.unregisterReceiver(intentReceiver)
     }
 
+    private fun cleanDateText(raw: String): String {
+        return raw.replace(" de ", " ").replace(" del ", " ")
+    }
+
     private fun updateClock() {
         if (dateFormat == null) {
             dateFormat = getFormatFromPattern(datePattern)
@@ -217,7 +221,7 @@ class VariableDateViewController(
 
         currentTime.time = systemClock.currentTimeMillis()
 
-        val text = getTextForFormat(currentTime, dateFormat!!)
+        val text = cleanDateText(getTextForFormat(currentTime, dateFormat!!))
         if (text != lastText) {
             mView.setText(text)
             lastText = text
@@ -235,14 +239,14 @@ class VariableDateViewController(
         }
         if (DEBUG) Log.d(TAG, "Width changed. Maybe changing pattern")
         // Start with longer pattern and see what fits
-        var text = getTextForFormat(currentTime, getFormatFromPattern(longerPattern))
+        var text = cleanDateText(getTextForFormat(currentTime, getFormatFromPattern(longerPattern)))
         var length = mView.getDesiredWidthForText(text)
         if (length <= availableWidth) {
             changePattern(longerPattern)
             return
         }
 
-        text = getTextForFormat(currentTime, getFormatFromPattern(shorterPattern))
+        text = cleanDateText(getTextForFormat(currentTime, getFormatFromPattern(shorterPattern)))
         length = mView.getDesiredWidthForText(text)
         if (length <= availableWidth) {
             changePattern(shorterPattern)
