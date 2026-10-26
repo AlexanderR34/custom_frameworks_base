@@ -145,7 +145,7 @@ class SystemIslandBanner(
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
-            title = "SystemIslandBanner"
+            setTitle("SystemIslandBanner")
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             y = topMargin
         }

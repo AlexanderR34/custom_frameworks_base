@@ -69,6 +69,9 @@ class SystemIslandBannerController(
                 Intent.ACTION_BATTERY_CHANGED -> {
                     handleBatteryEvent(intent)
                 }
+                Intent.ACTION_BATTERY_LOW -> {
+                    handleBatteryLowEvent(intent)
+                }
                 Intent.ACTION_POWER_DISCONNECTED -> {
                     wasCharging = false
                 }
@@ -178,6 +181,26 @@ class SystemIslandBannerController(
             }
         }
         return 0.0
+    }
+
+    private var hasShownLowBatteryAlert = false
+
+    private fun handleBatteryLowEvent(intent: Intent) {
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, 20)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
+        val batteryPct = if (scale > 0) (level * 100 / scale) else level
+        if (hasShownLowBatteryAlert) return
+        hasShownLowBatteryAlert = true
+        mainHandler.post {
+            banner.show(
+                iconRes = R.drawable.battery_meter_progress_low,
+                title = context.getString(R.string.island_battery_low),
+                subtitle = String.format(Locale.getDefault(), context.getString(R.string.island_battery_low_sub), batteryPct),
+                badge = "$batteryPct%",
+                tintColor = Color.parseColor("#FF453A"),
+                durationMs = 4500L,
+            )
+        }
     }
 
     private fun handleBluetoothEvent(intent: Intent) {

@@ -68,8 +68,28 @@ class WaveformView @JvmOverloads constructor(
         }
     }
 
+    private var topColor = Color.parseColor("#BA8CFA")
+    private var bottomColor = Color.parseColor("#7C3AED")
+
+    fun setGradientColors(top: Int, bottom: Int) {
+        topColor = top
+        bottomColor = bottom
+        invalidate()
+    }
+
     fun setBarColor(color: Int) {
-        barPaint.color = color
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        val topHsv = hsv.clone().apply {
+            this[2] = (this[2] * 1.15f).coerceIn(0.7f, 1.0f)
+            if (this[1] < 0.35f) this[1] = 0.55f
+        }
+        val bottomHsv = hsv.clone().apply {
+            this[2] = (this[2] * 0.75f).coerceIn(0.4f, 0.85f)
+            this[1] = (this[1] * 1.15f).coerceAtMost(1.0f)
+        }
+        topColor = Color.HSVToColor(topHsv)
+        bottomColor = Color.HSVToColor(bottomHsv)
         invalidate()
     }
 
@@ -130,6 +150,14 @@ class WaveformView @JvmOverloads constructor(
         }
 
         var startX = 0f
+        val gradient = android.graphics.LinearGradient(
+            0f, centerY - maxHeight / 2f,
+            0f, centerY + maxHeight / 2f,
+            topColor,
+            bottomColor,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        barPaint.shader = gradient
         for (i in 0 until 4) {
             val barH = (maxHeight * heights[i]).coerceAtLeast(4f * density)
             barRect.set(

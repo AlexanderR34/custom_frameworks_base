@@ -16,9 +16,10 @@
     android:id="@+id/dynamic_island_card_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_gravity="top|center_horizontal"
     android:clickable="true"
     android:focusable="true"
-    android:padding="14dp">
+    android:padding="20dp">
 
     <!-- 1. Media Section -->
     <LinearLayout
@@ -35,12 +36,30 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <ImageView
-                android:id="@+id/card_media_art"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:scaleType="centerCrop"
-                android:layout_marginEnd="12dp" />
+            <!-- Rounded Album Art with volume badge -->
+            <FrameLayout
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="14dp">
+
+                <ImageView
+                    android:id="@+id/card_media_art"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop" />
+
+                <ImageView
+                    android:id="@+id/card_media_volume_badge"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="3dp"
+                    android:padding="2dp"
+                    android:src="@drawable/ic_volume_media"
+                    android:tint="#FFFFFF"
+                    android:background="@drawable/music_island_volume_badge_bg"
+                    android:visibility="visible" />
+            </FrameLayout>
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -52,7 +71,7 @@
                     android:id="@+id/card_media_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="14sp"
+                    android:textSize="20sp"
                     android:textStyle="bold"
                     android:textColor="#FFFFFF"
                     android:singleLine="true"
@@ -63,100 +82,114 @@
                     android:id="@+id/card_media_artist"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="12sp"
-                    android:textColor="#B0BEC5"
+                    android:layout_marginTop="2dp"
+                    android:textSize="14sp"
+                    android:textColor="#A0FFFFFF"
                     android:singleLine="true"
                     android:ellipsize="end" />
             </LinearLayout>
+
+            <ImageView
+                android:id="@+id/card_media_output_icon"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_cast"
+                android:tint="#D0FFFFFF" />
 
             <com.android.systemui.statusbar.phone.island.WaveformView
                 android:id="@+id/card_media_waveform"
                 android:layout_width="wrap_content"
                 android:layout_height="18dp"
-                android:layout_marginStart="8dp" />
+                android:layout_marginStart="6dp"
+                android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Progress bar row -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="8dp">
-
-            <TextView
-                android:id="@+id/card_media_time_current"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="10sp"
-                android:textColor="#9E9E9E"
-                android:text="0:00" />
-
-            <ProgressBar
-                android:id="@+id/card_media_progress"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="0dp"
-                android:layout_height="4dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:progress="0"
-                android:max="1000" />
-
-            <TextView
-                android:id="@+id/card_media_time_total"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="10sp"
-                android:textColor="#9E9E9E"
-                android:text="0:00" />
-        </LinearLayout>
-
-        <!-- Playback controls row -->
+        <!-- Playback controls row (Middle) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginTop="10dp">
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp">
 
             <ImageView
                 android:id="@+id/card_media_btn_prev"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:padding="8dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="6dp"
                 android:src="@drawable/ic_music_island_prev"
-                android:background="@drawable/music_island_btn_bg"
+                android:tint="#FFFFFF"
                 android:clickable="true"
                 android:focusable="true" />
 
             <Space
-                android:layout_width="24dp"
+                android:layout_width="56dp"
                 android:layout_height="match_parent" />
 
             <ImageView
                 android:id="@+id/card_media_btn_play_pause"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:padding="10dp"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:padding="4dp"
                 android:src="@drawable/ic_music_island_play"
-                android:background="@drawable/music_island_btn_bg"
+                android:tint="#FFFFFF"
                 android:clickable="true"
                 android:focusable="true" />
 
             <Space
-                android:layout_width="24dp"
+                android:layout_width="56dp"
                 android:layout_height="match_parent" />
 
             <ImageView
                 android:id="@+id/card_media_btn_next"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:padding="8dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="6dp"
                 android:src="@drawable/ic_music_island_next"
-                android:background="@drawable/music_island_btn_bg"
+                android:tint="#FFFFFF"
                 android:clickable="true"
                 android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Progress bar row (Bottom) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="2dp">
+
+            <TextView
+                android:id="@+id/card_media_time_current"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#B3FFFFFF"
+                android:text="00:00" />
+
+            <ProgressBar
+                android:id="@+id/card_media_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="1"
+                android:layout_marginStart="14dp"
+                android:layout_marginEnd="14dp"
+                android:progressDrawable="@drawable/dynamic_island_media_progress"
+                android:progress="0"
+                android:max="10000" />
+
+            <TextView
+                android:id="@+id/card_media_time_total"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#B3FFFFFF"
+                android:text="00:00" />
         </LinearLayout>
     </LinearLayout>
 
@@ -175,12 +208,13 @@
             android:gravity="center_vertical">
 
             <ImageView
+                android:id="@+id/card_call_icon"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:src="@drawable/ic_call"
                 android:padding="6dp"
                 android:background="@drawable/music_island_btn_bg"
-                android:tint="#81C784" />
+                android:tint="#00E676" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -343,7 +377,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_bolt_charging"
-                android:tint="#38BDF8" />
+                android:tint="#00E676" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -367,7 +401,7 @@
                     android:layout_height="wrap_content"
                     android:text="90.0W Turbo"
                     android:textSize="12sp"
-                    android:textColor="#38BDF8" />
+                    android:textColor="#00E676" />
             </LinearLayout>
 
             <TextView
@@ -400,10 +434,10 @@
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@drawable/ic_screenrecord"
-            android:tint="#FF5252" />
+            android:id="@+id/card_record_dot"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_recording_dot" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -641,7 +675,7 @@
             android:layout_height="36dp"
             android:padding="6dp"
             android:src="@drawable/ic_flashlight"
-            android:tint="#FFD600"
+            android:tint="#FFFFFF"
             android:background="@drawable/music_island_btn_bg" />
 
         <LinearLayout
@@ -664,7 +698,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/island_torch_tap_off"
                 android:textSize="11sp"
-                android:textColor="#FFD600" />
+                android:textColor="#B0FFFFFF" />
         </LinearLayout>
 
         <ImageView
@@ -673,7 +707,7 @@
             android:layout_height="38dp"
             android:padding="8dp"
             android:src="@drawable/ic_timer_island_stop"
-            android:tint="#FFD600"
+            android:tint="#FFFFFF"
             android:background="@drawable/music_island_btn_bg"
             android:clickable="true"
             android:focusable="true" />
@@ -693,7 +727,7 @@
             android:layout_height="36dp"
             android:padding="6dp"
             android:src="@drawable/ic_hotspot"
-            android:tint="#FF9100"
+            android:tint="#38BDF8"
             android:background="@drawable/music_island_btn_bg" />
 
         <LinearLayout
@@ -717,7 +751,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/island_hotspot_devices_none"
                 android:textSize="11sp"
-                android:textColor="#FF9100" />
+                android:textColor="#38BDF8" />
         </LinearLayout>
 
         <ImageView
@@ -726,7 +760,7 @@
             android:layout_height="38dp"
             android:padding="8dp"
             android:src="@drawable/ic_timer_island_stop"
-            android:tint="#FF9100"
+            android:tint="#38BDF8"
             android:background="@drawable/music_island_btn_bg"
             android:clickable="true"
             android:focusable="true" />

@@ -14,27 +14,30 @@
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/dynamic_island_pill_root"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="36dp"
+    android:layout_gravity="top|center_horizontal"
     android:orientation="horizontal"
-    android:gravity="center_vertical"
+    android:gravity="center"
     android:paddingStart="8dp"
-    android:paddingEnd="10dp"
+    android:paddingEnd="8dp"
     android:clickable="true"
     android:focusable="true">
 
     <!-- Leading content (Left of notch) -->
     <FrameLayout
         android:id="@+id/pill_leading_container"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:layout_gravity="center_vertical">
 
-        <!-- Circular Album Art (Music) -->
+        <!-- Rounded Square Album Art (Music) -->
         <ImageView
             android:id="@+id/pill_album_art"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center_vertical|end"
             android:scaleType="centerCrop"
             android:visibility="gone" />
 
@@ -43,6 +46,7 @@
             android:id="@+id/pill_icon"
             android:layout_width="20dp"
             android:layout_height="20dp"
+            android:layout_gravity="center_vertical|end"
             android:scaleType="fitCenter"
             android:visibility="visible" />
     </FrameLayout>
@@ -56,11 +60,12 @@
     <!-- Trailing content (Right of notch) -->
     <LinearLayout
         android:id="@+id/pill_trailing_container"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:layout_gravity="center_vertical"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical|start">
 
         <!-- Waveform equalizer (Music) -->
         <com.android.systemui.statusbar.phone.island.WaveformView

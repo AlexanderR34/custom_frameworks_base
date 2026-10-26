@@ -77,6 +77,7 @@ data class IslandChargingState(
 data class IslandRecordState(
     val isRecording: Boolean = false,
     val startTimeMs: Long = 0L,
+    val stopIntent: PendingIntent? = null,
 )
 
 data class IslandNavigationState(
@@ -98,10 +99,12 @@ data class IslandDownloadState(
     val isFailed: Boolean = false,
     val isCancelled: Boolean = false,
     val cancelIntent: PendingIntent? = null,
+    val sourcePackage: String = "",
 )
 
 data class IslandTorchState(
     val isOn: Boolean = false,
+    val isIntro: Boolean = false,
 )
 
 data class IslandHotspotState(

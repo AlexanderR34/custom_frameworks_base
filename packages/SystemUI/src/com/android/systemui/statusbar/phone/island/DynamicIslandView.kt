@@ -16,30 +16,38 @@
 
 package com.android.systemui.statusbar.phone.island
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
-import android.os.SystemClock
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.graphics.drawable.BitmapDrawable
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
-import android.util.TypedValue
-import android.view.LayoutInflater
 import android.view.View
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
-import android.content.res.ColorStateList
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
-import com.android.systemui.res.R
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.ComposeView
+import com.android.systemui.compose.ComposeInitializer
+import com.android.systemui.statusbar.phone.island.compose.ConfigManager
+import com.android.systemui.statusbar.phone.island.compose.DynamicIsland
+import com.android.systemui.statusbar.phone.island.compose.DynamicIslandLabTheme
+import com.android.systemui.statusbar.phone.island.compose.DynamicIslandManager
+import com.android.systemui.statusbar.phone.island.compose.IconPackStyle
+import com.android.systemui.statusbar.phone.island.compose.IslandActivityType as ComposeActivityType
+import com.android.systemui.statusbar.phone.island.compose.TransientBannerType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
- * Independent Dynamic Island View .
- * Manages both the collapsed punch-hole pill and the expanded multi-activity card.
+ * Native Jetpack Compose Dynamic Island View for SystemUI.
+ * Hosts the DynamicIsland composable with full spring physics, custom canvas morphing,
+ * and direct system state updates.
  */
 class DynamicIslandView @JvmOverloads constructor(
     context: Context,
@@ -47,971 +55,458 @@ class DynamicIslandView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val density = resources.displayMetrics.density
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
 
-    // Subviews
-    private val pillView: View
-    private val cardView: View
-
-    // Dynamic Geometry & Notch clearance configuration
-    private var basePillWidthDp: Float = 110f
-    private var pillHeightDp: Float = 34f
-    private var notchMarginDp: Float = 5f
-
-    // Pill elements
-    private val pillAlbumArt: ImageView
-    private val pillIcon: ImageView
-    private val pillWaveform: WaveformView
-    private val pillTrailingIcon: ImageView
-    private val pillText: TextView
-    private val pillNotchCutoutSpace: View
-
-    // Card Media elements
-    private val cardMediaSection: LinearLayout
-    private val cardMediaArt: ImageView
-    private val cardMediaTitle: TextView
-    private val cardMediaArtist: TextView
-    private val cardMediaWaveform: WaveformView
-    private val cardMediaTimeCurrent: TextView
-    private val cardMediaProgress: ProgressBar
-    private val cardMediaTimeTotal: TextView
-    private val cardMediaBtnPrev: ImageView
-    private val cardMediaBtnPlayPause: ImageView
-    private val cardMediaBtnNext: ImageView
-
-    // Card Call elements
-    private val cardCallSection: LinearLayout
-    private val cardCallName: TextView
-    private val cardCallTimer: TextView
-    private val cardCallBtnMute: ImageView
-    private val cardCallBtnHangup: ImageView
-
-    // Card Timer elements
-    private val cardTimerSection: LinearLayout
-    private val cardTimerLabel: TextView
-    private val cardTimerDigits: TextView
-    private val cardTimerBtnReset: ImageView
-    private val cardTimerBtnPause: ImageView
-
-    // Card Charging elements
-    private val cardChargingSection: LinearLayout
-    private val cardChargingTitle: TextView
-    private val cardChargingBadge: TextView
-    private val cardChargingPct: TextView
-    private val cardChargingProgress: ProgressBar
-
-    // Card Record elements
-    private val cardRecordSection: LinearLayout
-    private val cardRecordTimer: TextView
-    private val cardRecordBtnStop: ImageView
-
-    // Card Banner elements
-    private val cardBannerSection: LinearLayout
-    private val cardBannerIcon: ImageView
-    private val cardBannerTitle: TextView
-    private val cardBannerSubtitle: TextView
-    private val cardBannerBadge: TextView
-
-    // Card Navigation elements
-    private val cardNavSection: LinearLayout
-    private val cardNavIcon: ImageView
-    private val cardNavDistance: TextView
-    private val cardNavInstruction: TextView
-    private val cardNavEta: TextView
-
-    // Card Download elements
-    private val cardDownloadSection: LinearLayout
-    private val cardDownloadTitle: TextView
-    private val cardDownloadSpeed: TextView
-    private val cardDownloadProgress: ProgressBar
-    private val cardDownloadTotal: TextView
-    private val cardDownloadBtnCancel: ImageView
-
-    // Card Torch elements
-    private val cardTorchSection: LinearLayout
-    private val cardTorchBtnToggle: ImageView
-
-    // Card Hotspot elements
-    private val cardHotspotSection: LinearLayout
-    private val cardHotspotDevices: TextView
-    private val cardHotspotBtnToggle: ImageView
-
-    // Card Cast elements
-    private val cardCastSection: LinearLayout
-    private val cardCastDevice: TextView
-    private val cardCastBtnDisconnect: ImageView
-
-    // Card Privacy elements
-    private val cardPrivacySection: LinearLayout
-    private val cardPrivacyIconCam: ImageView
-    private val cardPrivacyIconMic: ImageView
-    private val cardPrivacyIconLoc: ImageView
-    private val cardPrivacyApp: TextView
-
-    // Card Clipboard elements
-    private val cardClipboardSection: LinearLayout
-    private val cardClipboardText: TextView
-
-    // State
-    private var isExpanded = false
-    private var currentActivity = IslandActivityType.NONE
-
-    // Callbacks
+    // Interaction callbacks wired from DynamicIslandController
     var onToggleExpand: (() -> Unit)? = null
     var onPlayPauseClicked: (() -> Unit)? = null
     var onPrevClicked: (() -> Unit)? = null
     var onNextClicked: (() -> Unit)? = null
     var onEndCallClicked: (() -> Unit)? = null
     var onMuteToggled: (() -> Unit)? = null
-    var onTimerPauseClicked: (() -> Unit)? = null
-    var onTimerResetClicked: (() -> Unit)? = null
-    var onRecordStopClicked: (() -> Unit)? = null
     var onOpenMediaAppClicked: (() -> Unit)? = null
+    var onSeekTo: ((Long) -> Unit)? = null
+    var onRecordStopClicked: (() -> Unit)? = null
     var onToggleTorchClicked: (() -> Unit)? = null
     var onToggleHotspotClicked: (() -> Unit)? = null
     var onDisconnectCastClicked: (() -> Unit)? = null
     var onCancelDownloadClicked: (() -> Unit)? = null
     var onOpenNavigationClicked: (() -> Unit)? = null
+    var onTimerPauseClicked: (() -> Unit)? = null
+    var onTimerResetClicked: (() -> Unit)? = null
+    var onCollapseCompleted: (() -> Unit)? = null
+    var onPillWidthChanged: (() -> Unit)? = null
+
+    private var wasExpanded = false
+    private var collapseDelayRunnable: Runnable? = null
+
+    private val tempRect = Rect()
+    private val insetsListener = ViewTreeObserver.OnComputeInternalInsetsListener { inoutInfo ->
+        inoutInfo.setTouchableInsets(ViewTreeObserver.InternalInsetsInfo.TOUCHABLE_INSETS_REGION)
+        tempRect.setEmpty()
+        computeTouchableRegion(tempRect)
+        inoutInfo.touchableRegion.set(tempRect)
+    }
+
+    private fun computeTouchableRegion(outRect: Rect) {
+        if (visibility != View.VISIBLE || alpha <= 0f) {
+            outRect.setEmpty()
+            return
+        }
+        val density = context.resources.displayMetrics.density
+        val totalWidth = if (width > 0) width else context.resources.displayMetrics.widthPixels
+        val centerX = totalWidth / 2
+        val config = ConfigManager.config.value
+
+        if (DynamicIslandManager.isExpanded.value) {
+            val cardWidthPx = (362f * density).toInt()
+            val activeActivity = resolveActiveActivity()
+            val cardHeightDp = DynamicIslandManager.getExpandedCardHeightDp(
+                activeActivity,
+                DynamicIslandManager.transientBanner.value.type,
+                DynamicIslandManager.isClipboardCardActive.value
+            )
+            val notchCenterYDp = 22.5f + config.yOffsetDp
+            val closedTopYDp = (notchCenterYDp - (config.pillHeightDp / 2f)).coerceAtLeast(0f)
+            val expandedTopYDp = maxOf(closedTopYDp, notchCenterYDp + (config.pillHeightDp / 2f) + 6f)
+            val cardHeightPx = ((expandedTopYDp + cardHeightDp + 60f) * density).toInt()
+            val left = (centerX - cardWidthPx / 2).coerceAtLeast(0)
+            val right = (centerX + cardWidthPx / 2).coerceAtMost(totalWidth)
+            outRect.set(left, 0, right, cardHeightPx)
+        } else {
+            val pillWidthDp = getEstimatedPillWidthDp(IslandActivityType.NONE)
+            val pillWidthPx = ((pillWidthDp + 24f) * density).toInt()
+            val pillHeightPx = ((config.pillHeightDp + maxOf(0f, config.yOffsetDp) + 24f) * density).toInt()
+            val centerX = (totalWidth / 2) + ((config.xOffsetDp) * density).toInt()
+            val left = (centerX - pillWidthPx / 2).coerceAtLeast(0)
+            val right = (centerX + pillWidthPx / 2).coerceAtMost(totalWidth)
+            outRect.set(left, 0, right, pillHeightPx)
+        }
+    }
+
+    fun resolveActiveActivity(): ComposeActivityType {
+        val banner = DynamicIslandManager.transientBanner.value
+        val hotspot = DynamicIslandManager.hotspotState.value
+        val download = DynamicIslandManager.downloadState.value
+        val privacy = DynamicIslandManager.privacyState.value
+        val call = DynamicIslandManager.callState.value
+        val nav = DynamicIslandManager.navigationState.value
+        val timer = DynamicIslandManager.timerState.value
+        val cast = DynamicIslandManager.castState.value
+        val torch = DynamicIslandManager.torchState.value
+        val screenRecord = DynamicIslandManager.screenRecordState.value
+        val media = DynamicIslandManager.mediaState.value
+
+        return when {
+            banner.type != TransientBannerType.NONE -> ComposeActivityType.TRANSIENT_BANNER
+            call.isActive -> ComposeActivityType.CALL
+            nav.isActive -> ComposeActivityType.NAVIGATION
+            timer.isActive -> ComposeActivityType.TIMER
+            cast.isCasting -> ComposeActivityType.CAST
+            privacy.hasAnyPrivacyActive -> ComposeActivityType.PRIVACY
+            torch.isOn -> ComposeActivityType.TORCH
+            screenRecord.isRecording -> ComposeActivityType.SCREEN_RECORD
+            download.isDownloading || download.isCompleted || download.isFailed || download.isCancelled -> ComposeActivityType.DOWNLOAD
+            hotspot.isEnabled -> ComposeActivityType.HOTSPOT
+            media.hasActiveMedia -> ComposeActivityType.MEDIA
+            else -> ComposeActivityType.NONE
+        }
+    }
 
     init {
-        val inflater = LayoutInflater.from(context)
-        pillView = inflater.inflate(R.layout.dynamic_island_pill, this, false)
-        cardView = inflater.inflate(R.layout.dynamic_island_card, this, false)
+        ConfigManager.init(context)
+        DynamicIslandManager.init(context)
 
-        addView(pillView)
-        addView(cardView)
+        val composeView = ComposeView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setContent {
+                DynamicIslandLabTheme {
+                    val mediaState by DynamicIslandManager.mediaState.collectAsState()
+                    val batteryState by DynamicIslandManager.batteryState.collectAsState()
+                    val isExpanded by DynamicIslandManager.isExpanded.collectAsState()
+                    val liveConfig by ConfigManager.config.collectAsState()
 
-        // Find Pill views
-        pillAlbumArt = pillView.findViewById(R.id.pill_album_art)
-        pillIcon = pillView.findViewById(R.id.pill_icon)
-        pillWaveform = pillView.findViewById(R.id.pill_waveform)
-        pillTrailingIcon = pillView.findViewById(R.id.pill_trailing_icon)
-        pillText = pillView.findViewById(R.id.pill_text)
-        pillNotchCutoutSpace = pillView.findViewById(R.id.pill_notch_cutout_space)
+                    DynamicIsland(
+                        mediaState = mediaState,
+                        batteryState = batteryState,
+                        config = liveConfig,
+                        isExpanded = isExpanded,
+                        onToggleExpand = {
+                            val next = !DynamicIslandManager.isExpanded.value
+                            DynamicIslandManager.isExpanded.value = next
+                            onToggleExpand?.invoke()
+                        },
+                        onPlayPause = { onPlayPauseClicked?.invoke() },
+                        onNext = { onNextClicked?.invoke() },
+                        onPrevious = { onPrevClicked?.invoke() },
+                        onOpenMusicApp = { onOpenMediaAppClicked?.invoke() },
+                        onSeek = { posMs -> onSeekTo?.invoke(posMs) },
+                        onToggleTorch = { onToggleTorchClicked?.invoke() },
+                        onStopRecording = { onRecordStopClicked?.invoke() },
+                        onEndCall = { onEndCallClicked?.invoke() },
+                        onToggleHotspot = { onToggleHotspotClicked?.invoke() },
+                        onDisconnectCast = { onDisconnectCastClicked?.invoke() },
+                        onCancelDownload = {
+                            val ds = DynamicIslandManager.downloadState.value
+                            if (ds.isCompleted || ds.isFailed || ds.isCancelled) {
+                                DynamicIslandManager.dismissDownload()
+                            } else {
+                                onCancelDownloadClicked?.invoke()
+                            }
+                        },
+                        onCollapseCompleted = {
+                            collapseDelayRunnable?.let { mainHandler.removeCallbacks(it) }
+                            onCollapseCompleted?.invoke()
+                        }
+                    )
+                }
+            }
+        }
 
-        // Find Card Media views
-        cardMediaSection = cardView.findViewById(R.id.card_media_section)
-        cardMediaArt = cardView.findViewById(R.id.card_media_art)
-        cardMediaTitle = cardView.findViewById(R.id.card_media_title)
-        cardMediaArtist = cardView.findViewById(R.id.card_media_artist)
-        cardMediaWaveform = cardView.findViewById(R.id.card_media_waveform)
-        cardMediaTimeCurrent = cardView.findViewById(R.id.card_media_time_current)
-        cardMediaProgress = cardView.findViewById(R.id.card_media_progress)
-        cardMediaTimeTotal = cardView.findViewById(R.id.card_media_time_total)
-        cardMediaBtnPrev = cardView.findViewById(R.id.card_media_btn_prev)
-        cardMediaBtnPlayPause = cardView.findViewById(R.id.card_media_btn_play_pause)
-        cardMediaBtnNext = cardView.findViewById(R.id.card_media_btn_next)
+        addView(composeView)
 
-        // Find Card Call views
-        cardCallSection = cardView.findViewById(R.id.card_call_section)
-        cardCallName = cardView.findViewById(R.id.card_call_name)
-        cardCallTimer = cardView.findViewById(R.id.card_call_timer)
-        cardCallBtnMute = cardView.findViewById(R.id.card_call_btn_mute)
-        cardCallBtnHangup = cardView.findViewById(R.id.card_call_btn_hangup)
+        // Observe expansion state to notify controller when spring collapse completes
+        scope.launch {
+            DynamicIslandManager.isExpanded.collect { expanded ->
+                collapseDelayRunnable?.let { mainHandler.removeCallbacks(it) }
+                if (!expanded && wasExpanded) {
+                    collapseDelayRunnable = Runnable {
+                        if (!DynamicIslandManager.isExpanded.value) {
+                            onCollapseCompleted?.invoke()
+                        }
+                    }
+                    mainHandler.postDelayed(collapseDelayRunnable!!, 600L)
+                }
+                wasExpanded = expanded
+                post {
+                    requestLayout()
+                }
+                onPillWidthChanged?.invoke()
+            }
+        }
 
-        // Find Card Timer views
-        cardTimerSection = cardView.findViewById(R.id.card_timer_section)
-        cardTimerLabel = cardView.findViewById(R.id.card_timer_label)
-        cardTimerDigits = cardView.findViewById(R.id.card_timer_digits)
-        cardTimerBtnReset = cardView.findViewById(R.id.card_timer_btn_reset)
-        cardTimerBtnPause = cardView.findViewById(R.id.card_timer_btn_pause)
+        scope.launch {
+            DynamicIslandManager.transientBanner.collect {
+                onPillWidthChanged?.invoke()
+            }
+        }
 
-        // Find Card Charging views
-        cardChargingSection = cardView.findViewById(R.id.card_charging_section)
-        cardChargingTitle = cardView.findViewById(R.id.card_charging_title)
-        cardChargingBadge = cardView.findViewById(R.id.card_charging_badge)
-        cardChargingPct = cardView.findViewById(R.id.card_charging_pct)
-        cardChargingProgress = cardView.findViewById(R.id.card_charging_progress)
+        scope.launch {
+            DynamicIslandManager.downloadState.collect {
+                onPillWidthChanged?.invoke()
+            }
+        }
 
-        // Find Card Record views
-        cardRecordSection = cardView.findViewById(R.id.card_record_section)
-        cardRecordTimer = cardView.findViewById(R.id.card_record_timer)
-        cardRecordBtnStop = cardView.findViewById(R.id.card_record_btn_stop)
-
-        // Find Card Banner views
-        cardBannerSection = cardView.findViewById(R.id.card_banner_section)
-        cardBannerIcon = cardView.findViewById(R.id.card_banner_icon)
-        cardBannerTitle = cardView.findViewById(R.id.card_banner_title)
-        cardBannerSubtitle = cardView.findViewById(R.id.card_banner_subtitle)
-        cardBannerBadge = cardView.findViewById(R.id.card_banner_badge)
-
-        // Find Card Navigation views
-        cardNavSection = cardView.findViewById(R.id.card_nav_section)
-        cardNavIcon = cardView.findViewById(R.id.card_nav_icon)
-        cardNavDistance = cardView.findViewById(R.id.card_nav_distance)
-        cardNavInstruction = cardView.findViewById(R.id.card_nav_instruction)
-        cardNavEta = cardView.findViewById(R.id.card_nav_eta)
-
-        // Find Card Download views
-        cardDownloadSection = cardView.findViewById(R.id.card_download_section)
-        cardDownloadTitle = cardView.findViewById(R.id.card_download_title)
-        cardDownloadSpeed = cardView.findViewById(R.id.card_download_speed)
-        cardDownloadProgress = cardView.findViewById(R.id.card_download_progress)
-        cardDownloadTotal = cardView.findViewById(R.id.card_download_total)
-        cardDownloadBtnCancel = cardView.findViewById(R.id.card_download_btn_cancel)
-
-        // Find Card Torch views
-        cardTorchSection = cardView.findViewById(R.id.card_torch_section)
-        cardTorchBtnToggle = cardView.findViewById(R.id.card_torch_btn_toggle)
-
-        // Find Card Hotspot views
-        cardHotspotSection = cardView.findViewById(R.id.card_hotspot_section)
-        cardHotspotDevices = cardView.findViewById(R.id.card_hotspot_devices)
-        cardHotspotBtnToggle = cardView.findViewById(R.id.card_hotspot_btn_toggle)
-
-        // Find Card Cast views
-        cardCastSection = cardView.findViewById(R.id.card_cast_section)
-        cardCastDevice = cardView.findViewById(R.id.card_cast_device)
-        cardCastBtnDisconnect = cardView.findViewById(R.id.card_cast_btn_disconnect)
-
-        // Find Card Privacy views
-        cardPrivacySection = cardView.findViewById(R.id.card_privacy_section)
-        cardPrivacyIconCam = cardView.findViewById(R.id.card_privacy_icon_cam)
-        cardPrivacyIconMic = cardView.findViewById(R.id.card_privacy_icon_mic)
-        cardPrivacyIconLoc = cardView.findViewById(R.id.card_privacy_icon_location)
-        cardPrivacyApp = cardView.findViewById(R.id.card_privacy_app)
-
-        // Find Card Clipboard views
-        cardClipboardSection = cardView.findViewById(R.id.card_clipboard_section)
-        cardClipboardText = cardView.findViewById(R.id.card_clipboard_text)
-
-        applyBackgroundStyles()
-        setupListeners()
-
-        // Initial state: Pill visible, Card hidden
-        cardView.visibility = View.GONE
-        cardView.alpha = 0f
+        scope.launch {
+            DynamicIslandManager.mediaState.collect {
+                onPillWidthChanged?.invoke()
+            }
+        }
     }
 
-    private fun applyBackgroundStyles(accentColor: Int? = null) {
-        val strokeColor = if (accentColor != null) {
-            Color.argb(70, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
-        } else {
-            Color.argb(45, 255, 255, 255)
-        }
-
-        // Pill background
-        val pillShape = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = (pillHeightDp * density) / 2f
-            setColor(Color.parseColor("#0D0D11"))
-            setStroke((1.2f * density).toInt(), strokeColor)
-        }
-        pillView.background = pillShape
-
-        // Card background
-        val cardShape = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 28f * density
-            setColor(Color.parseColor("#121217"))
-            setStroke((1.2f * density).toInt(), strokeColor)
-        }
-        cardView.background = cardShape
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnComputeInternalInsetsListener(insetsListener)
+        ComposeInitializer.onAttachedToWindow(this)
     }
 
-    private fun setupListeners() {
-        pillView.setOnClickListener {
-            onToggleExpand?.invoke()
-        }
-
-        cardMediaArt.setOnClickListener { onOpenMediaAppClicked?.invoke() }
-        cardMediaTitle.setOnClickListener { onOpenMediaAppClicked?.invoke() }
-        cardMediaBtnPlayPause.setOnClickListener { onPlayPauseClicked?.invoke() }
-        cardMediaBtnPrev.setOnClickListener { onPrevClicked?.invoke() }
-        cardMediaBtnNext.setOnClickListener { onNextClicked?.invoke() }
-
-        cardCallBtnHangup.setOnClickListener { onEndCallClicked?.invoke() }
-        cardCallBtnMute.setOnClickListener { onMuteToggled?.invoke() }
-
-        cardTimerBtnPause.setOnClickListener { onTimerPauseClicked?.invoke() }
-        cardTimerBtnReset.setOnClickListener { onTimerResetClicked?.invoke() }
-
-        cardRecordBtnStop.setOnClickListener { onRecordStopClicked?.invoke() }
-        cardTorchBtnToggle.setOnClickListener { onToggleTorchClicked?.invoke() }
-        cardHotspotBtnToggle.setOnClickListener { onToggleHotspotClicked?.invoke() }
-        cardCastBtnDisconnect.setOnClickListener { onDisconnectCastClicked?.invoke() }
-        cardDownloadBtnCancel.setOnClickListener { onCancelDownloadClicked?.invoke() }
-        cardNavSection.setOnClickListener { onOpenNavigationClicked?.invoke() }
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        viewTreeObserver.removeOnComputeInternalInsetsListener(insetsListener)
+        collapseDelayRunnable?.let { mainHandler.removeCallbacks(it) }
+        ComposeInitializer.onDetachedFromWindow(this)
     }
 
-    private fun hideAllCardSections() {
-        cardMediaSection.visibility = View.GONE
-        cardCallSection.visibility = View.GONE
-        cardTimerSection.visibility = View.GONE
-        cardChargingSection.visibility = View.GONE
-        cardRecordSection.visibility = View.GONE
-        cardBannerSection.visibility = View.GONE
-        cardNavSection.visibility = View.GONE
-        cardDownloadSection.visibility = View.GONE
-        cardTorchSection.visibility = View.GONE
-        cardHotspotSection.visibility = View.GONE
-        cardCastSection.visibility = View.GONE
-        cardPrivacySection.visibility = View.GONE
-        cardClipboardSection.visibility = View.GONE
+    fun setAnimationConfig(bounceFactor: Float, durationMs: Long) {
+        val current = ConfigManager.config.value
+        ConfigManager.update(current.copy(springDamping = bounceFactor))
     }
 
-    fun getExpandedHeightDp(type: IslandActivityType): Float {
-        return when (type) {
-            IslandActivityType.MEDIA -> 175f
-            IslandActivityType.CALL -> 148f
-            IslandActivityType.TIMER -> 144f
-            IslandActivityType.CHARGING -> 140f
-            IslandActivityType.SCREEN_RECORD -> 134f
-            IslandActivityType.NAVIGATION -> 138f
-            IslandActivityType.DOWNLOAD -> 155f
-            IslandActivityType.TORCH -> 134f
-            IslandActivityType.HOTSPOT -> 138f
-            IslandActivityType.CAST -> 134f
-            IslandActivityType.PRIVACY -> 140f
-            IslandActivityType.CLIPBOARD -> 220f
-            IslandActivityType.TRANSIENT_BANNER -> 146f
-            else -> 140f
-        }
+    fun setIconStyle(style: Int) {
+        val current = ConfigManager.config.value
+        val newStyle = if (style == 1) IconPackStyle.HYPEROS else IconPackStyle.SYSTEM
+        ConfigManager.update(current.copy(iconPackStyle = newStyle))
+    }
+
+    fun setXOffset(xOffsetDp: Float) {
+        val current = ConfigManager.config.value
+        ConfigManager.update(current.copy(xOffsetDp = xOffsetDp))
+    }
+
+    fun setYOffset(yOffsetDp: Float) {
+        val current = ConfigManager.config.value
+        ConfigManager.update(current.copy(yOffsetDp = yOffsetDp))
+    }
+
+    fun setBasePillWidth(widthDp: Float) {
+        val current = ConfigManager.config.value
+        ConfigManager.update(current.copy(pillWidthDp = widthDp))
+    }
+
+    fun setPillHeight(heightDp: Float) {
+        val current = ConfigManager.config.value
+        ConfigManager.update(current.copy(pillHeightDp = heightDp))
+    }
+
+    fun setNotchMargin(marginDp: Float) {
+        val current = ConfigManager.config.value
+        ConfigManager.update(current.copy(notchMarginDp = marginDp))
     }
 
     fun setExpanded(expanded: Boolean, animate: Boolean = true) {
-        if (isExpanded == expanded) return
-        isExpanded = expanded
+        DynamicIslandManager.isExpanded.value = expanded
+    }
 
-        if (!animate) {
-            if (expanded) {
-                pillView.visibility = View.GONE
-                cardView.visibility = View.VISIBLE
-                cardView.alpha = 1f
-                cardView.scaleX = 1f
-                cardView.scaleY = 1f
-            } else {
-                cardView.visibility = View.GONE
-                pillView.visibility = View.VISIBLE
-                pillView.alpha = 1f
-            }
-            return
+    fun showPillAfterCollapse() {
+        DynamicIslandManager.isExpanded.value = false
+    }
+
+    fun getExpandedHeightDp(type: IslandActivityType): Float {
+        val composeType = when (type) {
+            IslandActivityType.CALL -> ComposeActivityType.CALL
+            IslandActivityType.MEDIA -> ComposeActivityType.MEDIA
+            IslandActivityType.TIMER -> ComposeActivityType.TIMER
+            IslandActivityType.NAVIGATION -> ComposeActivityType.NAVIGATION
+            IslandActivityType.DOWNLOAD -> ComposeActivityType.DOWNLOAD
+            IslandActivityType.CAST -> ComposeActivityType.CAST
+            IslandActivityType.HOTSPOT -> ComposeActivityType.HOTSPOT
+            IslandActivityType.SCREEN_RECORD -> ComposeActivityType.SCREEN_RECORD
+            IslandActivityType.TORCH -> ComposeActivityType.TORCH
+            IslandActivityType.PRIVACY -> ComposeActivityType.PRIVACY
+            IslandActivityType.CLIPBOARD,
+            IslandActivityType.TRANSIENT_BANNER -> ComposeActivityType.TRANSIENT_BANNER
+            else -> ComposeActivityType.NONE
         }
+        return DynamicIslandManager.getExpandedCardHeightDp(
+            composeType,
+            DynamicIslandManager.transientBanner.value.type,
+            DynamicIslandManager.isClipboardCardActive.value
+        )
+    }
 
-        if (expanded) {
-            val fadeOutDuration = (expandDurationMs * 0.4f).toLong().coerceAtLeast(80L)
-            pillView.animate().cancel()
-            pillView.animate().alpha(0f).setDuration(fadeOutDuration).withEndAction {
-                pillView.visibility = View.GONE
-            }.start()
+    fun getEstimatedPillWidthDp(type: IslandActivityType): Float {
+        val banner = DynamicIslandManager.transientBanner.value
+        val hotspot = DynamicIslandManager.hotspotState.value
+        val download = DynamicIslandManager.downloadState.value
+        val config = ConfigManager.config.value
 
-            cardView.visibility = View.VISIBLE
-            cardView.alpha = 0f
-            cardView.scaleX = 0.72f
-            cardView.scaleY = 0.72f
-            cardView.translationY = -14f * density
-
-            val interpolator = if (expandBounceFactor > 0.05f) {
-                OvershootInterpolator(expandBounceFactor)
-            } else {
-                DecelerateInterpolator(1.5f)
-            }
-
-            cardView.animate().cancel()
-            cardView.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .translationY(0f)
-                .setDuration(expandDurationMs)
-                .setInterpolator(interpolator)
-                .start()
-        } else {
-            val collapseDuration = (expandDurationMs * 0.75f).toLong().coerceAtLeast(140L)
-            cardView.animate().cancel()
-            cardView.animate()
-                .alpha(0f)
-                .scaleX(0.78f)
-                .scaleY(0.78f)
-                .translationY(-10f * density)
-                .setDuration(collapseDuration)
-                .withEndAction {
-                    cardView.visibility = View.GONE
-                    pillView.visibility = View.VISIBLE
-                    pillView.alpha = 0f
-                    pillView.scaleX = 0.85f
-                    pillView.scaleY = 0.85f
-                    val pillInterpolator = if (expandBounceFactor > 0.05f) {
-                        OvershootInterpolator(expandBounceFactor * 0.9f)
-                    } else {
-                        DecelerateInterpolator(1.5f)
-                    }
-                    pillView.animate().cancel()
-                    pillView.animate()
-                        .alpha(1f)
-                        .scaleX(1f)
-                        .scaleY(1f)
-                        .setDuration(collapseDuration)
-                        .setInterpolator(pillInterpolator)
-                        .start()
-                }.start()
+        return when {
+            banner.type != TransientBannerType.NONE -> banner.targetWidthDp
+            download.isDownloading || download.isCompleted || download.isCancelled || download.isFailed -> 185f
+            hotspot.isEnabled -> if (hotspot.showIntroBanner) 310f else 180f
+            DynamicIslandManager.privacyState.value.hasAnyPrivacyActive -> 210f
+            DynamicIslandManager.callState.value.isActive -> 185f
+            DynamicIslandManager.navigationState.value.isActive -> 220f
+            DynamicIslandManager.timerState.value.isActive -> 205f
+            DynamicIslandManager.castState.value.isCasting -> 215f
+            DynamicIslandManager.torchState.value.isOn -> 180f
+            DynamicIslandManager.screenRecordState.value.isRecording -> 180f
+            else -> config.pillWidthDp
         }
     }
 
     fun showMedia(media: IslandMediaState) {
-        currentActivity = IslandActivityType.MEDIA
-        applyBackgroundStyles(media.dominantColor)
-
-        // Update Pill
-        pillTrailingIcon.visibility = View.GONE
-        if (media.albumArt != null) {
-            pillAlbumArt.setImageBitmap(media.albumArt)
-            pillAlbumArt.visibility = View.VISIBLE
-            pillIcon.visibility = View.GONE
-        } else {
-            pillAlbumArt.visibility = View.GONE
-            pillIcon.setImageResource(if (iconStyle == 0) R.drawable.ic_hyper_music else com.android.internal.R.drawable.ic_audio_media)
-            pillIcon.visibility = View.VISIBLE
+        val pkg = media.packageName
+        var art = media.albumArt
+        if (art == null && pkg.isNotBlank()) {
+            try {
+                val d = context.packageManager.getApplicationIcon(pkg)
+                if (d is android.graphics.drawable.BitmapDrawable && d.bitmap != null) {
+                    art = d.bitmap
+                } else {
+                    val w = d.intrinsicWidth.takeIf { it > 0 } ?: 128
+                    val h = d.intrinsicHeight.takeIf { it > 0 } ?: 128
+                    val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(b)
+                    d.setBounds(0, 0, w, h)
+                    d.draw(canvas)
+                    art = b
+                }
+            } catch (ignored: Exception) {}
         }
-
-        pillWaveform.visibility = View.VISIBLE
-        pillWaveform.setPlaying(media.isPlaying)
-        if (media.dominantColor != null) {
-            pillWaveform.setBarColor(media.dominantColor)
-        }
-        pillText.visibility = View.GONE
-
-        // Update Card Media
-        cardMediaSection.visibility = View.VISIBLE
-        cardCallSection.visibility = View.GONE
-        cardTimerSection.visibility = View.GONE
-        cardChargingSection.visibility = View.GONE
-        cardRecordSection.visibility = View.GONE
-        cardBannerSection.visibility = View.GONE
-
-        if (media.albumArt != null) {
-            cardMediaArt.setImageBitmap(media.albumArt)
-            cardMediaArt.visibility = View.VISIBLE
-        } else {
-            cardMediaArt.setImageResource(R.drawable.ic_hyper_music)
-        }
-
-        cardMediaTitle.text = if (media.title.isNotBlank()) media.title else context.getString(R.string.island_now_playing)
-        cardMediaTitle.isSelected = true
-        cardMediaArtist.text = if (media.artist.isNotBlank()) media.artist else context.getString(R.string.island_unknown_artist)
-
-        cardMediaWaveform.setPlaying(media.isPlaying)
-        if (media.dominantColor != null) {
-            cardMediaWaveform.setBarColor(media.dominantColor)
-        }
-
-        val posSec = media.positionMs / 1000
-        val durSec = media.durationMs / 1000
-        cardMediaTimeCurrent.text = String.format("%d:%02d", posSec / 60, posSec % 60)
-        cardMediaTimeTotal.text = if (durSec > 0) String.format("%d:%02d", durSec / 60, durSec % 60) else "--:--"
-
-        if (media.durationMs > 0) {
-            cardMediaProgress.progress = ((media.positionMs.toFloat() / media.durationMs) * 1000).toInt()
-        }
-
-        cardMediaBtnPlayPause.setImageResource(
-            if (media.isPlaying) R.drawable.ic_music_island_pause else R.drawable.ic_music_island_play
+        DynamicIslandManager.updateMedia(
+            title = media.title,
+            artist = media.artist,
+            albumArt = art,
+            isPlaying = media.isPlaying,
+            positionMs = media.positionMs,
+            durationMs = media.durationMs,
+            lastUpdateTimeMs = media.lastUpdateTimeMs,
+            packageName = pkg
         )
     }
 
     fun showCall(call: IslandCallState) {
-        currentActivity = IslandActivityType.CALL
-        applyBackgroundStyles(Color.parseColor("#2E7D32"))
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(R.drawable.ic_hyper_call)
-        pillIcon.setColorFilter(Color.parseColor("#81C784"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        val elapsed = (SystemClock.elapsedRealtime() - call.startTimeMs) / 1000
-        val timerStr = String.format("%02d:%02d", elapsed / 60, elapsed % 60)
-        pillText.text = timerStr
-        pillText.setTextColor(Color.parseColor("#81C784"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card Call
-        cardMediaSection.visibility = View.GONE
-        cardCallSection.visibility = View.VISIBLE
-        cardTimerSection.visibility = View.GONE
-        cardChargingSection.visibility = View.GONE
-        cardRecordSection.visibility = View.GONE
-        cardBannerSection.visibility = View.GONE
-
-        cardCallName.text = if (call.contactName.isNotBlank()) call.contactName else context.getString(R.string.island_mode_sound)
-        cardCallTimer.text = timerStr
-
-        cardCallBtnMute.setColorFilter(if (call.isMuted) Color.parseColor("#FFD600") else Color.WHITE)
+        DynamicIslandManager.updateCall(
+            isActive = call.isActive,
+            contactName = call.contactName,
+            startTimeMs = call.startTimeMs,
+            hangupIntent = call.intent
+        )
     }
 
     fun showTimer(timer: IslandTimerState) {
-        currentActivity = IslandActivityType.TIMER
-        applyBackgroundStyles(Color.parseColor("#F57C00"))
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(if (iconStyle == 0) R.drawable.ic_hyper_timer else R.drawable.ic_alarm)
-        pillIcon.setColorFilter(Color.parseColor("#FFA726"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        val remStr = String.format("%02d:%02d", timer.remainingSeconds / 60, timer.remainingSeconds % 60)
-        pillText.text = remStr
-        pillText.setTextColor(Color.parseColor("#FFA726"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card Timer
-        cardMediaSection.visibility = View.GONE
-        cardCallSection.visibility = View.GONE
-        cardTimerSection.visibility = View.VISIBLE
-        cardChargingSection.visibility = View.GONE
-        cardRecordSection.visibility = View.GONE
-        cardBannerSection.visibility = View.GONE
-
-        cardTimerLabel.text = if (timer.label.isNotBlank()) timer.label else context.getString(R.string.island_timer)
-        cardTimerDigits.text = remStr
-        cardTimerBtnPause.setImageResource(
-            if (timer.isPaused) R.drawable.ic_music_island_play else R.drawable.ic_music_island_pause
+        DynamicIslandManager.updateTimer(
+            isActive = timer.isActive,
+            label = timer.label,
+            remainingTimeSeconds = timer.remainingSeconds,
+            isPaused = timer.isPaused,
+            cancelIntent = timer.resetIntent,
+            pauseResumeIntent = timer.pauseResumeIntent
         )
     }
 
     fun showCharging(charging: IslandChargingState) {
-        currentActivity = IslandActivityType.CHARGING
-        val tint = if (charging.watts >= 65.0) Color.parseColor("#38BDF8") else Color.parseColor("#81C995")
-        applyBackgroundStyles(tint)
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(
-            if (charging.watts >= 65.0) R.drawable.ic_hyper_charging_super
-            else if (charging.watts >= 30.0) R.drawable.ic_hyper_charging_turbo
-            else R.drawable.ic_hyper_charging
+        DynamicIslandManager.updateBattery(
+            isCharging = charging.isCharging,
+            level = charging.level,
+            watts = charging.watts,
+            isNewConnection = charging.isNewConnection
         )
-        pillIcon.setColorFilter(tint)
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        pillText.text = "${charging.level}%"
-        pillText.setTextColor(tint)
-        pillText.visibility = View.VISIBLE
-
-        // Update Card Charging
-        cardMediaSection.visibility = View.GONE
-        cardCallSection.visibility = View.GONE
-        cardTimerSection.visibility = View.GONE
-        cardChargingSection.visibility = View.VISIBLE
-        cardRecordSection.visibility = View.GONE
-        cardBannerSection.visibility = View.GONE
-
-        cardChargingTitle.text = charging.title
-        cardChargingBadge.text = if (charging.watts > 1.0) String.format("%.1fW Turbo", charging.watts) else context.getString(R.string.island_charging_battery)
-        cardChargingBadge.setTextColor(tint)
-        cardChargingPct.text = "${charging.level}%"
-        cardChargingProgress.progress = charging.level
     }
 
     fun showRecording(record: IslandRecordState) {
-        currentActivity = IslandActivityType.SCREEN_RECORD
-        applyBackgroundStyles(Color.parseColor("#D32F2F"))
-
-        // Update Pill - Indicator circle must be RED (#FF3B30), timer text in RED (#FF3B30)
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(R.drawable.ic_screenrecord)
-        pillIcon.setColorFilter(Color.parseColor("#FF3B30"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        val elapsed = (SystemClock.elapsedRealtime() - record.startTimeMs) / 1000
-        val str = String.format("%02d:%02d", elapsed / 60, elapsed % 60)
-        pillText.text = str
-        pillText.setTextColor(Color.parseColor("#FF3B30"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card Recording
-        cardMediaSection.visibility = View.GONE
-        cardCallSection.visibility = View.GONE
-        cardTimerSection.visibility = View.GONE
-        cardChargingSection.visibility = View.GONE
-        cardRecordSection.visibility = View.VISIBLE
-        cardBannerSection.visibility = View.GONE
-
-        cardRecordTimer.text = str
-        cardRecordTimer.setTextColor(Color.parseColor("#FF3B30"))
-        cardRecordBtnStop.setColorFilter(Color.parseColor("#FF3B30"))
+        DynamicIslandManager.updateScreenRecording(
+            isRecording = record.isRecording,
+            startTimeMs = record.startTimeMs,
+            stopIntent = record.stopIntent
+        )
     }
 
     fun showNavigation(nav: IslandNavigationState) {
-        currentActivity = IslandActivityType.NAVIGATION
-        applyBackgroundStyles(Color.parseColor("#0288D1"))
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(R.drawable.ic_hyper_navigation)
-        pillIcon.setColorFilter(Color.parseColor("#38BDF8"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        pillText.text = if (nav.distanceText.isNotBlank()) nav.distanceText else context.getString(R.string.island_nav_route)
-        pillText.setTextColor(Color.parseColor("#38BDF8"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card
-        hideAllCardSections()
-        cardNavSection.visibility = View.VISIBLE
-
-        cardNavDistance.text = if (nav.distanceText.isNotBlank()) nav.distanceText else context.getString(R.string.island_nav_route)
-        cardNavInstruction.text = if (nav.instructionText.isNotBlank()) nav.instructionText else context.getString(R.string.island_nav_on_route)
-        cardNavEta.text = if (nav.etaText.isNotBlank()) nav.etaText else "Google Maps"
+        DynamicIslandManager.updateNavigation(
+            isActive = nav.isActive,
+            maneuver = nav.maneuver,
+            instruction = nav.instructionText,
+            distanceText = nav.distanceText,
+            etaText = nav.etaText,
+            openIntent = nav.openIntent
+        )
     }
 
     fun showDownload(download: IslandDownloadState) {
-        currentActivity = IslandActivityType.DOWNLOAD
-        val accentColor = when {
-            download.isCancelled || download.isFailed -> Color.parseColor("#D32F2F")
-            download.isCompleted -> Color.parseColor("#1B5E20")
-            else -> Color.parseColor("#0288D1")
-        }
-        applyBackgroundStyles(accentColor)
-
-        pillAlbumArt.visibility = View.GONE
-        pillWaveform.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-
-        when {
-            download.isCancelled -> {
-                pillIcon.setImageResource(R.drawable.ic_close)
-                pillIcon.setColorFilter(Color.parseColor("#FF3B30"))
-                pillIcon.visibility = View.VISIBLE
-                pillText.text = context.getString(R.string.island_cancelled)
-                pillText.setTextColor(Color.parseColor("#FF3B30"))
-                pillText.visibility = View.VISIBLE
-            }
-            download.isFailed -> {
-                pillIcon.setImageResource(R.drawable.ic_close)
-                pillIcon.setColorFilter(Color.parseColor("#FF3B30"))
-                pillIcon.visibility = View.VISIBLE
-                pillText.text = context.getString(R.string.island_failed)
-                pillText.setTextColor(Color.parseColor("#FF3B30"))
-                pillText.visibility = View.VISIBLE
-            }
-            download.isCompleted -> {
-                pillIcon.setImageResource(R.drawable.ic_hyper_download)
-                pillIcon.setColorFilter(Color.parseColor("#00E676"))
-                pillIcon.visibility = View.VISIBLE
-                pillText.text = "100%"
-                pillText.setTextColor(Color.parseColor("#00E676"))
-                pillText.visibility = View.VISIBLE
-            }
-            else -> {
-                pillIcon.setImageResource(R.drawable.ic_hyper_download)
-                pillIcon.setColorFilter(Color.parseColor("#38BDF8"))
-                pillIcon.visibility = View.VISIBLE
-                pillText.text = "${download.progress}%"
-                pillText.setTextColor(Color.parseColor("#38BDF8"))
-                pillText.visibility = View.VISIBLE
-            }
-        }
-
-        // Update Card
-        hideAllCardSections()
-        cardDownloadSection.visibility = View.VISIBLE
-
-        cardDownloadTitle.text = if (download.fileName.isNotBlank()) download.fileName else context.getString(R.string.island_downloading)
-
-        when {
-            download.isCancelled -> {
-                cardDownloadSpeed.text = context.getString(R.string.island_download_cancelled)
-                cardDownloadSpeed.setTextColor(Color.parseColor("#FF3B30"))
-            }
-            download.isFailed -> {
-                cardDownloadSpeed.text = context.getString(R.string.island_download_failed_stopped)
-                cardDownloadSpeed.setTextColor(Color.parseColor("#FF3B30"))
-            }
-            download.isCompleted -> {
-                cardDownloadSpeed.text = "${context.getString(R.string.island_download_complete)} • 100%"
-                cardDownloadSpeed.setTextColor(Color.parseColor("#00E676"))
-            }
-            else -> {
-                val displaySpeed = if (download.speedText.isNotBlank()) {
-                    download.speedText
-                } else if (download.totalSizeText.isNotBlank()) {
-                    download.totalSizeText
-                } else {
-                    ""
-                }
-                val statusText = if (displaySpeed.isNotBlank()) {
-                    "${context.getString(R.string.island_downloading)} • $displaySpeed (${download.progress}%)"
-                } else {
-                    "${context.getString(R.string.island_downloading)} • ${download.progress}%"
-                }
-                cardDownloadSpeed.text = statusText
-                cardDownloadSpeed.setTextColor(Color.parseColor("#38BDF8"))
-            }
-        }
-
-        val progressColor = when {
-            download.isCancelled || download.isFailed -> Color.parseColor("#FF3B30")
-            download.isCompleted -> Color.parseColor("#00E676")
-            else -> Color.parseColor("#38BDF8")
-        }
-        cardDownloadProgress.progress = if (download.isCompleted) 100 else download.progress
-        cardDownloadProgress.progressTintList = ColorStateList.valueOf(progressColor)
-
-        cardDownloadTotal.text = when {
-            download.isCancelled -> context.getString(R.string.island_cancelled)
-            download.isFailed -> context.getString(R.string.island_failed)
-            download.isCompleted -> context.getString(R.string.island_completed)
-            else -> if (download.totalSizeText.isNotBlank()) download.totalSizeText else context.getString(R.string.island_download)
-        }
-
-        if (download.isCancelled || download.isFailed) {
-            cardDownloadBtnCancel.setImageResource(R.drawable.ic_close)
-            cardDownloadBtnCancel.setColorFilter(Color.parseColor("#FF3B30"))
-        } else if (download.isCompleted) {
-            cardDownloadBtnCancel.setImageResource(R.drawable.ic_hyper_download)
-            cardDownloadBtnCancel.setColorFilter(Color.parseColor("#00E676"))
-        } else {
-            cardDownloadBtnCancel.setImageResource(R.drawable.ic_close)
-            cardDownloadBtnCancel.setColorFilter(Color.WHITE)
-        }
+        DynamicIslandManager.updateDownload(
+            isDownloading = download.isDownloading,
+            fileName = download.fileName,
+            progress = download.progress,
+            speedText = download.speedText,
+            totalSizeText = download.totalSizeText,
+            isCompleted = download.isCompleted,
+            isFailed = download.isFailed,
+            isCancelled = download.isCancelled,
+            cancelIntent = download.cancelIntent
+        )
     }
 
     fun showTorch(torch: IslandTorchState) {
-        currentActivity = IslandActivityType.TORCH
-        applyBackgroundStyles(Color.parseColor("#E65100"))
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(if (iconStyle == 0) R.drawable.ic_hyper_torch else R.drawable.ic_qs_flashlight)
-        pillIcon.setColorFilter(Color.parseColor("#FFD600"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        pillText.text = context.getString(R.string.island_torch_pill)
-        pillText.setTextColor(Color.parseColor("#FFD600"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card
-        hideAllCardSections()
-        cardTorchSection.visibility = View.VISIBLE
+        DynamicIslandManager.updateTorch(
+            isOn = torch.isOn
+        )
     }
 
     fun showHotspot(hotspot: IslandHotspotState) {
-        currentActivity = IslandActivityType.HOTSPOT
-        applyBackgroundStyles(Color.parseColor("#BF360C"))
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillWaveform.visibility = View.GONE
-        pillIcon.setImageResource(if (iconStyle == 0) R.drawable.ic_hyper_hotspot else R.drawable.ic_hotspot)
-        pillIcon.setColorFilter(Color.parseColor("#FF9100"))
-        pillIcon.visibility = View.VISIBLE
-
-        if (hotspot.showIntroBanner) {
-            pillTrailingIcon.visibility = View.GONE
-            pillText.text = context.getString(R.string.island_active)
-            pillText.setTextColor(Color.parseColor("#FF9100"))
-            pillText.visibility = View.VISIBLE
-        } else {
-            pillTrailingIcon.setImageResource(R.drawable.ic_island_link)
-            pillTrailingIcon.setColorFilter(Color.parseColor("#FF9100"))
-            pillTrailingIcon.visibility = View.VISIBLE
-            // Strictly NO "dev." or "disp."! Only client count number!
-            pillText.text = "${hotspot.clientCount}"
-            pillText.setTextColor(Color.parseColor("#FF9100"))
-            pillText.visibility = View.VISIBLE
-        }
-
-        // Update Card
-        hideAllCardSections()
-        cardHotspotSection.visibility = View.VISIBLE
-        val devText = when (hotspot.clientCount) {
-            0 -> context.getString(R.string.island_hotspot_devices_none)
-            1 -> context.getString(R.string.island_hotspot_devices_one)
-            else -> context.getString(R.string.island_hotspot_devices_many, hotspot.clientCount)
-        }
-        cardHotspotDevices.text = devText
+        DynamicIslandManager.updateHotspot(
+            isEnabled = hotspot.isEnabled,
+            connectedDevices = hotspot.clientCount
+        )
     }
 
     fun showCast(cast: IslandCastState) {
-        currentActivity = IslandActivityType.CAST
-        applyBackgroundStyles(Color.parseColor("#01579B"))
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(if (iconStyle == 0) R.drawable.ic_hyper_cast else R.drawable.ic_cast)
-        pillIcon.setColorFilter(Color.parseColor("#38BDF8"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        pillText.text = context.getString(R.string.island_cast)
-        pillText.setTextColor(Color.parseColor("#38BDF8"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card
-        hideAllCardSections()
-        cardCastSection.visibility = View.VISIBLE
-        cardCastDevice.text = if (cast.deviceName.isNotBlank()) cast.deviceName else context.getString(R.string.island_wireless_display)
+        DynamicIslandManager.updateCast(
+            isCasting = cast.isCasting,
+            deviceName = cast.deviceName,
+            castType = cast.castType
+        )
     }
 
     fun showPrivacy(privacy: IslandPrivacyState) {
-        currentActivity = IslandActivityType.PRIVACY
-        val sensorColor = when {
-            privacy.isCameraInUse -> Color.parseColor("#00E676")
-            privacy.isMicInUse -> Color.parseColor("#FF9100")
-            else -> Color.parseColor("#0091EA")
-        }
-        val sensorName = when {
-            privacy.isCameraInUse -> context.getString(R.string.island_camera)
-            privacy.isMicInUse -> context.getString(R.string.island_microphone)
-            else -> context.getString(R.string.island_location)
-        }
-        applyBackgroundStyles(sensorColor)
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillWaveform.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-
-        pillIcon.setImageResource(when {
-            privacy.isCameraInUse -> R.drawable.ic_camera
-            privacy.isMicInUse -> R.drawable.vd_mic
-            else -> R.drawable.ic_location
-        })
-        pillIcon.setColorFilter(sensorColor)
-        pillIcon.visibility = View.VISIBLE
-
-        val displayLabel = privacy.appName.ifBlank { sensorName }
-        pillText.text = displayLabel
-        pillText.setTextColor(sensorColor)
-        pillText.visibility = View.VISIBLE
-
-        // Update Card
-        hideAllCardSections()
-        cardPrivacySection.visibility = View.VISIBLE
-
-        cardPrivacyIconCam.visibility = if (privacy.isCameraInUse) View.VISIBLE else View.GONE
-        cardPrivacyIconMic.visibility = if (privacy.isMicInUse) View.VISIBLE else View.GONE
-        cardPrivacyIconLoc.visibility = if (privacy.isLocationInUse) View.VISIBLE else View.GONE
-        cardPrivacyApp.text = context.getString(R.string.island_in_use_by, displayLabel)
-        cardPrivacyApp.setTextColor(sensorColor)
+        DynamicIslandManager.updatePrivacy(
+            isCameraInUse = privacy.isCameraInUse,
+            isMicInUse = privacy.isMicInUse,
+            isLocationInUse = privacy.isLocationInUse,
+            appName = privacy.appName
+        )
     }
 
     fun showClipboard(clipboard: IslandClipboardState) {
-        currentActivity = IslandActivityType.CLIPBOARD
-        applyBackgroundStyles(Color.parseColor("#006064"))
+        DynamicIslandManager.onClipboardCopied(clipboard.copiedText)
+    }
 
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(R.drawable.ic_hyper_clipboard)
-        pillIcon.setColorFilter(Color.parseColor("#00E5FF"))
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        pillText.text = context.getString(R.string.island_clipboard_copied)
-        pillText.setTextColor(Color.parseColor("#00E5FF"))
-        pillText.visibility = View.VISIBLE
-
-        // Update Card
-        hideAllCardSections()
-        cardClipboardSection.visibility = View.VISIBLE
-        cardClipboardText.text = clipboard.copiedText
+    fun dismissClipboard() {
+        DynamicIslandManager.dismissTransientBanner()
     }
 
     fun showBanner(banner: IslandBannerState) {
-        currentActivity = IslandActivityType.TRANSIENT_BANNER
-        applyBackgroundStyles(banner.tintColor)
-
-        // Update Pill
-        pillAlbumArt.visibility = View.GONE
-        pillTrailingIcon.visibility = View.GONE
-        pillIcon.setImageResource(banner.iconRes)
-        pillIcon.setColorFilter(banner.tintColor)
-        pillIcon.visibility = View.VISIBLE
-        pillWaveform.visibility = View.GONE
-
-        if (!banner.badge.isNullOrBlank()) {
-            pillText.text = banner.badge
-            pillText.setTextColor(banner.tintColor)
-            pillText.visibility = View.VISIBLE
-        } else {
-            pillText.visibility = View.GONE
+        if (!banner.isActive) return
+        val bannerType = when {
+            banner.title.contains("zona", ignoreCase = true) || banner.title.contains("hotspot", ignoreCase = true) -> TransientBannerType.HOTSPOT
+            banner.title.contains("linterna", ignoreCase = true) || banner.title.contains("torch", ignoreCase = true) -> TransientBannerType.TORCH
+            banner.title.contains("cargador", ignoreCase = true) || banner.title.contains("charger", ignoreCase = true) -> TransientBannerType.CHARGING
+            banner.title.contains("batería", ignoreCase = true) || banner.title.contains("battery", ignoreCase = true) -> TransientBannerType.BATTERY_LOW
+            else -> TransientBannerType.NONE
         }
-
-        // Update Card Banner
-        cardMediaSection.visibility = View.GONE
-        cardCallSection.visibility = View.GONE
-        cardTimerSection.visibility = View.GONE
-        cardChargingSection.visibility = View.GONE
-        cardRecordSection.visibility = View.GONE
-        cardBannerSection.visibility = View.VISIBLE
-
-        cardBannerIcon.setImageResource(banner.iconRes)
-        cardBannerIcon.setColorFilter(banner.tintColor)
-        cardBannerTitle.text = banner.title
-        cardBannerSubtitle.text = banner.subtitle
-
-        if (!banner.badge.isNullOrBlank()) {
-            cardBannerBadge.text = banner.badge
-            cardBannerBadge.setTextColor(banner.tintColor)
-            cardBannerBadge.visibility = View.VISIBLE
-        } else {
-            cardBannerBadge.visibility = View.GONE
+        val targetWidth = when (bannerType) {
+            TransientBannerType.HOTSPOT -> 255f
+            TransientBannerType.CHARGING -> 250f
+            TransientBannerType.BATTERY_LOW -> 250f
+            TransientBannerType.TORCH -> 230f
+            else -> 235f
         }
+        DynamicIslandManager.showTransientBanner(
+            type = bannerType,
+            title = banner.title,
+            subtitle = banner.subtitle,
+            tintColor = banner.tintColor.toLong() and 0xFFFFFFFFL,
+            targetWidthDp = targetWidth,
+            durationMs = 3500L
+        )
     }
 
-    fun setBasePillWidth(widthDp: Float) {
-        basePillWidthDp = widthDp
-        requestLayout()
-    }
-
-    fun setPillHeight(heightDp: Float) {
-        pillHeightDp = heightDp
-        val heightPx = (heightDp * density).toInt()
-        val lp = pillView.layoutParams
-        if (lp != null) {
-            lp.height = heightPx
-            pillView.layoutParams = lp
-        }
-        applyBackgroundStyles()
-        requestLayout()
-    }
-
-    fun setNotchMargin(marginDp: Float) {
-        notchMarginDp = marginDp
-        // Punch-hole cutout base diameter is ~22dp. Clearance space expands with marginDp.
-        val spacePx = ((22f + 2f * marginDp) * density).toInt()
-        val lp = pillNotchCutoutSpace.layoutParams
-        if (lp != null) {
-            lp.width = spacePx
-            pillNotchCutoutSpace.layoutParams = lp
-        }
-        requestLayout()
-    }
-
-    fun getEstimatedPillWidthDp(type: IslandActivityType): Float {
-        val extra = when (type) {
-            IslandActivityType.MEDIA -> 14f
-            IslandActivityType.CALL -> 18f
-            IslandActivityType.TIMER -> 20f
-            IslandActivityType.CHARGING -> 16f
-            IslandActivityType.SCREEN_RECORD -> 20f
-            IslandActivityType.NAVIGATION -> 24f
-            IslandActivityType.DOWNLOAD -> 26f
-            IslandActivityType.TORCH -> 14f
-            IslandActivityType.HOTSPOT -> 22f
-            IslandActivityType.CAST -> 16f
-            IslandActivityType.PRIVACY -> 36f
-            IslandActivityType.CLIPBOARD -> 22f
-            IslandActivityType.TRANSIENT_BANNER -> 28f
-            else -> 0f
-        }
-        val calculatedCutoutSpace = 22f + 2f * notchMarginDp
-        val contentPaddingAndIcons = 56f + extra
-        return maxOf(basePillWidthDp, calculatedCutoutSpace + contentPaddingAndIcons)
+    fun hidePill() {
+        DynamicIslandManager.collapseIsland()
     }
 }
