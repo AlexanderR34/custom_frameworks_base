@@ -24,6 +24,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -94,6 +95,11 @@ class DynamicIslandView @JvmOverloads constructor(
             outRect.setEmpty()
             return
         }
+        val activeActivity = resolveActiveActivity()
+        if (activeActivity == ComposeActivityType.NONE && !DynamicIslandManager.isExpanded.value) {
+            outRect.setEmpty()
+            return
+        }
         val density = context.resources.displayMetrics.density
         val totalWidth = if (width > 0) width else context.resources.displayMetrics.widthPixels
         val centerX = totalWidth / 2
@@ -101,7 +107,6 @@ class DynamicIslandView @JvmOverloads constructor(
 
         if (DynamicIslandManager.isExpanded.value) {
             val cardWidthPx = (362f * density).toInt()
-            val activeActivity = resolveActiveActivity()
             val cardHeightDp = DynamicIslandManager.getExpandedCardHeightDp(
                 activeActivity,
                 DynamicIslandManager.transientBanner.value.type,
@@ -115,7 +120,7 @@ class DynamicIslandView @JvmOverloads constructor(
             val right = (centerX + cardWidthPx / 2).coerceAtMost(totalWidth)
             outRect.set(left, 0, right, cardHeightPx)
         } else {
-            val pillWidthDp = getEstimatedPillWidthDp(IslandActivityType.NONE)
+            val pillWidthDp = getEstimatedPillWidthDp(activeActivity)
             val pillWidthPx = ((pillWidthDp + 24f) * density).toInt()
             val pillHeightPx = ((config.pillHeightDp + maxOf(0f, config.yOffsetDp) + 24f) * density).toInt()
             val centerX = (totalWidth / 2) + ((config.xOffsetDp) * density).toInt()
@@ -123,6 +128,18 @@ class DynamicIslandView @JvmOverloads constructor(
             val right = (centerX + pillWidthPx / 2).coerceAtMost(totalWidth)
             outRect.set(left, 0, right, pillHeightPx)
         }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (visibility != View.VISIBLE || alpha <= 0f) {
+            return false
+        }
+        tempRect.setEmpty()
+        computeTouchableRegion(tempRect)
+        if (tempRect.isEmpty || !tempRect.contains(ev.x.toInt(), ev.y.toInt())) {
+            return false
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     fun resolveActiveActivity(): ComposeActivityType {
@@ -231,18 +248,21 @@ class DynamicIslandView @JvmOverloads constructor(
 
         scope.launch {
             DynamicIslandManager.transientBanner.collect {
+                post { requestLayout() }
                 onPillWidthChanged?.invoke()
             }
         }
 
         scope.launch {
             DynamicIslandManager.downloadState.collect {
+                post { requestLayout() }
                 onPillWidthChanged?.invoke()
             }
         }
 
         scope.launch {
             DynamicIslandManager.mediaState.collect {
+                post { requestLayout() }
                 onPillWidthChanged?.invoke()
             }
         }
@@ -328,7 +348,7 @@ class DynamicIslandView @JvmOverloads constructor(
         )
     }
 
-    fun getEstimatedPillWidthDp(type: IslandActivityType): Float {
+    fun getEstimatedPillWidthDp(type: Any? = null): Float {
         val banner = DynamicIslandManager.transientBanner.value
         val hotspot = DynamicIslandManager.hotspotState.value
         val download = DynamicIslandManager.downloadState.value

@@ -1183,6 +1183,7 @@ class DynamicIslandController(
             ((pillHeightDp + maxOf(0, yOffsetDp) + 24) * density).toInt(),
             WindowManager.LayoutParams.TYPE_STATUS_BAR_SUB_PANEL,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -1262,6 +1263,7 @@ class DynamicIslandController(
             val expandedTopYDp = maxOf(closedTopYDp, notchCenterYDp + (pillHeightDp / 2f) + 6f)
             params.height = ((expandedTopYDp + dynamicHeightDp + 60f) * density).toInt()
             params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
@@ -1276,6 +1278,7 @@ class DynamicIslandController(
             val targetHeight = ((pillHeightDp + maxOf(0, yOffsetDp) + 24) * density).toInt()
             params.height = targetHeight
             params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
@@ -1299,6 +1302,10 @@ class DynamicIslandController(
             .scaleX(0.7f)
             .scaleY(0.7f)
             .setDuration(240L)
+            .withEndAction {
+                view.visibility = View.GONE
+                view.post { view.requestLayout() }
+            }
             .start()
     }
 
@@ -1306,6 +1313,7 @@ class DynamicIslandController(
         val view = islandView ?: return
         val activeType = resolveActiveActivity()
         if (activeType != IslandActivityType.NONE) {
+            view.visibility = View.VISIBLE
             view.animate().cancel()
             view.animate()
                 .alpha(1f)
@@ -1314,6 +1322,7 @@ class DynamicIslandController(
                 .translationY(0f)
                 .setDuration(240L)
                 .withEndAction {
+                    view.post { view.requestLayout() }
                     notifyIslandWidthChanged()
                 }
                 .start()
