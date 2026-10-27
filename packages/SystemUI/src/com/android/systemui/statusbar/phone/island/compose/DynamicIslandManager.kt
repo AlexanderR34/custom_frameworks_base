@@ -1262,21 +1262,10 @@ object DynamicIslandManager {
                 showBanner = true
             )
 
-            val chargingClassRes = when {
-                watts >= 67.0 -> R.string.charging_hypercharge
-                watts >= 30.0 -> R.string.charging_turbo
-                watts >= 15.0 -> R.string.charging_fast
-                else -> R.string.charging_battery
-            }
-            val chargingClass = when {
-                watts >= 67.0 -> "HyperCharge 90W Ultra"
-                watts >= 33.0 -> "Carga ultra rápida"
-                watts >= 15.0 -> "Carga rápida"
-                else -> "Cargando"
-            }
-            val wattLabel = if (watts > 0) {
-                if (watts >= 10.0) "${level}% • ${watts.toInt()}W"
-                else String.format(java.util.Locale.US, "%d%% • %.1fW", level, watts)
+            val chargingClass = "Cargando"
+            val wattLabel = if (watts > 0.5) {
+                val wFormatted = if (watts >= 10.0) String.format(java.util.Locale.US, "%.0fW", watts) else String.format(java.util.Locale.US, "%.1fW", watts)
+                "${level}% • $wFormatted"
             } else "$level%"
 
             showTransientBanner(

@@ -71,7 +71,7 @@ data class IslandChargingState(
     val level: Int = 100,
     val watts: Double = 0.0,
     val isNewConnection: Boolean = false,
-    val title: String = "HyperCharge 90W Ultra",
+    val title: String = "Cargando",
 )
 
 data class IslandRecordState(

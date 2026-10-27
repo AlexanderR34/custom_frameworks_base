@@ -1496,7 +1496,9 @@ class DynamicIslandController(
             callState.isActive ||
             recordState.isRecording ||
             (timerState.isActive && !timerState.isPaused) ||
-            downloadState.isDownloading
+            downloadState.isDownloading ||
+            isChargingBannerActive ||
+            (isExpanded && chargingState.isCharging)
     }
 
     private fun updateTick() {
@@ -1515,6 +1517,19 @@ class DynamicIslandController(
             val rem = (timerState.remainingSeconds - 1).coerceAtLeast(0)
             timerState = timerState.copy(remainingSeconds = rem)
             view.showTimer(timerState)
+        } else if (isChargingBannerActive || (isExpanded && chargingState.isCharging)) {
+            val batteryIntent = try {
+                context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            } catch (_: Exception) { null }
+            if (batteryIntent != null) {
+                val newWatts = calculateWatts(batteryIntent)
+                if (newWatts > 0.5 && abs(newWatts - chargingState.watts) >= 0.5) {
+                    val wattFmt = if (newWatts >= 10.0) String.format(java.util.Locale.US, "%.0fW", newWatts) else String.format(java.util.Locale.US, "%.1fW", newWatts)
+                    val newTitle = "${context.getString(R.string.island_charging_battery)} · $wattFmt"
+                    chargingState = chargingState.copy(watts = newWatts, title = newTitle)
+                    view.showCharging(chargingState)
+                }
+            }
         }
     }
 
@@ -2728,16 +2743,18 @@ class DynamicIslandController(
         }
 
         val watts = calculateWatts(batteryIntent)
-        val wattsChanged = abs(watts - lastChargingWatts) >= 2.0 && watts > 1.0
+        val wattsChanged = abs(watts - lastChargingWatts) >= 1.5 && watts > 0.5
         val shouldShowBanner = isNewConnection || (wattsChanged && !isChargingBannerActive)
 
-        val wattFormatted = if (watts >= 10.0) String.format(java.util.Locale.US, "%.0fW", watts) else String.format(java.util.Locale.US, "%.1fW", watts)
-        val title = when {
-            watts >= 65.0 -> "${context.getString(R.string.island_charging_hypercharge)} · $wattFormatted"
-            watts >= 30.0 -> "${context.getString(R.string.island_charging_turbo)} · $wattFormatted"
-            watts >= 15.0 -> "${context.getString(R.string.island_charging_fast)} · $wattFormatted"
-            watts > 0.5 -> "${context.getString(R.string.island_charging_fast)} · $wattFormatted"
-            else -> context.getString(R.string.island_charging_fast)
+        val wattFormatted = if (watts > 0.5) {
+            if (watts >= 10.0) String.format(java.util.Locale.US, "%.0fW", watts)
+            else String.format(java.util.Locale.US, "%.1fW", watts)
+        } else null
+
+        val title = if (wattFormatted != null) {
+            "${context.getString(R.string.island_charging_battery)} · $wattFormatted"
+        } else {
+            context.getString(R.string.island_charging_battery)
         }
 
         chargingState = IslandChargingState(
@@ -2761,52 +2778,94 @@ class DynamicIslandController(
     }
 
     private fun calculateWatts(intent: Intent): Double {
-        val maxCurrentUa = intent.getIntExtra("max_charging_current", -1)
-        val maxVoltageUv = intent.getIntExtra("max_charging_voltage", -1)
-        if (maxCurrentUa > 0 && maxVoltageUv > 0) {
-            val w = (maxCurrentUa.toDouble() / 1_000_000.0) * (maxVoltageUv.toDouble() / 1_000_000.0)
-            if (w > 0.5) return w
-        }
-
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
-        if (bm != null) {
-            val voltageMv = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1).takeIf { it > 0 } ?: 4100
-            val currentNow = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            if (currentNow != 0 && currentNow != Int.MIN_VALUE) {
-                var currentAmps = abs(currentNow).toDouble()
-                if (currentAmps > 10_000) {
-                    currentAmps /= 1_000_000.0
-                } else if (currentAmps > 0) {
-                    currentAmps /= 1_000.0
-                }
-                val voltageVolts = if (voltageMv > 1000) voltageMv.toDouble() / 1000.0 else voltageMv.toDouble()
-                val w = currentAmps * voltageVolts
-                if (w > 0.5) return w
+
+        // 1. Obtener voltaje real de la batería (en mV)
+        var voltageMv = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+        if (voltageMv <= 0) {
+            val vFiles = listOf(
+                "/sys/class/power_supply/battery/voltage_now",
+                "/sys/class/power_supply/mt6375-gauge/voltage_now"
+            )
+            for (vf in vFiles) {
+                try {
+                    val f = java.io.File(vf)
+                    if (f.exists() && f.canRead()) {
+                        val vRaw = f.readText().trim().toLongOrNull() ?: 0L
+                        if (vRaw > 100_000) {
+                            voltageMv = (vRaw / 1000).toInt()
+                            break
+                        } else if (vRaw > 1000) {
+                            voltageMv = vRaw.toInt()
+                            break
+                        }
+                    }
+                } catch (_: Exception) {}
             }
         }
+        val voltageVolts = if (voltageMv > 1000) voltageMv.toDouble() / 1000.0 else if (voltageMv > 0) voltageMv.toDouble() else 4.2
 
+        // 2. Intentar leer power_now de sysfs si el driver kernel lo expone directamente
         try {
-            val powerFiles = listOf(
-                "/sys/class/power_supply/battery/power_now",
-                "/sys/class/power_supply/battery/current_now"
+            val pFiles = listOf(
+                "/sys/class/power_supply/battery/power_now"
             )
-            for (p in powerFiles) {
-                val f = java.io.File(p)
+            for (pf in pFiles) {
+                val f = java.io.File(pf)
                 if (f.exists() && f.canRead()) {
-                    val raw = f.readText().trim().toLongOrNull() ?: continue
-                    val absVal = abs(raw).toDouble()
-                    if (p.contains("power_now")) {
-                        val w = if (absVal > 1_000_000) absVal / 1_000_000.0 else absVal / 1_000.0
-                        if (w > 0.5) return w
-                    } else if (p.contains("current_now")) {
-                        val amps = if (absVal > 10_000) absVal / 1_000_000.0 else absVal / 1_000.0
-                        val v = 4.2
-                        val w = amps * v
-                        if (w > 0.5) return w
+                    val pRaw = abs(f.readText().trim().toLongOrNull() ?: 0L).toDouble()
+                    if (pRaw > 1_000_000) {
+                        val w = pRaw / 1_000_000.0
+                        if (w in 0.5..120.0) return w
+                    } else if (pRaw in 500.0..120_000.0) {
+                        val w = pRaw / 1000.0
+                        if (w in 0.5..120.0) return w
                     }
                 }
             }
-        } catch (ignored: Exception) {}
+        } catch (_: Exception) {}
+
+        // 3. Corriente real instantánea vía BatteryManager oficial (health HAL)
+        if (bm != null) {
+            val currentNow = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+            if (currentNow != 0 && currentNow != Int.MIN_VALUE) {
+                val absCurrent = abs(currentNow).toDouble()
+                val currentAmps = when {
+                    absCurrent > 10_000 -> absCurrent / 1_000_000.0
+                    absCurrent in 20.0..10_000.0 -> absCurrent / 1_000.0
+                    else -> 0.0
+                }
+                if (currentAmps > 0.05) {
+                    val w = currentAmps * voltageVolts
+                    if (w in 0.5..120.0) return w
+                }
+            }
+        }
+
+        // 4. Corriente real desde sysfs (MediaTek fuel gauge / charger / dual charge pump)
+        try {
+            val cFiles = listOf(
+                "/sys/class/power_supply/battery/current_now",
+                "/sys/class/power_supply/mt6375-gauge/current_now",
+                "/sys/class/power_supply/primary_chg/current_now",
+                "/sys/class/power_supply/cp_master/current_now"
+            )
+            for (cf in cFiles) {
+                val f = java.io.File(cf)
+                if (f.exists() && f.canRead()) {
+                    val cRaw = abs(f.readText().trim().toLongOrNull() ?: 0L).toDouble()
+                    val currentAmps = when {
+                        cRaw > 10_000 -> cRaw / 1_000_000.0
+                        cRaw in 20.0..10_000.0 -> cRaw / 1_000.0
+                        else -> 0.0
+                    }
+                    if (currentAmps > 0.05) {
+                        val w = currentAmps * voltageVolts
+                        if (w in 0.5..120.0) return w
+                    }
+                }
+            }
+        } catch (_: Exception) {}
 
         return 0.0
     }

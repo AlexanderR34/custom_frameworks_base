@@ -3521,13 +3521,7 @@ fun ExpandedChargingCard(batteryState: DynamicIslandBatteryState) {
                 }
                 Column {
                     Text(
-                        text = if (batteryState.watts >= 65.0) {
-                            stringResource(R.string.charging_hypercharge)
-                        } else if (batteryState.watts >= 30.0) {
-                            stringResource(R.string.charging_turbo)
-                        } else if (batteryState.watts >= 15.0) {
-                            stringResource(R.string.charging_fast)
-                        } else if (batteryState.isCharging) {
+                        text = if (batteryState.isCharging) {
                             stringResource(R.string.charging_battery)
                         } else {
                             stringResource(R.string.charging_poco_battery)

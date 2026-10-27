@@ -203,10 +203,10 @@
     <string name="island_nav_on_route">En ruta</string>
     <string name="island_wireless_display">Pantalla inalámbrica</string>
 
-    <string name="island_charging_hypercharge">HyperCharge 90W Ultra</string>
-    <string name="island_charging_turbo">Carga Ultra Rápida</string>
-    <string name="island_charging_fast">Carga Rápida</string>
-    <string name="island_charging_battery">Cargando Batería</string>
+    <string name="island_charging_hypercharge">Cargando</string>
+    <string name="island_charging_turbo">Cargando</string>
+    <string name="island_charging_fast">Cargando</string>
+    <string name="island_charging_battery">Cargando</string>
 
     <string name="island_headphones_connected">Audífonos Conectados</string>
     <string name="island_headphones_disconnected">Audífonos desconectados</string>

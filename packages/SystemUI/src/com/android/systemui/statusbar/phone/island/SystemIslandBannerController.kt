@@ -133,21 +133,21 @@ class SystemIslandBannerController(
         val watts = calculateChargingWatts(intent)
 
         mainHandler.post {
-            val (title, tintColor) = when {
-                watts >= 65.0 -> context.getString(R.string.island_charging_hypercharge) to Color.parseColor("#38BDF8")
-                watts >= 30.0 -> context.getString(R.string.island_charging_turbo) to Color.parseColor("#00E5FF")
-                else -> context.getString(R.string.island_charging_fast) to Color.parseColor("#81C995")
-            }
+            val title = context.getString(R.string.island_charging_battery)
+            val tintColor = Color.parseColor("#81C995")
 
-            val subtitle = if (watts > 1.0) {
-                String.format(Locale.US, "%d%% • %.1fW Turbo", batteryPct, watts)
+            val subtitle = if (watts > 0.5) {
+                val wFmt = if (watts >= 10.0) String.format(Locale.US, "%.0fW", watts) else String.format(Locale.US, "%.1fW", watts)
+                "$batteryPct% • $wFmt"
             } else {
                 "$batteryPct% • ${context.getString(R.string.island_charging_battery)}"
             }
 
-            val badge = if (watts >= 65.0) "90W" else if (watts > 1.0) String.format(Locale.US, "%.0fW", watts) else null
+            val badge = if (watts > 0.5) {
+                if (watts >= 10.0) String.format(Locale.US, "%.0fW", watts) else String.format(Locale.US, "%.1fW", watts)
+            } else null
 
-            val icon = if (watts >= 65.0) R.drawable.ic_hyper_charging_super else if (watts >= 30.0) R.drawable.ic_hyper_charging_turbo else R.drawable.ic_hyper_charging
+            val icon = R.drawable.ic_hyper_charging
 
             banner.show(
                 iconRes = icon,
@@ -161,23 +161,36 @@ class SystemIslandBannerController(
     }
 
     private fun calculateChargingWatts(intent: Intent): Double {
-        val maxCurrentUa = intent.getIntExtra("max_charging_current", -1)
-        val maxVoltageUv = intent.getIntExtra("max_charging_voltage", -1)
-
-        if (maxCurrentUa > 0 && maxVoltageUv > 0) {
-            val w = (maxCurrentUa.toDouble() / 1_000_000.0) * (maxVoltageUv.toDouble() / 1_000_000.0)
-            if (w > 0.5) return w
-        }
-
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        var voltageMv = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+        if (voltageMv <= 0) {
+            val vFiles = listOf("/sys/class/power_supply/battery/voltage_now", "/sys/class/power_supply/mt6375-gauge/voltage_now")
+            for (vf in vFiles) {
+                try {
+                    val f = java.io.File(vf)
+                    if (f.exists() && f.canRead()) {
+                        val vRaw = f.readText().trim().toLongOrNull() ?: 0L
+                        if (vRaw > 100_000) { voltageMv = (vRaw / 1000).toInt(); break }
+                        else if (vRaw > 1000) { voltageMv = vRaw.toInt(); break }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+        val voltageVolts = if (voltageMv > 1000) voltageMv.toDouble() / 1000.0 else if (voltageMv > 0) voltageMv.toDouble() else 4.2
+
         if (bm != null) {
-            val voltageMv = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1).takeIf { it > 0 } ?: 4100
-            val currentNowUa = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            if (currentNowUa != 0 && currentNowUa != Int.MIN_VALUE) {
-                val currentAmps = abs(currentNowUa).toDouble() / 1_000_000.0
-                val voltageVolts = voltageMv.toDouble() / 1000.0
-                val w = currentAmps * voltageVolts
-                if (w > 0.5) return w
+            val currentNow = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+            if (currentNow != 0 && currentNow != Int.MIN_VALUE) {
+                val absCurrent = abs(currentNow).toDouble()
+                val currentAmps = when {
+                    absCurrent > 10_000 -> absCurrent / 1_000_000.0
+                    absCurrent in 20.0..10_000.0 -> absCurrent / 1_000.0
+                    else -> 0.0
+                }
+                if (currentAmps > 0.05) {
+                    val w = currentAmps * voltageVolts
+                    if (w in 0.5..120.0) return w
+                }
             }
         }
         return 0.0

@@ -5111,10 +5111,10 @@
     <string name="quick_settings_performance_inactive_label">Normal</string>
 
     <!-- Dynamic Island Strings -->
-    <string name="charging_hypercharge">HyperCharge 90W Ultra</string>
-    <string name="charging_turbo">Turbo Charge</string>
-    <string name="charging_fast">Fast Charge</string>
-    <string name="charging_battery">Charging Battery</string>
+    <string name="charging_hypercharge">Charging</string>
+    <string name="charging_turbo">Charging</string>
+    <string name="charging_fast">Charging</string>
+    <string name="charging_battery">Charging</string>
     <string name="charging_poco_battery">POCO X7 Pro Battery</string>
     <string name="device_specs_battery">Dimensity 8400 Ultra • 6000 mAh</string>
     <string name="power_label">POWER</string>
