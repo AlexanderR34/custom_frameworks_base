@@ -557,7 +557,7 @@ class DynamicIslandController(
 
                 ACTION_UPDATE_DOWNLOAD -> handleDownloadIntent(intent)
 
-                DownloadManager.ACTION_DOWNLOAD_COMPLETE -> checkDownloads()
+                DownloadManager.ACTION_DOWNLOAD_COMPLETE -> handleDownloadComplete(intent)
 
                 ACTION_UPDATE_CAST -> handleCastIntent(intent)
 
@@ -2202,25 +2202,22 @@ class DynamicIslandController(
 
             if (downloadState.isDownloading) {
                 var actuallyCompleted = false
-                if (downloadState.progress >= 85) {
-                    if (downloadState.sourcePackage == "download_manager" || downloadState.sourcePackage.isBlank()) {
-                        try {
-                            val finishedQuery = DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
-                            val finishedCursor = dm?.query(finishedQuery)
-                            if (finishedCursor != null) {
-                                if (finishedCursor.moveToFirst()) {
-                                    actuallyCompleted = true
-                                }
-                                finishedCursor.close()
+                if (downloadState.sourcePackage == "download_manager" || downloadState.sourcePackage.isBlank()) {
+                    try {
+                        val finishedQuery = DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
+                        val finishedCursor = dm?.query(finishedQuery)
+                        if (finishedCursor != null) {
+                            if (finishedCursor.moveToFirst()) {
+                                actuallyCompleted = true
                             }
-                        } catch (_: Exception) {}
-                    } else {
-                        // For browsers/other apps, no active progress notification remains
-                        actuallyCompleted = true
-                    }
+                            finishedCursor.close()
+                        }
+                    } catch (_: Exception) {}
+                } else {
+                    actuallyCompleted = !downloadState.isCancelled && !downloadState.isFailed
                 }
 
-                if (actuallyCompleted || downloadState.progress >= 95) {
+                if (actuallyCompleted || downloadState.progress >= 90) {
                     downloadState = downloadState.copy(
                         isDownloading = false,
                         isCompleted = true,
@@ -2238,6 +2235,60 @@ class DynamicIslandController(
         } catch (e: Exception) {
             Log.e(TAG, "Error checking downloads", e)
         }
+    }
+
+    private fun handleDownloadComplete(intent: Intent) {
+        if (!isDownloadEnabled) return
+        val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+        if (dm != null) {
+            try {
+                val query = if (downloadId != -1L) {
+                    DownloadManager.Query().setFilterById(downloadId)
+                } else {
+                    DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
+                }
+                val cursor = dm.query(query)
+                if (cursor != null) {
+                    if (cursor.moveToFirst()) {
+                        val titleIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
+                        val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                        val status = if (statusIndex >= 0) cursor.getInt(statusIndex) else -1
+                        val fileName = if (titleIndex >= 0) cursor.getString(titleIndex) ?: "" else ""
+
+                        if (status == DownloadManager.STATUS_SUCCESSFUL &&
+                            !fileName.contains("metadata", ignoreCase = true) &&
+                            !fileName.contains(".model.", ignoreCase = true) &&
+                            !fileName.contains("speech", ignoreCase = true) &&
+                            !fileName.contains("es.model", ignoreCase = true)) {
+
+                            val resolvedName = fileName.ifBlank {
+                                downloadState.fileName.ifBlank { context.getString(R.string.island_download) }
+                            }
+                            downloadState = IslandDownloadState(
+                                isDownloading = false,
+                                fileName = resolvedName,
+                                progress = 100,
+                                isCompleted = true,
+                                isFailed = false,
+                                isCancelled = false,
+                                sourcePackage = "download_manager"
+                            )
+                            islandView?.showDownload(downloadState)
+                            mainHandler.removeCallbacks(downloadDismissRunnable)
+                            mainHandler.postDelayed(downloadDismissRunnable, 3500L)
+                            refreshCurrentActivity()
+                            cursor.close()
+                            return
+                        }
+                    }
+                    cursor.close()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error handling download complete", e)
+            }
+        }
+        checkDownloads()
     }
 
     private fun handleDownloadIntent(intent: Intent) {
@@ -2568,7 +2619,7 @@ class DynamicIslandController(
 
         if (isDownloadRemoval && isDownloadEnabled) {
             if (downloadState.isDownloading && (downloadState.sourcePackage == pkg || downloadState.sourcePackage.isBlank())) {
-                if (downloadState.progress >= 85) {
+                if (!downloadState.isCancelled && !downloadState.isFailed) {
                     downloadState = downloadState.copy(
                         isDownloading = false,
                         isCompleted = true,
