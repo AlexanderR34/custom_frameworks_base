@@ -17,6 +17,7 @@
 package com.android.systemui.statusbar.phone.island
 
 import android.animation.ValueAnimator
+import android.app.ActivityOptions
 import android.app.AppOpsManager
 import android.app.DownloadManager
 import android.app.KeyguardManager
@@ -1375,9 +1376,9 @@ class DynamicIslandController(
 
         if (!isWindowAttached) {
             view.visibility = View.VISIBLE
-            view.alpha = 0f
-            view.scaleX = 0.7f
-            view.scaleY = 0.7f
+            view.alpha = 1f
+            view.scaleX = 1f
+            view.scaleY = 1f
             view.translationY = 0f
             try {
                 windowManager.addView(view, params)
@@ -1385,14 +1386,6 @@ class DynamicIslandController(
             } catch (e: Exception) {
                 return
             }
-
-            view.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .translationY(0f)
-                .setDuration(240)
-                .start()
             notifyIslandWidthChanged()
         } else {
             view.visibility = View.VISIBLE
@@ -1534,9 +1527,26 @@ class DynamicIslandController(
     }
 
     private fun updateActiveController(controllers: List<MediaController>?) {
+        val currentToken = activeMediaController?.sessionToken
+        val currentStillExists = controllers?.firstOrNull { it.sessionToken == currentToken }
+
         val playingController = controllers?.firstOrNull {
             it.playbackState?.state == PlaybackState.STATE_PLAYING
-        } ?: controllers?.firstOrNull()
+        } ?: controllers?.firstOrNull {
+            val st = it.playbackState?.state
+            st == PlaybackState.STATE_BUFFERING ||
+            st == PlaybackState.STATE_SKIPPING_TO_NEXT ||
+            st == PlaybackState.STATE_SKIPPING_TO_PREVIOUS ||
+            st == PlaybackState.STATE_CONNECTING
+        } ?: run {
+            if (currentStillExists != null &&
+                currentStillExists.playbackState?.state != PlaybackState.STATE_STOPPED &&
+                currentStillExists.playbackState?.state != PlaybackState.STATE_NONE) {
+                currentStillExists
+            } else {
+                controllers?.firstOrNull()
+            }
+        }
 
         if (activeMediaController?.sessionToken != playingController?.sessionToken) {
             activeMediaController?.unregisterCallback(mediaCallback)
@@ -1627,6 +1637,17 @@ class DynamicIslandController(
         }
 
         val pkg = activeMediaController?.packageName ?: mediaState.packageName
+
+        // Try to obtain the art from active media notification if metadata didn't have it
+        if (art == null && pkg.isNotBlank()) {
+            art = getMediaNotificationArt(pkg)
+        }
+
+        // If skipping songs in the same music app, retain current album art rather than replacing with app icon
+        if (art == null && pkg.isNotBlank() && pkg == mediaState.packageName && mediaState.albumArt != null) {
+            art = mediaState.albumArt
+        }
+
         if (art == null && pkg.isNotBlank()) {
             try {
                 val d = context.packageManager.getApplicationIcon(pkg)
@@ -1659,6 +1680,32 @@ class DynamicIslandController(
         refreshCurrentActivity()
     }
 
+    private fun getMediaNotificationArt(targetPkg: String): Bitmap? {
+        if (targetPkg.isBlank()) return null
+        try {
+            val sbns = notificationListener?.activeNotifications
+                ?: (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.activeNotifications
+                ?: return null
+            for (sbn in sbns) {
+                if (sbn.packageName.equals(targetPkg, ignoreCase = true)) {
+                    val largeIcon = sbn.notification?.getLargeIcon() ?: continue
+                    val drawable = largeIcon.loadDrawable(context) ?: continue
+                    if (drawable is android.graphics.drawable.BitmapDrawable && drawable.bitmap != null) {
+                        return drawable.bitmap
+                    }
+                    val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: 128
+                    val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: 128
+                    val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(b)
+                    drawable.setBounds(0, 0, w, h)
+                    drawable.draw(canvas)
+                    return b
+                }
+            }
+        } catch (ignored: Exception) {}
+        return null
+    }
+
     private fun extractColor(bitmap: Bitmap): Int {
         return try {
             val sample = Bitmap.createScaledBitmap(bitmap, 1, 1, false)
@@ -1689,10 +1736,15 @@ class DynamicIslandController(
     }
 
     fun openMediaApp() {
+        val options = ActivityOptions.makeBasic().apply {
+            pendingIntentBackgroundActivityStartMode =
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+        }.toBundle()
+
         val pendingIntent = activeMediaController?.sessionActivity
         if (pendingIntent != null) {
             try {
-                pendingIntent.send()
+                pendingIntent.send(context, 0, null, null, null, null, options)
                 collapse()
                 return
             } catch (e: Exception) {
@@ -1705,7 +1757,7 @@ class DynamicIslandController(
                 val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
                 if (launchIntent != null) {
                     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                    context.startActivity(launchIntent)
+                    context.startActivity(launchIntent, options)
                     collapse()
                     return
                 }
@@ -1721,7 +1773,15 @@ class DynamicIslandController(
             telecomManager?.endCall()
         } catch (ignored: Exception) {}
         callState.intent?.let {
-            try { it.send() } catch (ignored: Exception) {}
+            try {
+                val options = ActivityOptions.makeBasic().apply {
+                    pendingIntentBackgroundActivityStartMode =
+                        ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                }.toBundle()
+                it.send(context, 0, null, null, null, null, options)
+            } catch (ignored: Exception) {
+                try { it.send() } catch (ignored2: Exception) {}
+            }
         }
         callState = IslandCallState(isActive = false)
         collapse()
@@ -2220,6 +2280,33 @@ class DynamicIslandController(
             return
         }
 
+        // Live artwork sync for active media app notifications
+        val activeMediaPkg = (activeMediaController?.packageName ?: mediaState.packageName).lowercase()
+        if (activeMediaPkg.isNotBlank() && pkg == activeMediaPkg && mediaState.hasActiveMedia) {
+            val largeIcon = notification.getLargeIcon()
+            if (largeIcon != null) {
+                try {
+                    val drawable = largeIcon.loadDrawable(context)
+                    val bmp = if (drawable is android.graphics.drawable.BitmapDrawable && drawable.bitmap != null) {
+                        drawable.bitmap
+                    } else if (drawable != null) {
+                        val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: 128
+                        val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: 128
+                        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(b)
+                        drawable.setBounds(0, 0, w, h)
+                        drawable.draw(canvas)
+                        b
+                    } else null
+                    if (bmp != null && bmp != mediaState.albumArt) {
+                        val color = extractColor(bmp)
+                        mediaState = mediaState.copy(albumArt = bmp, dominantColor = color)
+                        refreshCurrentActivity()
+                    }
+                } catch (ignored: Exception) {}
+            }
+        }
+
         // Screen recording active notification detection
         val isScreenRecordNotif = (pkg == "com.android.systemui" || pkg.contains("screenrecord")) && (
             channelId.contains("record") ||
@@ -2684,14 +2771,43 @@ class DynamicIslandController(
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         if (bm != null) {
             val voltageMv = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1).takeIf { it > 0 } ?: 4100
-            val currentNowUa = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            if (currentNowUa != 0 && currentNowUa != Int.MIN_VALUE) {
-                val currentAmps = abs(currentNowUa).toDouble() / 1_000_000.0
-                val voltageVolts = voltageMv.toDouble() / 1000.0
+            val currentNow = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+            if (currentNow != 0 && currentNow != Int.MIN_VALUE) {
+                var currentAmps = abs(currentNow).toDouble()
+                if (currentAmps > 10_000) {
+                    currentAmps /= 1_000_000.0
+                } else if (currentAmps > 0) {
+                    currentAmps /= 1_000.0
+                }
+                val voltageVolts = if (voltageMv > 1000) voltageMv.toDouble() / 1000.0 else voltageMv.toDouble()
                 val w = currentAmps * voltageVolts
                 if (w > 0.5) return w
             }
         }
+
+        try {
+            val powerFiles = listOf(
+                "/sys/class/power_supply/battery/power_now",
+                "/sys/class/power_supply/battery/current_now"
+            )
+            for (p in powerFiles) {
+                val f = java.io.File(p)
+                if (f.exists() && f.canRead()) {
+                    val raw = f.readText().trim().toLongOrNull() ?: continue
+                    val absVal = abs(raw).toDouble()
+                    if (p.contains("power_now")) {
+                        val w = if (absVal > 1_000_000) absVal / 1_000_000.0 else absVal / 1_000.0
+                        if (w > 0.5) return w
+                    } else if (p.contains("current_now")) {
+                        val amps = if (absVal > 10_000) absVal / 1_000_000.0 else absVal / 1_000.0
+                        val v = 4.2
+                        val w = amps * v
+                        if (w > 0.5) return w
+                    }
+                }
+            }
+        } catch (ignored: Exception) {}
+
         return 0.0
     }
 

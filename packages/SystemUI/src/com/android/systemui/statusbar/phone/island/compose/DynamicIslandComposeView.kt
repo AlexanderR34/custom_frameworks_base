@@ -292,21 +292,27 @@ private fun DynamicIslandInternal(
             downloadState.isCancelled ||
             hotspotState.isEnabled
 
-    val appearanceProgress by animateFloatAsState(
-        targetValue = if (hasContent) 1f else 0f,
-        animationSpec = if (hasContent) {
-            spring(
-                dampingRatio = config.springDamping.coerceIn(0.35f, 2.0f),
-                stiffness = config.springStiffness
+    val appearanceAnim = remember { Animatable(0f) }
+    LaunchedEffect(hasContent) {
+        if (hasContent) {
+            appearanceAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = config.springDamping.coerceIn(0.35f, 2.0f),
+                    stiffness = config.springStiffness
+                )
             )
         } else {
-            spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = 320f
+            appearanceAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = 320f
+                )
             )
-        },
-        label = "pillEntranceExit"
-    )
+        }
+    }
+    val appearanceProgress = appearanceAnim.value
 
     if (appearanceProgress <= 0.005f && !hasContent) {
         return
@@ -3515,7 +3521,17 @@ fun ExpandedChargingCard(batteryState: DynamicIslandBatteryState) {
                 }
                 Column {
                     Text(
-                        text = if (batteryState.watts > 30.0) stringResource(R.string.charging_hypercharge) else if (batteryState.isCharging) stringResource(R.string.charging_battery) else stringResource(R.string.charging_poco_battery),
+                        text = if (batteryState.watts >= 65.0) {
+                            stringResource(R.string.charging_hypercharge)
+                        } else if (batteryState.watts >= 30.0) {
+                            stringResource(R.string.charging_turbo)
+                        } else if (batteryState.watts >= 15.0) {
+                            stringResource(R.string.charging_fast)
+                        } else if (batteryState.isCharging) {
+                            stringResource(R.string.charging_battery)
+                        } else {
+                            stringResource(R.string.charging_poco_battery)
+                        },
                         color = Color.White,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold,
@@ -3566,7 +3582,14 @@ fun ExpandedChargingCard(batteryState: DynamicIslandBatteryState) {
                 ) {
                     Text(text = stringResource(R.string.power_label), color = Color.White.copy(alpha = 0.45f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        text = if (batteryState.watts > 0) "${batteryState.watts.toInt()}W" else "90W Max",
+                        text = if (batteryState.watts > 1.0) {
+                            if (batteryState.watts >= 10.0) "${batteryState.watts.toInt()}W"
+                            else String.format(java.util.Locale.US, "%.1fW", batteryState.watts)
+                        } else if (batteryState.isCharging) {
+                            stringResource(R.string.charging_label)
+                        } else {
+                            "--"
+                        },
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
