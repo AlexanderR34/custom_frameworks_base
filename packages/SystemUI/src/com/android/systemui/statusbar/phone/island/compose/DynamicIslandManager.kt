@@ -1271,7 +1271,7 @@ object DynamicIslandManager {
             showTransientBanner(
                 type = TransientBannerType.CHARGING,
                 title = chargingClass,
-                titleResId = chargingClassRes,
+                titleResId = R.string.charging_battery,
                 subtitle = wattLabel,
                 iconName = "bolt",
                 tintColor = 0xFF81C995,
