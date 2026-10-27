@@ -670,8 +670,72 @@ private fun SystemStatusIconsContainer(
     modifier: Modifier = Modifier,
     systemStatusIconBlockListInteractor: SystemStatusIconBlocklistInteractor,
 ) {
+    val context = LocalContext.current
     var bounds by remember { mutableStateOf(Rect()) }
-    val tint = if (isDark.isDarkTheme(bounds)) Color.White else Color.Black
+
+    var customIconColor by remember {
+        mutableStateOf(
+            try {
+                val hex = android.provider.Settings.System.getStringForUser(
+                    context.contentResolver, "status_bar_icons_color", android.os.UserHandle.USER_CURRENT
+                )
+                if (!hex.isNullOrBlank()) Color(android.graphics.Color.parseColor(hex.trim())) else null
+            } catch (_: Throwable) { null }
+        )
+    }
+
+    var customDarkIconColor by remember {
+        mutableStateOf(
+            try {
+                val hex = android.provider.Settings.System.getStringForUser(
+                    context.contentResolver, "status_bar_icons_dark_color", android.os.UserHandle.USER_CURRENT
+                )
+                if (!hex.isNullOrBlank()) Color(android.graphics.Color.parseColor(hex.trim())) else null
+            } catch (_: Throwable) { null }
+        )
+    }
+
+    DisposableEffect(context) {
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                customIconColor = try {
+                    val hex = android.provider.Settings.System.getStringForUser(
+                        context.contentResolver, "status_bar_icons_color", android.os.UserHandle.USER_CURRENT
+                    )
+                    if (!hex.isNullOrBlank()) Color(android.graphics.Color.parseColor(hex.trim())) else null
+                } catch (_: Throwable) { null }
+
+                customDarkIconColor = try {
+                    val hex = android.provider.Settings.System.getStringForUser(
+                        context.contentResolver, "status_bar_icons_dark_color", android.os.UserHandle.USER_CURRENT
+                    )
+                    if (!hex.isNullOrBlank()) Color(android.graphics.Color.parseColor(hex.trim())) else null
+                } catch (_: Throwable) { null }
+            }
+        }
+        val cr = context.contentResolver
+        val uri1 = android.provider.Settings.System.getUriFor("status_bar_icons_color")
+        val uri2 = android.provider.Settings.System.getUriFor("status_bar_icons_dark_color")
+        try {
+            cr.registerContentObserver(uri1, false, observer, android.os.UserHandle.USER_CURRENT)
+            cr.registerContentObserver(uri2, false, observer, android.os.UserHandle.USER_CURRENT)
+        } catch (_: Throwable) {}
+        onDispose {
+            try { cr.unregisterContentObserver(observer) } catch (_: Throwable) {}
+        }
+    }
+
+    val isDarkArea = isDark.isDarkTheme(bounds)
+    val tint = if (isDarkArea) {
+        customIconColor ?: Color.White
+    } else {
+        customDarkIconColor
+            ?: customIconColor?.let { c ->
+                val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+                if (lum > 0.65f) Color.Black else c
+            } ?: Color.Black
+    }
+
     SystemStatusIcons(
         viewModelFactory = viewModelFactory,
         tint = tint,

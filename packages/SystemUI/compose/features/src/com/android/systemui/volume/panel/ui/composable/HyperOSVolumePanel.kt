@@ -121,6 +121,19 @@ fun HyperOSVolumePanel(
         )
     }
 
+    var showPercent by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.System.getIntForUser(
+                    context.contentResolver,
+                    android.provider.Settings.System.HYPEROS_VOLUME_SHOW_PERCENT,
+                    0,
+                    android.os.UserHandle.USER_CURRENT
+                ) == 1
+            } catch (e: Exception) { false }
+        )
+    }
+
     DisposableEffect(context) {
         val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
@@ -138,9 +151,30 @@ fun HyperOSVolumePanel(
         try {
             context.contentResolver.registerContentObserver(uri, false, observer, android.os.UserHandle.USER_CURRENT)
         } catch (e: Exception) {}
+
+        val percentObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                showPercent = try {
+                    android.provider.Settings.System.getIntForUser(
+                        context.contentResolver,
+                        android.provider.Settings.System.HYPEROS_VOLUME_SHOW_PERCENT,
+                        0,
+                        android.os.UserHandle.USER_CURRENT
+                    ) == 1
+                } catch (e: Exception) { false }
+            }
+        }
+        val uriPercent = android.provider.Settings.System.getUriFor(android.provider.Settings.System.HYPEROS_VOLUME_SHOW_PERCENT)
+        try {
+            context.contentResolver.registerContentObserver(uriPercent, false, percentObserver, android.os.UserHandle.USER_CURRENT)
+        } catch (e: Exception) {}
+
         onDispose {
             try {
                 context.contentResolver.unregisterContentObserver(observer)
+            } catch (e: Exception) {}
+            try {
+                context.contentResolver.unregisterContentObserver(percentObserver)
             } catch (e: Exception) {}
         }
     }
@@ -229,7 +263,8 @@ fun HyperOSVolumePanel(
                         audioManager = audioManager,
                         view = view,
                         isLandscape = isLandscape,
-                        useMonet = useMonet
+                        useMonet = useMonet,
+                        showPercent = showPercent
                     )
 
                     Spacer(modifier = Modifier.height(if (isLandscape) 8.dp else 18.dp))
@@ -255,6 +290,7 @@ private fun HyperOSVerticalSlidersRow(
     view: android.view.View,
     isLandscape: Boolean,
     useMonet: Boolean,
+    showPercent: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val spacerWidth = if (isLandscape) 8.dp else 10.dp
@@ -272,6 +308,7 @@ private fun HyperOSVerticalSlidersRow(
             view = view,
             isLandscape = isLandscape,
             useMonet = useMonet,
+            showPercent = showPercent,
             modifier = Modifier.weight(1f)
         )
 
@@ -285,6 +322,7 @@ private fun HyperOSVerticalSlidersRow(
             view = view,
             isLandscape = isLandscape,
             useMonet = useMonet,
+            showPercent = showPercent,
             modifier = Modifier.weight(1f)
         )
 
@@ -298,6 +336,7 @@ private fun HyperOSVerticalSlidersRow(
             view = view,
             isLandscape = isLandscape,
             useMonet = useMonet,
+            showPercent = showPercent,
             modifier = Modifier.weight(1f)
         )
 
@@ -311,6 +350,7 @@ private fun HyperOSVerticalSlidersRow(
             view = view,
             isLandscape = isLandscape,
             useMonet = useMonet,
+            showPercent = showPercent,
             modifier = Modifier.weight(1f)
         )
     }
@@ -324,6 +364,7 @@ private fun HyperOSVerticalStreamSlider(
     view: android.view.View,
     isLandscape: Boolean,
     useMonet: Boolean,
+    showPercent: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -460,6 +501,26 @@ private fun HyperOSVerticalStreamSlider(
                     .fillMaxHeight(animatedFraction.coerceIn(0f, 1f))
                     .background(sliderFillColor)
             )
+
+            // Volume percentage indicator at the top if enabled
+            if (showPercent) {
+                val percentVal = (fraction * 100).roundToInt().coerceIn(0, 100)
+                val percentTextColor = if (animatedFraction >= 0.82f) {
+                    activeIconColor
+                } else {
+                    Color.White
+                }
+                Text(
+                    text = "$percentVal%",
+                    color = percentTextColor,
+                    fontSize = if (isLandscape) 9.sp else 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = if (isLandscape) 8.dp else 12.dp)
+                )
+            }
 
             // Bottom Icon badge
             Box(

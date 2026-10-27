@@ -65,6 +65,9 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -118,6 +121,19 @@ fun HyperOSAppVolumeContent(
         )
     }
 
+    var showPercent by remember {
+        mutableStateOf(
+            try {
+                android.provider.Settings.System.getIntForUser(
+                    context.contentResolver,
+                    android.provider.Settings.System.HYPEROS_VOLUME_SHOW_PERCENT,
+                    0,
+                    android.os.UserHandle.USER_CURRENT
+                ) == 1
+            } catch (_: Exception) { false }
+        )
+    }
+
     DisposableEffect(context) {
         val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
@@ -135,9 +151,30 @@ fun HyperOSAppVolumeContent(
         try {
             context.contentResolver.registerContentObserver(uri, false, observer, android.os.UserHandle.USER_CURRENT)
         } catch (_: Exception) {}
+
+        val percentObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                showPercent = try {
+                    android.provider.Settings.System.getIntForUser(
+                        context.contentResolver,
+                        android.provider.Settings.System.HYPEROS_VOLUME_SHOW_PERCENT,
+                        0,
+                        android.os.UserHandle.USER_CURRENT
+                    ) == 1
+                } catch (_: Exception) { false }
+            }
+        }
+        val uriPercent = android.provider.Settings.System.getUriFor(android.provider.Settings.System.HYPEROS_VOLUME_SHOW_PERCENT)
+        try {
+            context.contentResolver.registerContentObserver(uriPercent, false, percentObserver, android.os.UserHandle.USER_CURRENT)
+        } catch (_: Exception) {}
+
         onDispose {
             try {
                 context.contentResolver.unregisterContentObserver(observer)
+            } catch (_: Exception) {}
+            try {
+                context.contentResolver.unregisterContentObserver(percentObserver)
             } catch (_: Exception) {}
         }
     }
@@ -222,6 +259,7 @@ fun HyperOSAppVolumeContent(
                         sliderHeight = sliderHeight,
                         isLandscape = isLandscape,
                         useMonet = useMonet,
+                        showPercent = showPercent,
                         view = view
                     )
 
@@ -236,6 +274,7 @@ fun HyperOSAppVolumeContent(
                                 sliderHeight = sliderHeight,
                                 isLandscape = isLandscape,
                                 useMonet = useMonet,
+                                showPercent = showPercent,
                                 view = view
                             )
                         }
@@ -257,6 +296,7 @@ private fun HyperOSMediaVolumeSlider(
     sliderHeight: androidx.compose.ui.unit.Dp,
     isLandscape: Boolean,
     useMonet: Boolean,
+    showPercent: Boolean,
     view: android.view.View,
 ) {
     val context = LocalContext.current
@@ -410,6 +450,24 @@ private fun HyperOSMediaVolumeSlider(
                     .background(mediaFillColor)
             )
 
+            // Volume percentage indicator at the top if enabled
+            if (showPercent) {
+                val percentVal = (fraction * 100).roundToInt().coerceIn(0, 100)
+                val percentTextColor = if (animatedFraction >= 0.82f) {
+                    if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF0D84FF)
+                } else Color.White
+                Text(
+                    text = "$percentVal%",
+                    color = percentTextColor,
+                    fontSize = if (isLandscape) 9.sp else 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = if (isLandscape) 8.dp else 12.dp)
+                )
+            }
+
             // Bottom Speaker Icon badge
             Box(
                 modifier = Modifier
@@ -453,6 +511,7 @@ private fun HyperOSSingleAppVolumeSlider(
     sliderHeight: androidx.compose.ui.unit.Dp,
     isLandscape: Boolean,
     useMonet: Boolean,
+    showPercent: Boolean,
     view: android.view.View,
 ) {
     var volumeFraction by remember(appVolume.packageName) { mutableFloatStateOf(appVolume.volume.coerceIn(0f, 1f)) }
@@ -555,6 +614,24 @@ private fun HyperOSSingleAppVolumeSlider(
                     .fillMaxHeight(animatedFraction.coerceIn(0f, 1f))
                     .background(appFillColor)
             )
+
+            // Volume percentage indicator at the top if enabled
+            if (showPercent) {
+                val percentVal = (volumeFraction * 100).roundToInt().coerceIn(0, 100)
+                val percentTextColor = if (animatedFraction >= 0.82f) {
+                    if (useMonet) MaterialTheme.colorScheme.onPrimary else Color(0xFF0D84FF)
+                } else Color.White
+                Text(
+                    text = "$percentVal%",
+                    color = percentTextColor,
+                    fontSize = if (isLandscape) 9.sp else 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = if (isLandscape) 8.dp else 12.dp)
+                )
+            }
 
             // Bottom App Icon badge
             Box(

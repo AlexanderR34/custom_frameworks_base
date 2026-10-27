@@ -838,10 +838,12 @@ private fun getBatteryStyle(context: android.content.Context): Int {
 private data class CustomBatteryConfig(
     val useMonet: Boolean = false,
     val normalColor: Color? = null,
+    val normalDarkColor: Color? = null,
     val chargingColor: Color? = null,
     val lowColor: Color? = null,
     val saverColor: Color? = null,
     val iconColor: Color? = null,
+    val iconDarkColor: Color? = null,
 )
 
 private fun parseHexToColor(hex: String?): Color? {
@@ -857,17 +859,21 @@ private fun loadCustomBatteryConfig(context: android.content.Context): CustomBat
     val cr = context.contentResolver
     val useMonet = Settings.System.getIntForUser(cr, "status_bar_colors_monet", 0, UserHandle.USER_CURRENT) == 1
     val normalStr = Settings.System.getStringForUser(cr, "status_bar_battery_color", UserHandle.USER_CURRENT)
+    val normalDarkStr = Settings.System.getStringForUser(cr, "status_bar_battery_dark_color", UserHandle.USER_CURRENT)
     val chargingStr = Settings.System.getStringForUser(cr, "status_bar_battery_charging_color", UserHandle.USER_CURRENT)
     val lowStr = Settings.System.getStringForUser(cr, "status_bar_battery_low_color", UserHandle.USER_CURRENT)
     val saverStr = Settings.System.getStringForUser(cr, "status_bar_battery_saver_color", UserHandle.USER_CURRENT)
     val iconStr = Settings.System.getStringForUser(cr, "status_bar_icons_color", UserHandle.USER_CURRENT)
+    val iconDarkStr = Settings.System.getStringForUser(cr, "status_bar_icons_dark_color", UserHandle.USER_CURRENT)
     return CustomBatteryConfig(
         useMonet = useMonet,
         normalColor = parseHexToColor(normalStr),
+        normalDarkColor = parseHexToColor(normalDarkStr),
         chargingColor = parseHexToColor(chargingStr),
         lowColor = parseHexToColor(lowStr),
         saverColor = parseHexToColor(saverStr),
         iconColor = parseHexToColor(iconStr),
+        iconDarkColor = parseHexToColor(iconDarkStr),
     )
 }
 
@@ -918,20 +924,24 @@ fun UnifiedBattery(
         val uri3 = Settings.System.getUriFor(Settings.System.SHOW_BATTERY_PERCENT)
         val uri4 = Settings.System.getUriFor("status_bar_colors_monet")
         val uri5 = Settings.System.getUriFor("status_bar_battery_color")
+        val uri5Dark = Settings.System.getUriFor("status_bar_battery_dark_color")
         val uri6 = Settings.System.getUriFor("status_bar_battery_charging_color")
         val uri7 = Settings.System.getUriFor("status_bar_battery_low_color")
         val uri8 = Settings.System.getUriFor("status_bar_battery_saver_color")
         val uri9 = Settings.System.getUriFor("status_bar_icons_color")
+        val uri9Dark = Settings.System.getUriFor("status_bar_icons_dark_color")
 
         cr.registerContentObserver(uri1, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri2, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri3, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri4, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri5, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri5Dark, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri6, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri7, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri8, false, observer, UserHandle.USER_CURRENT)
         cr.registerContentObserver(uri9, false, observer, UserHandle.USER_CURRENT)
+        cr.registerContentObserver(uri9Dark, false, observer, UserHandle.USER_CURRENT)
 
         onDispose {
             cr.unregisterContentObserver(observer)
@@ -955,21 +965,27 @@ fun UnifiedBattery(
         }
     }
 
-    val adaptedNormalColor = remember(customColors.normalColor, isDark) {
-        customColors.normalColor?.let { c ->
-            if (!isDark) {
-                val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
-                if (lum > 0.75f) Color.Black else c
-            } else c
+    val adaptedNormalColor = remember(customColors.normalColor, customColors.normalDarkColor, isDark) {
+        if (!isDark) {
+            customColors.normalDarkColor
+                ?: customColors.normalColor?.let { c ->
+                    val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+                    if (lum > 0.65f) Color.Black else c
+                } ?: Color.Black
+        } else {
+            customColors.normalColor
         }
     }
 
-    val adaptedIconColor = remember(customColors.iconColor, isDark) {
-        customColors.iconColor?.let { c ->
-            if (!isDark) {
-                val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
-                if (lum > 0.75f) Color.Black else c
-            } else c
+    val adaptedIconColor = remember(customColors.iconColor, customColors.iconDarkColor, isDark) {
+        if (!isDark) {
+            customColors.iconDarkColor
+                ?: customColors.iconColor?.let { c ->
+                    val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+                    if (lum > 0.65f) Color.Black else c
+                } ?: Color.Black
+        } else {
+            customColors.iconColor
         }
     }
 
